@@ -1,14 +1,19 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Header from '@/app/components/UI/Header';
 import MapContainerWrapper from '@/app/components/Map/MapContainer';
 import LotCard from '@/app/components/UI/LotCard';
 import LotDetailModal from '@/app/components/UI/LotDetailModal';
 import { lotsData, Lot } from '@/app/data/lotsData';
-import { Search, Menu, Filter, Map as MapIcon, Layers, Square, Navigation } from 'lucide-react';
+import { Search, Menu, Filter, Map as MapIcon, Layers, Square, Navigation, Loader2 } from 'lucide-react';
+import { useAuth } from '@/app/context/AuthContext';
+import { useRouter } from 'next/navigation';
 
 export default function Home() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
   const [selectedLotId, setSelectedLotId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -16,6 +21,20 @@ export default function Home() {
   const [mapType, setMapType] = useState<'street' | 'satellite' | 'blank'>('street');
   // Local state for lots to simulate status updates
   const [lots, setLots] = useState<Lot[]>(lotsData);
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/login');
+    }
+  }, [user, loading, router]);
+
+  if (loading || !user) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-50">
+        <Loader2 className="animate-spin text-blue-600" size={32} />
+      </div>
+    );
+  }
 
   const stats = useMemo(() => {
     return {
