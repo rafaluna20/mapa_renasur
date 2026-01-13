@@ -17,8 +17,9 @@ const LeafletMap = dynamic(
 
 interface MapContainerProps {
     lots: Lot[];
-    selectedLot: Lot | null;
+    selectedLotId: string | null;
     onLotSelect: (lot: Lot) => void;
+    mapType: 'street' | 'satellite' | 'blank';
 }
 
 export default function MapContainerWrapper(props: MapContainerProps) {
