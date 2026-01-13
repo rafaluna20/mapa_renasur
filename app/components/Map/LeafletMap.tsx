@@ -6,8 +6,10 @@ import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility
 import 'leaflet-defaulticon-compatibility';
 import proj4 from 'proj4';
 import { Lot } from '@/app/data/lotsData';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
+
+const ZOOM_THRESHOLD_LABELS = 16;
 
 // Define UTM zone 18L projection (WGS84)
 proj4.defs("EPSG:32718", "+proj=utm +zone=18 +south +datum=WGS84 +units=m +no_defs");
@@ -19,9 +21,23 @@ interface LeafletMapProps {
     mapType: 'street' | 'satellite' | 'blank';
 }
 
-function MapController({ lots, selectedLotId }: { lots: Lot[], selectedLotId: string | null }) {
+function MapController({ lots, selectedLotId, onZoomChange }: { lots: Lot[], selectedLotId: string | null, onZoomChange: (z: number) => void }) {
     const map = useMap();
     const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    useEffect(() => {
+        // Report initial zoom
+        onZoomChange(map.getZoom());
+
+        const handleZoom = () => {
+            onZoomChange(map.getZoom());
+        };
+
+        map.on('zoomend', handleZoom);
+        return () => {
+            map.off('zoomend', handleZoom);
+        };
+    }, [map, onZoomChange]);
 
     useEffect(() => {
         // If selected lot, fly to it
@@ -37,20 +53,23 @@ function MapController({ lots, selectedLotId }: { lots: Lot[], selectedLotId: st
                 }
             }
         }
-        // Initial bounds fitting if no selection AND we haven't done it recently to avoid jitter
+        // Initial bounds fitting if no selection
         else if (lots.length > 0) {
-            // Simple center logic for now, or could use fitBounds if we calculated bounds of all polygons
-            // Let's stick to a known good center for the polygons provided
-            // Center around the first lot
             try {
-                const firstLot = lots[0];
-                if (firstLot.points.length > 0) {
-                    const p = firstLot.points[0];
-                    const [lon, lat] = proj4("EPSG:32718", "EPSG:4326", [p[0], p[1]]);
-                    // Only set view if far away? No, simple is better.
-                    // map.setView([lat, lon], 15);
+                const bounds = L.latLngBounds([]);
+                lots.forEach(lot => {
+                    lot.points.forEach(p => {
+                        const [lon, lat] = proj4("EPSG:32718", "EPSG:4326", [p[0], p[1]]);
+                        bounds.extend([lat, lon]);
+                    });
+                });
+
+                if (bounds.isValid()) {
+                    map.fitBounds(bounds, { padding: [50, 50] });
                 }
-            } catch (e) { }
+            } catch (e) {
+                console.error("FitBounds error", e);
+            }
         }
     }, [selectedLotId, map, lots]);
 
@@ -59,6 +78,7 @@ function MapController({ lots, selectedLotId }: { lots: Lot[], selectedLotId: st
 
 export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType }: LeafletMapProps) {
     const center: [number, number] = [-12.0464, -77.0428];
+    const [zoom, setZoom] = useState(14);
 
     const getColor = (status: string) => {
         switch (status) {
@@ -117,21 +137,23 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType }
                             click: () => onLotSelect(lot),
                         }}
                     >
-                        <Tooltip
-                            permanent
-                            direction="center"
-                            className="bg-transparent border-0 shadow-none font-bold text-xs"
-                            opacity={1}
-                        >
-                            <span className="text-black drop-shadow-md bg-white/50 px-1 rounded backdrop-blur-[1px]">
-                                {lot.name}
-                            </span>
-                        </Tooltip>
+                        {zoom >= ZOOM_THRESHOLD_LABELS && (
+                            <Tooltip
+                                permanent
+                                direction="center"
+                                className="bg-transparent border-0 shadow-none font-bold text-[10px]"
+                                opacity={1}
+                            >
+                                <span className="text-black drop-shadow-md bg-white/50 px-1 rounded backdrop-blur-[1px]">
+                                    {lot.name}
+                                </span>
+                            </Tooltip>
+                        )}
                     </Polygon>
                 );
             })}
 
-            <MapController lots={lots} selectedLotId={selectedLotId} />
+            <MapController lots={lots} selectedLotId={selectedLotId} onZoomChange={setZoom} />
         </MapContainer>
     );
 }
