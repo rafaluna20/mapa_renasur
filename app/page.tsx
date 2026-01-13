@@ -28,13 +28,6 @@ export default function Home() {
     }
   }, [user, loading, router]);
 
-  if (loading || !user) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
-        <Loader2 className="animate-spin text-blue-600" size={32} />
-      </div>
-    );
-  }
 
   const stats = useMemo(() => {
     return {
@@ -63,6 +56,15 @@ export default function Home() {
   const handleSync = () => {
     alert("Sincronizando con Odoo...");
   };
+
+  if (loading || !user) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-50">
+        <Loader2 className="animate-spin text-blue-600" size={32} />
+      </div>
+    );
+  }
+
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 overflow-hidden font-sans">
