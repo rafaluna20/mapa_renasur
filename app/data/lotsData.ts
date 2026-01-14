@@ -8,6 +8,8 @@ export interface Lot {
     image?: string;
     description?: string;
     salespersonId?: number; // ID of the salesperson assigned to this lot
+    manzana: string; // Block identifier (Q, R, S, T, W, X)
+    etapa: string; // Phase identifier (01, 02, 03, 04)
 }
 
 export const lotsData: Lot[] = [
@@ -17,9 +19,11 @@ export const lotsData: Lot[] = [
         status: 'available',
         price: 150000,
         area: 450,
+        manzana: 'X',
+        etapa: '04',
         points: [
             [308291.4827, 8623340.869], [308750.1099, 8623077.248], [308640.4756, 8623051.1366],
-            [308735.7424, 8622776.1674], [308198.1441, 8623150.4862]
+            [308735.7424, 8622776.1674]
         ],
         image: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
         description: 'Amplio lote con vista panorámica.'
@@ -30,13 +34,15 @@ export const lotsData: Lot[] = [
         status: 'reserved',
         price: 120000,
         area: 380,
+        manzana: 'X',
+        etapa: '04',
+        salespersonId: 2,
         points: [
             [308333.7336, 8623076.5369], [308397.7777, 8623106.2979], [308328.1165, 8623178.0433],
-            [308331.8287, 8623284.9785], [308198.1585, 8623150.4783]
+            [308331.8287, 8623284.9785]
         ],
         image: 'https://images.unsplash.com/photo-1516156008625-3a9d60da923c?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
-        description: 'Lote ideal para desarrollo residencial.',
-        salespersonId: 3
+        description: 'Lote ideal para desarrollo residencial.'
     },
     {
         id: '3',
@@ -44,13 +50,14 @@ export const lotsData: Lot[] = [
         status: 'sold',
         price: 180000,
         area: 2500,
+        manzana: 'X',
+        etapa: '04',
+        salespersonId: 3,
         points: [
-            [308198.1585, 8623150.4783], [308017.3558, 8623248.9168], [307990.8568, 8623285.3908],
-            [307991.3548, 8623377.0198]
+            [308198.1585, 8623150.4783], [308017.3558, 8623248.9168], [307990.8568, 8623285.3908]
         ],
         image: 'https://images.unsplash.com/photo-1524813686514-a57563d77965?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
-        description: 'Terreno con gran potencial.',
-        salespersonId: 3
+        description: 'Terreno con gran potencial.'
     },
     {
         id: "poly-04",
@@ -58,9 +65,10 @@ export const lotsData: Lot[] = [
         status: "available",
         price: 60000,
         area: 2500,
+        manzana: 'X',
+        etapa: '04',
         points: [
-            [308198.1585, 8623150.4783], [308017.3558, 8623248.9168], [307990.8568, 8623285.3908],
-            [307991.3548, 8623377.0198]
+            [308198.1585, 8623150.4783], [308017.3558, 8623248.9168], [307990.8568, 8623285.3908]
         ],
         image: 'https://images.unsplash.com/photo-1524813686514-a57563d77965?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
         description: 'Terreno con gran potencial.'
@@ -71,6 +79,8 @@ export const lotsData: Lot[] = [
         status: "sold",
         price: 55000,
         area: 1200,
+        manzana: 'X',
+        etapa: '04',
         points: [
             [308019.022, 8623384.37],
             [308076.5769, 8623466.2157], [308178.828, 8623409.9244]
@@ -83,6 +93,8 @@ export const lotsData: Lot[] = [
         name: "Lote 11",
         status: "sold",
         price: 40000,
+        manzana: 'T',
+        etapa: '02',
         area: 160,
         salespersonId: 3,
         points: [
@@ -96,6 +108,8 @@ export const lotsData: Lot[] = [
         name: "Lote 12",
         status: "sold",
         price: 40000,
+        manzana: 'T',
+        etapa: '02',
         area: 160,
         salespersonId: 3,
         points: [
@@ -109,6 +123,8 @@ export const lotsData: Lot[] = [
         name: "Lote 13",
         status: "sold",
         price: 40000,
+        manzana: 'T',
+        etapa: '02',
         area: 160,
         salespersonId: 3,
         points: [
@@ -122,6 +138,8 @@ export const lotsData: Lot[] = [
         name: "Lote 14",
         status: "sold",
         price: 40000,
+        manzana: 'T',
+        etapa: '02',
         area: 160,
         salespersonId: 3,
         points: [
@@ -135,6 +153,8 @@ export const lotsData: Lot[] = [
         name: "Lote 15",
         status: "reserved",
         price: 40000,
+        manzana: 'T',
+        etapa: '02',
         area: 160,
         salespersonId: 3,
         points: [
@@ -148,6 +168,8 @@ export const lotsData: Lot[] = [
         name: "Lote 16",
         status: "reserved",
         price: 40000,
+        manzana: 'T',
+        etapa: '02',
         area: 160,
         salespersonId: 3,
         points: [
@@ -161,6 +183,8 @@ export const lotsData: Lot[] = [
         name: "Lote 17",
         status: "reserved",
         price: 40000,
+        manzana: 'T',
+        etapa: '02',
         area: 160,
         salespersonId: 3,
         points: [
@@ -174,6 +198,8 @@ export const lotsData: Lot[] = [
         name: "Lote 18",
         status: "sold",
         price: 40000,
+        manzana: 'T',
+        etapa: '02',
         area: 160,
         salespersonId: 3,
         points: [
@@ -187,6 +213,8 @@ export const lotsData: Lot[] = [
         name: "Lote 19",
         status: "sold",
         price: 40000,
+        manzana: 'T',
+        etapa: '02',
         area: 160,
         salespersonId: 3,
         points: [
@@ -200,6 +228,8 @@ export const lotsData: Lot[] = [
         name: "Lote 20",
         status: "sold",
         price: 40000,
+        manzana: 'T',
+        etapa: '02',
         area: 160,
         salespersonId: 3,
         points: [
@@ -214,6 +244,8 @@ export const lotsData: Lot[] = [
         status: "available",
         price: 40000,
         area: 160,
+        manzana: 'W',
+        etapa: '03',
         points: [
             [308716.7795, 8622939.2127], [308709.8619, 8622941.1745], [308704.7036, 8622924.4520],
             [308712.4002, 8622922.2695]
@@ -226,6 +258,8 @@ export const lotsData: Lot[] = [
         status: "available",
         price: 40000,
         area: 160,
+        manzana: 'W',
+        etapa: '03',
         points: [
             [308709.8619, 8622941.1745], [308703.0424, 8622943.4542], [308697.1163, 8622926.9881],
             [308704.7036, 8622924.4520]
@@ -238,6 +272,8 @@ export const lotsData: Lot[] = [
         status: "available",
         price: 40000,
         area: 160,
+        manzana: 'W',
+        etapa: '03',
         points: [
             [308703.0424, 8622943.4542], [308696.3356, 8622946.0468], [308689.6543, 8622929.8724],
             [308697.1163, 8622926.9881]
@@ -250,6 +286,8 @@ export const lotsData: Lot[] = [
         status: "available",
         price: 40000,
         area: 160,
+        manzana: 'W',
+        etapa: '03',
         points: [
             [308696.3356, 8622946.0468], [308689.7559, 8622948.9468], [308682.3337, 8622933.0987],
             [308689.6543, 8622929.8724]
@@ -262,6 +300,8 @@ export const lotsData: Lot[] = [
         status: "available",
         price: 40000,
         area: 160,
+        manzana: 'W',
+        etapa: '03',
         points: [
             [308689.7559, 8622948.9468], [308687.8629, 8622949.8496], [308677.4574, 8622946.6782],
             [308672.4689, 8622938.1126], [308682.3337, 8622933.0987]
@@ -274,6 +314,8 @@ export const lotsData: Lot[] = [
         status: "available",
         price: 40000,
         area: 160,
+        manzana: 'S',
+        etapa: '02',
         points: [
             [308682.3337, 8622933.0987], [308672.4689, 8622938.1126], [308667.8710, 8622930.2175],
             [308671.2225, 8622919.0279], [308674.9116, 8622917.2506]
@@ -286,6 +328,8 @@ export const lotsData: Lot[] = [
         status: "available",
         price: 40000,
         area: 160,
+        manzana: 'S',
+        etapa: '02',
         points: [
             [308689.6543, 8622929.8724], [308682.3337, 8622933.0987], [308674.9116, 8622917.2506],
             [308682.9731, 8622913.6980]
@@ -298,6 +342,8 @@ export const lotsData: Lot[] = [
         status: "available",
         price: 40000,
         area: 160,
+        manzana: 'S',
+        etapa: '02',
         points: [
             [308697.1163, 8622926.9881], [308689.6543, 8622929.8724], [308682.9731, 8622913.6980],
             [308691.1902, 8622910.5220]
@@ -310,6 +356,8 @@ export const lotsData: Lot[] = [
         status: "available",
         price: 40000,
         area: 160,
+        manzana: 'S',
+        etapa: '02',
         points: [
             [308704.7036, 8622924.4520], [308697.1163, 8622926.9881], [308691.1902, 8622910.5220],
             [308699.5454, 8622907.7295]
@@ -322,6 +370,8 @@ export const lotsData: Lot[] = [
         status: "available",
         price: 40000,
         area: 160,
+        manzana: 'R',
+        etapa: '01',
         points: [
             [308712.4002, 8622922.2695], [308704.7036, 8622924.4520], [308699.5454, 8622907.7295],
             [308708.0208, 8622905.3263]
@@ -334,6 +384,8 @@ export const lotsData: Lot[] = [
         status: "available",
         price: 40000,
         area: 160,
+        manzana: 'R',
+        etapa: '01',
         points: [
             [308720.1894, 8622920.4453], [308712.4002, 8622922.2695], [308708.0208, 8622905.3263],
             [308716.5983, 8622903.3177]
@@ -346,6 +398,8 @@ export const lotsData: Lot[] = [
         status: "available",
         price: 40000,
         area: 160,
+        manzana: 'R',
+        etapa: '01',
         points: [
             [308728.0547, 8622918.9832], [308720.1894, 8622920.4453], [308716.5983, 8622903.3177],
             [308725.2596, 8622901.7079]
@@ -358,6 +412,8 @@ export const lotsData: Lot[] = [
         status: "available",
         price: 40000,
         area: 160,
+        manzana: 'R',
+        etapa: '01',
         points: [
             [308735.9792, 8622917.8865], [308728.0547, 8622918.9832], [308725.2596, 8622901.7079],
             [308733.9860, 8622900.5004]
@@ -370,6 +426,8 @@ export const lotsData: Lot[] = [
         status: "available",
         price: 40000,
         area: 160,
+        manzana: 'R',
+        etapa: '01',
         points: [
             [308743.9459, 8622917.1575], [308735.9792, 8622917.8865], [308733.9860, 8622900.5004],
             [308742.7589, 8622899.6978]
@@ -382,6 +440,8 @@ export const lotsData: Lot[] = [
         status: "available",
         price: 40000,
         area: 160,
+        manzana: 'Q',
+        etapa: '01',
         points: [
             [308751.9378, 8622916.7976], [308743.9459, 8622917.1575], [308742.7589, 8622899.6978],
             [308751.5595, 8622899.3017]
@@ -394,6 +454,8 @@ export const lotsData: Lot[] = [
         status: "available",
         price: 40000,
         area: 160,
+        manzana: 'Q',
+        etapa: '01',
         points: [
             [308759.9378, 8622916.8078], [308751.9378, 8622916.7976], [308751.5595, 8622899.3017],
             [308760.3690, 8622899.3131]
@@ -406,6 +468,8 @@ export const lotsData: Lot[] = [
         status: "available",
         price: 40000,
         area: 160,
+        manzana: 'Q',
+        etapa: '01',
         points: [
             [308767.9287, 8622917.1879], [308759.9378, 8622916.8078], [308760.3690, 8622899.3131],
             [308769.1686, 8622899.7319]
@@ -418,6 +482,8 @@ export const lotsData: Lot[] = [
         status: "available",
         price: 40000,
         area: 160,
+        manzana: 'Q',
+        etapa: '01',
         points: [
             [308775.8936, 8622917.9372], [308767.9287, 8622917.1879], [308769.1686, 8622899.7319],
             [308777.9394, 8622900.5572]
@@ -430,6 +496,8 @@ export const lotsData: Lot[] = [
         status: "available",
         price: 40000,
         area: 160,
+        manzana: 'Q',
+        etapa: '01',
         points: [
             [308783.8152, 8622919.0540], [308775.8936, 8622917.9372], [308777.9394, 8622900.5572],
             [308786.6627, 8622901.7872]
@@ -442,6 +510,8 @@ export const lotsData: Lot[] = [
         status: "available",
         price: 40000,
         area: 160,
+        manzana: 'Q',
+        etapa: '01',
         points: [
             [308794.7454, 8622903.2982], [308786.6627, 8622901.7872], [308783.8152, 8622919.0540],
             [308794.9341, 8622921.2613], [308798.7520, 8622909.0449]

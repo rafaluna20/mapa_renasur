@@ -6,7 +6,7 @@ import MapContainerWrapper from '@/app/components/Map/MapContainer';
 import LotCard from '@/app/components/UI/LotCard';
 import LotDetailModal from '@/app/components/UI/LotDetailModal';
 import { lotsData, Lot } from '@/app/data/lotsData';
-import { Search, Menu, Filter, Map as MapIcon, Layers, Square, Navigation, Loader2 } from 'lucide-react';
+import { Search, Menu, Filter, Map as MapIcon, Layers, Square, Navigation, Loader2, FileText } from 'lucide-react';
 import { useAuth } from '@/app/context/AuthContext';
 import { useRouter } from 'next/navigation';
 
@@ -22,6 +22,8 @@ export default function Home() {
   // Local state for lots to simulate status updates
   const [lots, setLots] = useState<Lot[]>(lotsData);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+  const [manzanaFilter, setManzanaFilter] = useState<string>('all');
+  const [etapaFilter, setEtapaFilter] = useState<string>('all');
 
   useEffect(() => {
     if (!loading && !user) {
@@ -42,9 +44,11 @@ export default function Home() {
     return lots.filter(lot => {
       const matchesStatus = statusFilter === 'all' || lot.status === statusFilter;
       const matchesSearch = lot.name.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesStatus && matchesSearch;
+      const matchesManzana = manzanaFilter === 'all' || lot.manzana === manzanaFilter;
+      const matchesEtapa = etapaFilter === 'all' || lot.etapa === etapaFilter;
+      return matchesStatus && matchesSearch && matchesManzana && matchesEtapa;
     });
-  }, [lots, statusFilter, searchQuery]);
+  }, [lots, statusFilter, searchQuery, manzanaFilter, etapaFilter]);
 
   const selectedLot = useMemo(() => lots.find(l => l.id === selectedLotId) || null, [lots, selectedLotId]);
 
@@ -88,18 +92,20 @@ export default function Home() {
           md:relative md:translate-x-0 md:z-10 md:shadow-xl
         `}>
           {/* Filters */}
-          <div className="p-4 border-b border-slate-100 bg-white space-y-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+          <div className="p-4 border-b border-slate-200 bg-gradient-to-b from-white to-slate-50 space-y-4">
+            {/* Search */}
+            <div className="relative group">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18} />
               <input
                 type="text"
-                placeholder="Buscar polígono..."
-                className="w-full pl-10 pr-4 py-2 bg-slate-100 border-transparent focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 rounded-lg text-sm transition-all outline-none"
+                placeholder="Buscar lote..."
+                className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 rounded-xl text-sm transition-all outline-none shadow-sm hover:shadow-md"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
 
+            {/* Status Filter */}
             <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
               {[
                 { value: 'all', label: 'Todos' },
@@ -121,6 +127,69 @@ export default function Home() {
                 </button>
               ))}
             </div>
+
+            {/* Filters Grid */}
+            <div className="grid grid-cols-2 gap-3">
+              {/* Manzana Filter */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-blue-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <Layers size={12} className="text-blue-600" />
+                  Manzana
+                </label>
+                <select
+                  value={manzanaFilter}
+                  onChange={(e) => setManzanaFilter(e.target.value)}
+                  className="w-full px-3 py-2 bg-blue-50 border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 rounded-lg text-sm font-medium text-blue-900 transition-all outline-none shadow-sm hover:shadow-md hover:bg-blue-100 cursor-pointer"
+                >
+                  <option value="all">Todas</option>
+                  <option value="Q">MZ Q</option>
+                  <option value="R">MZ R</option>
+                  <option value="S">MZ S</option>
+                  <option value="T">MZ T</option>
+                  <option value="W">MZ W</option>
+                  <option value="X">MZ X</option>
+                </select>
+              </div>
+
+              {/* Etapa Filter */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-blue-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <MapIcon size={12} className="text-blue-600" />
+                  Etapa
+                </label>
+                <select
+                  value={etapaFilter}
+                  onChange={(e) => setEtapaFilter(e.target.value)}
+                  className="w-full px-3 py-2 bg-blue-50 border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 rounded-lg text-sm font-medium text-blue-900 transition-all outline-none shadow-sm hover:shadow-md hover:bg-blue-100 cursor-pointer"
+                >
+                  <option value="all">Todas</option>
+                  <option value="01">Etapa 01</option>
+                  <option value="02">Etapa 02</option>
+                  <option value="03">Etapa 03</option>
+                  <option value="04">Etapa 04</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Active Filters Count */}
+            {(statusFilter !== 'all' || manzanaFilter !== 'all' || etapaFilter !== 'all' || searchQuery) && (
+              <div className="flex items-center justify-between px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg">
+                <span className="text-xs font-medium text-blue-700">
+                  {filteredLots.length} lotes encontrados
+                </span>
+                <button
+                  onClick={() => {
+                    setStatusFilter('all');
+                    setManzanaFilter('all');
+                    setEtapaFilter('all');
+                    setSearchQuery('');
+                  }}
+                  className="text-xs font-semibold text-blue-600 hover:text-blue-700 underline"
+                >
+                  Limpiar
+                </button>
+              </div>
+            )}
           </div>
 
           {/* List */}
@@ -146,10 +215,19 @@ export default function Home() {
           </div>
 
           {/* Mini Stats Footer */}
-          <div className="p-3 bg-slate-50 border-t border-slate-200 grid grid-cols-3 gap-2 text-center text-xs">
-            <div className="text-emerald-600 font-bold">{stats.available} <span className="font-normal text-slate-500">Disp.</span></div>
-            <div className="text-amber-600 font-bold">{stats.reserved} <span className="font-normal text-slate-500">Res.</span></div>
-            <div className="text-red-600 font-bold">{stats.sold} <span className="font-normal text-slate-500">Vend.</span></div>
+          <div className="p-3 bg-gradient-to-r from-slate-50 to-white border-t border-slate-200 grid grid-cols-3 gap-2 text-center text-xs">
+            <div className="flex flex-col items-center p-2 rounded-lg bg-emerald-50 border border-emerald-100">
+              <span className="text-2xl font-bold text-emerald-600">{stats.available}</span>
+              <span className="font-medium text-emerald-700 text-[10px] uppercase tracking-wide">Disponibles</span>
+            </div>
+            <div className="flex flex-col items-center p-2 rounded-lg bg-amber-50 border border-amber-100">
+              <span className="text-2xl font-bold text-amber-600">{stats.reserved}</span>
+              <span className="font-medium text-amber-700 text-[10px] uppercase tracking-wide">Reservados</span>
+            </div>
+            <div className="flex flex-col items-center p-2 rounded-lg bg-red-50 border border-red-100">
+              <span className="text-2xl font-bold text-red-600">{stats.sold}</span>
+              <span className="font-medium text-red-700 text-[10px] uppercase tracking-wide">Vendidos</span>
+            </div>
           </div>
         </div>
 
@@ -252,6 +330,84 @@ export default function Home() {
             onClose={() => setSelectedLotId(null)}
             onUpdateStatus={handleUpdateStatus}
           />
+
+          {/* Mobile Quick Filters Bar */}
+          <div className="md:hidden fixed bottom-4 left-2 right-2 z-[600] animate-in slide-in-from-bottom-4 duration-300">
+            <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200 p-2">
+              {/* Filters Group */}
+              <div className="grid grid-cols-5 gap-1.5 items-center">
+                {/* Etapa */}
+                <div className="flex flex-col gap-0.5">
+                  <label className="text-[8px] font-bold text-blue-700 uppercase leading-none px-1 text-center">Etapa</label>
+                  <select
+                    value={etapaFilter}
+                    onChange={(e) => setEtapaFilter(e.target.value)}
+                    className="w-full px-1 py-1 bg-blue-50 border border-blue-100 rounded-lg text-[10px] font-semibold text-blue-900 outline-none appearance-none text-center"
+                  >
+                    <option value="all">Todas</option>
+                    <option value="01">01</option>
+                    <option value="02">02</option>
+                    <option value="03">03</option>
+                    <option value="04">04</option>
+                  </select>
+                </div>
+
+                {/* MZ */}
+                <div className="flex flex-col gap-0.5">
+                  <label className="text-[8px] font-bold text-blue-700 uppercase leading-none px-1 text-center">MZ</label>
+                  <select
+                    value={manzanaFilter}
+                    onChange={(e) => setManzanaFilter(e.target.value)}
+                    className="w-full px-1 py-1 bg-blue-50 border border-blue-100 rounded-lg text-[10px] font-semibold text-blue-900 outline-none appearance-none text-center"
+                  >
+                    <option value="all">Todas</option>
+                    <option value="Q">Q</option>
+                    <option value="R">R</option>
+                    <option value="S">S</option>
+                    <option value="T">T</option>
+                    <option value="W">W</option>
+                    <option value="X">X</option>
+                  </select>
+                </div>
+
+                {/* Search Button (Center) */}
+                <div className="flex flex-col items-center">
+                  <button
+                    onClick={() => setSidebarOpen(true)}
+                    className="p-2.5 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-200 active:scale-90 transition-transform flex items-center justify-center"
+                  >
+                    <Search size={18} />
+                  </button>
+                </div>
+
+                {/* Estado */}
+                <div className="flex flex-col gap-0.5">
+                  <label className="text-[8px] font-bold text-slate-600 uppercase leading-none px-1 text-center">Estado</label>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="w-full px-1 py-1 bg-slate-50 border border-slate-100 rounded-lg text-[10px] font-semibold text-slate-900 outline-none appearance-none text-center"
+                  >
+                    <option value="all">Todos</option>
+                    <option value="available">Disp</option>
+                    <option value="reserved">Res</option>
+                    <option value="sold">Vend</option>
+                  </select>
+                </div>
+
+                {/* Notas */}
+                <div className="flex flex-col gap-0.5 items-center justify-end">
+                  <button
+                    onClick={() => alert('Función de notas próximamente')}
+                    className="w-full py-2 bg-slate-800 text-white rounded-lg text-[10px] font-bold active:scale-95 transition-transform flex flex-col items-center justify-center"
+                  >
+                    <FileText size={14} />
+                    <span className="text-[7px] uppercase mt-0.5">Notas</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
