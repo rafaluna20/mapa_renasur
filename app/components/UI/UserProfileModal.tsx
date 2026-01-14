@@ -57,7 +57,7 @@ export default function UserProfileModal({ user, onClose }: UserProfileModalProp
                         <User size={40} className="text-white" />
                     </div>
                     <h2 className="text-xl font-bold">{user.name}</h2>
-                    <p className="text-blue-200 text-sm">{user.login}</p>
+                    <p className="text-blue-200 text-sm">{user.username}</p>
                     <div className="mt-2 inline-block bg-blue-900/50 px-3 py-1 rounded-full text-xs font-medium border border-blue-500/30">
                         Vendedor Autorizado
                     </div>
