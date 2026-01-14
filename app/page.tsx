@@ -72,11 +72,19 @@ export default function Home() {
 
       <div className="flex flex-1 overflow-hidden relative">
 
+        {/* Mobile Backdrop */}
+        {isSidebarOpen && (
+          <div
+            className="absolute inset-0 bg-black/30 z-[490] md:hidden backdrop-blur-[2px] animate-in fade-in"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
         {/* Sidebar List */}
         <div className={`
-          absolute inset-y-0 left-0 z-10 w-80 bg-white shadow-xl transform transition-transform duration-300 ease-in-out border-r border-slate-200 flex flex-col
+          absolute inset-y-0 left-0 z-[500] w-80 max-w-[85vw] bg-white shadow-2xl transform transition-transform duration-300 ease-in-out border-r border-slate-200 flex flex-col
           ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-          md:relative md:translate-x-0
+          md:relative md:translate-x-0 md:z-10 md:shadow-xl
         `}>
           {/* Filters */}
           <div className="p-4 border-b border-slate-100 bg-white space-y-3">

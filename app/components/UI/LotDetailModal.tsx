@@ -18,7 +18,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus }: LotDeta
     const config = STATUS_CONFIG[lot.status] || STATUS_CONFIG.available;
 
     return (
-        <div className="absolute top-4 right-4 w-80 bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden z-[1000] animate-in fade-in slide-in-from-right-10 duration-200 origin-top-right scale-[0.7]">
+        <div className="fixed md:absolute bottom-0 left-0 md:left-auto md:bottom-auto md:top-4 md:right-4 w-full md:w-80 bg-white rounded-t-2xl md:rounded-xl shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.2)] md:shadow-2xl border-t md:border border-slate-200 overflow-hidden z-[1000] animate-in slide-in-from-bottom-12 md:slide-in-from-right-8 fade-in duration-300 md:origin-top-right md:scale-[0.7]">
             <div className={`h-24 ${config.bg} flex items-center justify-center relative`}>
                 <button
                     onClick={onClose}
