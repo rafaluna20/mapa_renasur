@@ -45,11 +45,25 @@ function MapController({ lots, selectedLotId, onZoomChange }: { lots: Lot[], sel
             const selectedLot = lots.find(l => l.id === selectedLotId);
             if (selectedLot && selectedLot.points && selectedLot.points.length > 0) {
                 try {
-                    const p1 = selectedLot.points[0];
-                    const [lon, lat] = proj4("EPSG:32718", "EPSG:4326", [p1[0], p1[1]]);
-                    map.flyTo([lat, lon], 17, { animate: true, duration: 1 });
+                    const bounds = L.latLngBounds([]);
+                    selectedLot.points.forEach(p => {
+                        const [lon, lat] = proj4("EPSG:32718", "EPSG:4326", [p[0], p[1]]);
+                        bounds.extend([lat, lon]);
+                    });
+
+                    if (bounds.isValid()) {
+                        // Calculate the target zoom to fit the bounds with padding
+                        const targetZoom = map.getBoundsZoom(bounds, false, [50, 50] as any);
+                        const finalZoom = Math.min(targetZoom, 21); // Ensure we don't exceed maxZoom
+
+                        // Use flyTo for a smoother "flight" animation
+                        map.flyTo(bounds.getCenter(), finalZoom, {
+                            duration: 2, // Slower duration for "gradual" effect
+                            easeLinearity: 0.25
+                        });
+                    }
                 } catch (e) {
-                    console.error("FlyTo error", e);
+                    console.error("Zoom to lot error", e);
                 }
             }
         }
@@ -65,7 +79,7 @@ function MapController({ lots, selectedLotId, onZoomChange }: { lots: Lot[], sel
                 });
 
                 if (bounds.isValid()) {
-                    map.fitBounds(bounds, { padding: [50, 50] });
+                    map.fitBounds(bounds, { padding: [20, 20], maxZoom: 22 });
                 }
             } catch (e) {
                 console.error("FitBounds error", e);
@@ -78,7 +92,7 @@ function MapController({ lots, selectedLotId, onZoomChange }: { lots: Lot[], sel
 
 export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType }: LeafletMapProps) {
     const center: [number, number] = [-12.0464, -77.0428];
-    const [zoom, setZoom] = useState(14);
+    const [zoom, setZoom] = useState(16);
 
     const getColor = (status: string) => {
         switch (status) {
@@ -92,7 +106,8 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType }
     return (
         <MapContainer
             center={center}
-            zoom={14}
+            zoom={16}
+            maxZoom={22}
             scrollWheelZoom={true}
             style={{ height: '100%', width: '100%', background: mapType === 'blank' ? '#ffffff' : '#ddd' }}
             className="z-0"
@@ -101,12 +116,14 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType }
                 <TileLayer
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                     url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+                    maxNativeZoom={19}
                 />
             )}
             {mapType === 'satellite' && (
                 <TileLayer
                     attribution='Tiles &copy; Esri'
                     url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                    maxNativeZoom={19}
                 />
             )}
 
@@ -138,13 +155,15 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType }
                         }}
                     >
                         <Tooltip
+                            permanent
                             direction="center"
-                            className="bg-transparent border-0 shadow-none font-bold text-[10px]"
+                            className="bg-transparent border-0 shadow-none"
                             opacity={1}
                         >
-                            <span className="text-black drop-shadow-md bg-white/50 px-1 rounded backdrop-blur-[1px]">
-                                {lot.name}
-                            </span>
+                            <div className="flex flex-col items-center justify-center pointer-events-none">
+                                <span className="text-white font-black text-[10px] leading-none drop-shadow-[0_1.2px_1.2px_rgba(0,0,0,0.8)]">{lot.name}</span>
+                                <span className="text-white text-[9px] font-bold leading-none mt-0.5 drop-shadow-[0_1.2px_1.2px_rgba(0,0,0,0.8)]">{lot.area} m²</span>
+                            </div>
                         </Tooltip>
                     </Polygon>
                 );
