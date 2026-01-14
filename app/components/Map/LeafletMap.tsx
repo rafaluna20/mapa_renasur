@@ -103,6 +103,12 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType }
         }
     };
 
+    const getMinZoomForLabel = (area: number) => {
+        if (area < 200) return 21; // Small lots (e.g. 160m2) needs high zoom
+        if (area < 1200) return 19; // Medium lots
+        return 19; // Large lots
+    };
+
     return (
         <MapContainer
             center={center}
@@ -139,6 +145,7 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType }
 
                 if (positions.length === 0) return null;
                 const isSelected = selectedLotId === lot.id;
+                const isPermanent = zoom >= getMinZoomForLabel(lot.area);
 
                 return (
                     <Polygon
@@ -155,14 +162,18 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType }
                         }}
                     >
                         <Tooltip
-                            permanent
+                            key={`tooltip-${lot.id}-${isPermanent}`}
+                            permanent={isPermanent}
                             direction="center"
-                            className="bg-transparent border-0 shadow-none"
+                            className="!bg-transparent !border-0 !shadow-none p-0"
                             opacity={1}
                         >
-                            <div className="flex flex-col items-center justify-center pointer-events-none">
-                                <span className="text-white font-black text-[10px] leading-none drop-shadow-[0_1.2px_1.2px_rgba(0,0,0,0.8)]">{lot.name}</span>
-                                <span className="text-white text-[9px] font-bold leading-none mt-0.5 drop-shadow-[0_1.2px_1.2px_rgba(0,0,0,0.8)]">{lot.area} m²</span>
+                            <div className="flex flex-col items-center justify-center bg-white/95 backdrop-blur-md rounded-xl shadow-2xl border border-white/50 p-2.5 min-w-[90px] transform transition-all cursor-pointer">
+                                <span className="text-slate-800 font-bold text-xs tracking-tight">{lot.name}</span>
+                                <div className="h-px w-full bg-slate-100 my-1.5"></div>
+                                <span className="text-blue-600 text-[10px] font-bold bg-blue-50 px-2 py-0.5 rounded-full tracking-wide shadow-sm">
+                                    {lot.area} m²
+                                </span>
                             </div>
                         </Tooltip>
                     </Polygon>
