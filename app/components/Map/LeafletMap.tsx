@@ -9,7 +9,7 @@ import { Lot } from '@/app/data/lotsData';
 import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 
-const ZOOM_THRESHOLD_LABELS = 16;
+const ZOOM_THRESHOLD_LABELS = 14;
 
 // Define UTM zone 18L projection (WGS84)
 proj4.defs("EPSG:32718", "+proj=utm +zone=18 +south +datum=WGS84 +units=m +no_defs");
@@ -137,18 +137,15 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType }
                             click: () => onLotSelect(lot),
                         }}
                     >
-                        {zoom >= ZOOM_THRESHOLD_LABELS && (
-                            <Tooltip
-                                permanent
-                                direction="center"
-                                className="bg-transparent border-0 shadow-none font-bold text-[10px]"
-                                opacity={1}
-                            >
-                                <span className="text-black drop-shadow-md bg-white/50 px-1 rounded backdrop-blur-[1px]">
-                                    {lot.name}
-                                </span>
-                            </Tooltip>
-                        )}
+                        <Tooltip
+                            direction="center"
+                            className="bg-transparent border-0 shadow-none font-bold text-[10px]"
+                            opacity={1}
+                        >
+                            <span className="text-black drop-shadow-md bg-white/50 px-1 rounded backdrop-blur-[1px]">
+                                {lot.name}
+                            </span>
+                        </Tooltip>
                     </Polygon>
                 );
             })}
