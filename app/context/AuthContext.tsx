@@ -2,7 +2,8 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { odooService, OdooUser } from '@/app/services/odooService';
+import { odooService, type OdooUser } from '@/app/services/odooService';
+export type { OdooUser };
 
 interface AuthContextType {
     user: OdooUser | null;
