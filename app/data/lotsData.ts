@@ -3,57 +3,54 @@ export interface Lot {
     name: string;
     status: 'available' | 'reserved' | 'sold';
     price: number;
-    area: number;
-    points: number[][]; // [[x, y], [x, y]]
+    area: number; // m2
+    points: [number, number][]; // UTM coordinates
     image?: string;
     description?: string;
+    salespersonId?: number; // ID of the salesperson assigned to this lot
 }
 
 export const lotsData: Lot[] = [
     {
-        id: "poly-01",
-        name: "Polígono 01",
-        status: "available",
-        price: 120000,
-        area: 5000,
-        points: [
-            [308758.5435, 8623079.82], [308763.5952, 8623080.0217], [308775.4647, 8623081.8499],
-            [309039.5162, 8623154.452], [309075.2187, 8623027.7484], [309136.3503, 8622811.2917],
-            [308871.432, 8622738.7153], [308850.0381, 8622819.799], [308822.3445, 8622929.7864]
-        ],
-        image: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
-        description: 'Terreno amplio con excelente ubicación.'
-    },
-    {
-        id: "poly-02",
-        name: "Polígono 02",
-        status: "reserved",
-        price: 95000,
-        area: 4200,
+        id: '1',
+        name: 'Lote 01',
+        status: 'available',
+        price: 150000,
+        area: 450,
         points: [
             [308291.4827, 8623340.869], [308750.1099, 8623077.248], [308640.4756, 8623051.1366],
-            [308735.7424, 8622776.1674], [308752.6381, 8622703.634], [308660.749, 8622678.4603],
-            [308648.4495, 8622753.4586], [308355.4442, 8622689.0557], [308308.517, 8622753.8469],
-            [308477.6171, 8622887.5031], [308471.4927, 8622971.2857], [308271.0707, 8622921.1211],
-            [308251.4539, 8622988.398], [308150.0365, 8623042.7388], [308198.1441, 8623150.4862],
-            [308333.7336, 8623076.5369], [308397.7777, 8623106.2979], [308328.1165, 8623178.0433],
-            [308331.8287, 8623284.9785]
+            [308735.7424, 8622776.1674], [308198.1441, 8623150.4862]
         ],
-        image: 'https://images.unsplash.com/photo-1516156008625-3a9d60da923c?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
-        description: 'Lote ideal para desarrollo residencial.'
+        image: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
+        description: 'Amplio lote con vista panorámica.'
     },
     {
-        id: "poly-03",
-        name: "Polígono 03",
-        status: "sold",
-        price: 45000,
-        area: 1200,
+        id: '2',
+        name: 'Lote 02',
+        status: 'reserved',
+        price: 120000,
+        area: 380,
         points: [
-            [308147.3936, 8623045.3306], [308248.8111, 8622990.9898], [308268.4278, 8622923.7129],
-            [308468.8498, 8622973.8775], [308474.9742, 8622890.0949], [308305.8741, 8622756.4382]
+            [308333.7336, 8623076.5369], [308397.7777, 8623106.2979], [308328.1165, 8623178.0433],
+            [308331.8287, 8623284.9785], [308198.1585, 8623150.4783]
         ],
-        image: 'https://images.unsplash.com/photo-1626245084927-46e33621a24d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
-        description: 'Oportunidad de inversión.'
+        image: 'https://images.unsplash.com/photo-1516156008625-3a9d60da923c?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
+        description: 'Lote ideal para desarrollo residencial.',
+        salespersonId: 3
+    },
+    {
+        id: '3',
+        name: 'Lote 03',
+        status: 'sold',
+        price: 180000,
+        area: 2500,
+        points: [
+            [308198.1585, 8623150.4783], [308017.3558, 8623248.9168], [307990.8568, 8623285.3908],
+            [307991.3548, 8623377.0198]
+        ],
+        image: 'https://images.unsplash.com/photo-1524813686514-a57563d77965?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
+        description: 'Terreno con gran potencial.',
+        salespersonId: 3
     },
     {
         id: "poly-04",
@@ -63,10 +60,7 @@ export const lotsData: Lot[] = [
         area: 2500,
         points: [
             [308198.1585, 8623150.4783], [308017.3558, 8623248.9168], [307990.8568, 8623285.3908],
-            [307991.3548, 8623377.0198], [308019.022, 8623384.37], [308076.5927, 8623445.2029],
-            [308076.5769, 8623466.2157], [308178.828, 8623409.9244], [308291.4827, 8623340.869],
-            [308331.8287, 8623284.9785], [308328.1165, 8623178.0433], [308397.7777, 8623106.2979],
-            [308333.7336, 8623076.5369]
+            [307991.3548, 8623377.0198]
         ],
         image: 'https://images.unsplash.com/photo-1524813686514-a57563d77965?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
         description: 'Terreno con gran potencial.'
@@ -87,9 +81,10 @@ export const lotsData: Lot[] = [
     {
         id: "poly-11",
         name: "Lote 11",
-        status: "available",
+        status: "sold",
         price: 40000,
         area: 160,
+        salespersonId: 3,
         points: [
             [308794.9341, 8622921.2613], [308790.6257, 8622935.0486], [308786.7906, 8622937.3021],
             [308780.9770, 8622936.2645], [308783.8152, 8622919.0540]
@@ -99,9 +94,10 @@ export const lotsData: Lot[] = [
     {
         id: "poly-12",
         name: "Lote 12",
-        status: "available",
+        status: "sold",
         price: 40000,
         area: 160,
+        salespersonId: 3,
         points: [
             [308780.9770, 8622936.2645], [308773.8477, 8622935.3172], [308775.8936, 8622917.9372],
             [308783.8152, 8622919.0540]
@@ -111,9 +107,10 @@ export const lotsData: Lot[] = [
     {
         id: "poly-13",
         name: "Lote 13",
-        status: "available",
+        status: "sold",
         price: 40000,
         area: 160,
+        salespersonId: 3,
         points: [
             [308773.8477, 8622935.3172], [308766.6888, 8622934.6439], [308767.9287, 8622917.1879],
             [308775.8936, 8622917.9372]
@@ -123,9 +120,10 @@ export const lotsData: Lot[] = [
     {
         id: "poly-14",
         name: "Lote 14",
-        status: "available",
+        status: "sold",
         price: 40000,
         area: 160,
+        salespersonId: 3,
         points: [
             [308766.6888, 8622934.6439], [308759.5065, 8622934.3025], [308759.9378, 8622916.8078],
             [308767.9287, 8622917.1879]
@@ -135,9 +133,10 @@ export const lotsData: Lot[] = [
     {
         id: "poly-15",
         name: "Lote 15",
-        status: "available",
+        status: "reserved",
         price: 40000,
         area: 160,
+        salespersonId: 3,
         points: [
             [308759.5065, 8622934.3025], [308752.3160, 8622934.2935], [308751.9378, 8622916.7976],
             [308759.9378, 8622916.8078]
@@ -147,9 +146,10 @@ export const lotsData: Lot[] = [
     {
         id: "poly-16",
         name: "Lote 16",
-        status: "available",
+        status: "reserved",
         price: 40000,
         area: 160,
+        salespersonId: 3,
         points: [
             [308752.3160, 8622934.2935], [308745.1329, 8622934.6172], [308743.9459, 8622917.1575],
             [308751.9378, 8622916.7976]
@@ -159,9 +159,10 @@ export const lotsData: Lot[] = [
     {
         id: "poly-17",
         name: "Lote 17",
-        status: "available",
+        status: "reserved",
         price: 40000,
         area: 160,
+        salespersonId: 3,
         points: [
             [308745.1329, 8622934.6172], [308737.9724, 8622935.2726], [308735.9792, 8622917.8865],
             [308743.9459, 8622917.1575]
@@ -171,9 +172,10 @@ export const lotsData: Lot[] = [
     {
         id: "poly-18",
         name: "Lote 18",
-        status: "available",
+        status: "sold",
         price: 40000,
         area: 160,
+        salespersonId: 3,
         points: [
             [308737.9724, 8622935.2726], [308730.8498, 8622936.2586], [308728.0547, 8622918.9832],
             [308735.9792, 8622917.8865]
@@ -183,9 +185,10 @@ export const lotsData: Lot[] = [
     {
         id: "poly-19",
         name: "Lote 19",
-        status: "available",
+        status: "sold",
         price: 40000,
         area: 160,
+        salespersonId: 3,
         points: [
             [308730.8498, 8622936.2586], [308723.7805, 8622937.5729], [308720.1894, 8622920.4453],
             [308728.0547, 8622918.9832]
@@ -195,9 +198,10 @@ export const lotsData: Lot[] = [
     {
         id: "poly-20",
         name: "Lote 20",
-        status: "available",
+        status: "sold",
         price: 40000,
         area: 160,
+        salespersonId: 3,
         points: [
             [308723.7805, 8622937.5729], [308716.7795, 8622939.2127], [308712.4002, 8622922.2695],
             [308720.1894, 8622920.4453]

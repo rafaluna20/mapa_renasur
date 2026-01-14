@@ -21,6 +21,7 @@ export default function Home() {
   const [mapType, setMapType] = useState<'street' | 'satellite' | 'blank'>('street');
   // Local state for lots to simulate status updates
   const [lots, setLots] = useState<Lot[]>(lotsData);
+  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -192,7 +193,25 @@ export default function Home() {
             <button
               className="bg-white text-slate-700 p-2 rounded-lg shadow-md border border-slate-200 hover:bg-slate-50"
               title="Mi Ubicación"
-              onClick={() => alert("GPS simulado")}
+              onClick={() => {
+                if (navigator.geolocation) {
+                  navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                      const { latitude, longitude } = position.coords;
+                      setUserLocation([latitude, longitude]);
+                      setSelectedLotId(null);
+                      window.dispatchEvent(new CustomEvent('centerMap', {
+                        detail: { lat: latitude, lng: longitude, zoom: 18 }
+                      }));
+                    },
+                    (error) => {
+                      alert('No se pudo obtener tu ubicación: ' + error.message);
+                    }
+                  );
+                } else {
+                  alert('Tu navegador no soporta geolocalización');
+                }
+              }}
             >
               <Navigation size={20} />
             </button>
@@ -223,6 +242,7 @@ export default function Home() {
               selectedLotId={selectedLotId}
               onLotSelect={(l) => setSelectedLotId(l.id)}
               mapType={mapType}
+              userLocation={userLocation}
             />
           </div>
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { MapContainer, TileLayer, Polygon, Popup, useMap, Tooltip, LayersControl } from 'react-leaflet';
+import { MapContainer, TileLayer, Polygon, Popup, useMap, Tooltip, LayersControl, Marker, Circle, CircleMarker } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.css';
 import 'leaflet-defaulticon-compatibility';
@@ -19,6 +19,7 @@ interface LeafletMapProps {
     selectedLotId: string | null;
     onLotSelect: (lot: Lot) => void;
     mapType: 'street' | 'satellite' | 'blank';
+    userLocation?: [number, number] | null;
 }
 
 function MapController({ lots, selectedLotId, onZoomChange }: { lots: Lot[], selectedLotId: string | null, onZoomChange: (z: number) => void }) {
@@ -87,10 +88,21 @@ function MapController({ lots, selectedLotId, onZoomChange }: { lots: Lot[], sel
         }
     }, [selectedLotId, map, lots]);
 
+    // Listen for GPS location events
+    useEffect(() => {
+        const handleCenterMap = (event: any) => {
+            const { lat, lng, zoom } = event.detail;
+            map.flyTo([lat, lng], zoom, { animate: true, duration: 2 });
+        };
+
+        window.addEventListener('centerMap', handleCenterMap);
+        return () => window.removeEventListener('centerMap', handleCenterMap);
+    }, [map]);
+
     return null;
 }
 
-export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType }: LeafletMapProps) {
+export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, userLocation }: LeafletMapProps) {
     const center: [number, number] = [-12.0464, -77.0428];
     const [zoom, setZoom] = useState(16);
 
@@ -131,6 +143,33 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType }
                     url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
                     maxNativeZoom={19}
                 />
+            )}
+
+            {/* User Location Marker */}
+            {userLocation && (
+                <>
+                    <CircleMarker
+                        center={userLocation}
+                        radius={8}
+                        pathOptions={{
+                            fillColor: '#3B82F6',
+                            fillOpacity: 1,
+                            color: '#FFFFFF',
+                            weight: 3
+                        }}
+                    />
+                    <Circle
+                        center={userLocation}
+                        radius={20}
+                        pathOptions={{
+                            fillColor: '#3B82F6',
+                            fillOpacity: 0.1,
+                            color: '#3B82F6',
+                            weight: 1,
+                            opacity: 0.3
+                        }}
+                    />
+                </>
             )}
 
             {lots.map((lot) => {

@@ -7,6 +7,7 @@ import { odooService, OdooUser } from '@/app/services/odooService';
 interface AuthContextType {
     user: OdooUser | null;
     salesCount: number;
+    reservedCount: number;
     loading: boolean;
     login: (login: string, pass: string) => Promise<void>;
     logout: () => void;
@@ -17,6 +18,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<OdooUser | null>(null);
     const [salesCount, setSalesCount] = useState(0);
+    const [reservedCount, setReservedCount] = useState(0);
     const [loading, setLoading] = useState(true);
     const router = useRouter();
 
@@ -37,8 +39,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const refreshStats = async (partnerId: number) => {
         try {
-            const count = await odooService.getSalesCount(partnerId);
-            setSalesCount(count);
+            // Import lotsData dynamically to calculate local stats
+            const { lotsData } = await import('@/app/data/lotsData');
+
+            // Calculate from local data
+            const userLots = lotsData.filter(lot => lot.salespersonId === partnerId);
+            const sold = userLots.filter(l => l.status === 'sold').length;
+            const reserved = userLots.filter(l => l.status === 'reserved').length;
+
+            setSalesCount(sold);
+            setReservedCount(reserved);
+
+            // Optionally fetch from Odoo as well (uncomment to use)
+            // const count = await odooService.getSalesCount(partnerId);
+            // setSalesCount(count);
         } catch (error) {
             console.error("Error refreshing stats", error);
         }
@@ -62,12 +76,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const logout = () => {
         setUser(null);
         setSalesCount(0);
+        setReservedCount(0);
         localStorage.removeItem('odoo_user');
         router.push('/login');
     };
 
     return (
-        <AuthContext.Provider value={{ user, salesCount, loading, login, logout }}>
+        <AuthContext.Provider value={{ user, salesCount, reservedCount, loading, login, logout }}>
             {children}
         </AuthContext.Provider>
     );

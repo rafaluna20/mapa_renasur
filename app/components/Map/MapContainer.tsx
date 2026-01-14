@@ -20,6 +20,7 @@ interface MapContainerProps {
     selectedLotId: string | null;
     onLotSelect: (lot: Lot) => void;
     mapType: 'street' | 'satellite' | 'blank';
+    userLocation?: [number, number] | null;
 }
 
 export default function MapContainerWrapper(props: MapContainerProps) {
