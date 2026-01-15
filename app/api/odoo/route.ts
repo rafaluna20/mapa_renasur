@@ -11,6 +11,7 @@ export async function POST(request: Request) {
     const ODOO_URL = process.env.NEXT_PUBLIC_ODOO_URL;
 
     if (!ODOO_URL) {
+        console.error('Server configuration error: NEXT_PUBLIC_ODOO_URL not set');
         return NextResponse.json({ error: 'Server configuration error: NEXT_PUBLIC_ODOO_URL not set' }, { status: 500 });
     }
 
