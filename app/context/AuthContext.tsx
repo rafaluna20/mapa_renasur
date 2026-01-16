@@ -45,8 +45,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             // Calculate from local data
             const userLots = lotsData.filter(lot => lot.salespersonId === partnerId);
-            const sold = userLots.filter(l => l.status === 'sold').length;
-            const reserved = userLots.filter(l => l.status === 'reserved').length;
+            const sold = userLots.filter(l => l.x_statu === 'vendido').length;
+            const reserved = userLots.filter(l => l.x_statu === 'separado').length;
 
             setSalesCount(sold);
             setReservedCount(reserved);

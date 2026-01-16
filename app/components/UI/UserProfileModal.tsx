@@ -18,11 +18,11 @@ export default function UserProfileModal({ user, onClose }: UserProfileModalProp
         // We use user.partner_id as the salespersonId matcher.
         const userLots = lotsData.filter(lot => lot.salespersonId === user.partner_id);
 
-        const sold = userLots.filter(l => l.status === 'sold').length;
-        const reserved = userLots.filter(l => l.status === 'reserved').length;
+        const sold = userLots.filter(l => l.x_statu === 'vendido').length;
+        const reserved = userLots.filter(l => l.x_statu === 'separado').length;
         const totalValue = userLots
-            .filter(l => l.status === 'sold')
-            .reduce((acc, lot) => acc + lot.price, 0);
+            .filter(l => l.x_statu === 'vendido')
+            .reduce((acc, lot) => acc + lot.list_price, 0);
 
         setStats({ sold, reserved, totalValue });
     }, [user]);
