@@ -46,6 +46,8 @@ export default function FloatingControls({
                             className="w-full px-1 py-1 bg-blue-50 border border-blue-100 rounded-lg text-[10px] font-semibold text-blue-900 outline-none appearance-none text-center"
                         >
                             <option value="all">Todas</option>
+                            <option value="D">D</option>
+                            <option value="P">P</option>
                             <option value="Q">Q</option>
                             <option value="R">R</option>
                             <option value="S">S</option>

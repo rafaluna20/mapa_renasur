@@ -71,7 +71,10 @@ export default function FilterBar({
                         className="w-full px-3 py-2 bg-blue-50 border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 rounded-lg text-sm font-medium text-blue-900 transition-all outline-none shadow-sm hover:shadow-md hover:bg-blue-100 cursor-pointer"
                     >
                         <option value="all">Todas</option>
+
+                        <option value="D">MZ D</option>
                         <option value="Q">MZ Q</option>
+                        <option value="P">MZ P</option>
                         <option value="R">MZ R</option>
                         <option value="S">MZ S</option>
                         <option value="T">MZ T</option>

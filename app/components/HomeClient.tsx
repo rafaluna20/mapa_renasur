@@ -87,7 +87,7 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
      * Se recalcula solo cuando 'odooProducts' cambia.
      */
     const mergedLots = useMemo(() => {
-        // 1. Crear un mapa rápido (Hash Map) de productos Odoo usando default_code
+        // 1. Crear un mapa rápido de productos Odoo
         const odooMap = new Map<string, OdooProduct>();
         odooProducts.forEach(p => {
             if (p.default_code) {
@@ -95,38 +95,59 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
             }
         });
 
-        console.log(`[DEBUG] Odoo Map tiene ${odooMap.size} productos indexados por default_code`);
+        // 2. Procesar lotes locales
+        const processedLocalCode = new Set<string>();
+        const matched = lotsData.map(lot => {
+            const localCode = lot.default_code.toUpperCase();
+            processedLocalCode.add(localCode);
+            const odooMatch = odooMap.get(localCode);
 
-        // 2. Recorrer los lotes locales y fusionar
-        const matched = lotsData
-            .map(lot => {
-                const localCode = lot.default_code.toUpperCase();
-                const odooMatch = odooMap.get(localCode);
+            if (odooMatch) {
+                const mappedStatus = mapOdooStatus(odooMatch.x_statu);
+                const registryPoints = (geometriesJson as any)[localCode];
 
-                if (odooMatch) {
-                    // Si hay coincidencia, actualizamos estado, precio y OTROS DATOS
-                    const mappedStatus = mapOdooStatus(odooMatch.x_statu);
+                return {
+                    ...lot,
+                    x_statu: mappedStatus || lot.x_statu,
+                    list_price: odooMatch.list_price || lot.list_price,
+                    x_area: getOdooVal(odooMatch.x_area, lot.x_area),
+                    x_mz: getOdooVal(odooMatch.x_mz, lot.x_mz),
+                    x_etapa: getOdooVal(odooMatch.x_etapa, lot.x_etapa),
+                    points: registryPoints || lot.points
+                };
+            }
+            return lot;
+        });
 
-                    // Recuperar puntos de la base de datos de geometrías si no están el lot local
-                    // o forzar el uso de geometriesJson para mayor seguridad
-                    const registryPoints = (geometriesJson as any)[localCode];
-
-                    return {
-                        ...lot,
-                        x_statu: mappedStatus || lot.x_statu,
-                        list_price: odooMatch.list_price || lot.list_price,
-                        x_area: getOdooVal(odooMatch.x_area, lot.x_area),
-                        x_mz: getOdooVal(odooMatch.x_mz, lot.x_mz),
-                        x_etapa: getOdooVal(odooMatch.x_etapa, lot.x_etapa),
-                        points: registryPoints || lot.points // Inyectar geometría del registro
-                    };
-                } else {
-                    return { ...lot };
+        // 3. INTEGRACIÓN DINÁMICA: Añadir lotes que están en Odoo y tienen geometría, pero NO en lotsData.ts
+        const dynamicLots: Lot[] = [];
+        odooProducts.forEach(odooMatch => {
+            const code = (odooMatch.default_code || '').toString().trim().toUpperCase();
+            if (code && !processedLocalCode.has(code)) {
+                const registryPoints = (geometriesJson as any)[code];
+                if (registryPoints) {
+                    dynamicLots.push({
+                        id: odooMatch.id.toString(),
+                        name: odooMatch.name || `Lote ${code}`,
+                        x_statu: mapOdooStatus(odooMatch.x_statu) || 'libre',
+                        list_price: odooMatch.list_price || 0,
+                        x_area: odooMatch.x_area || 0,
+                        x_mz: odooMatch.x_mz || '',
+                        x_etapa: odooMatch.x_etapa || '',
+                        x_lote: odooMatch.x_lote || '',
+                        default_code: code,
+                        points: registryPoints,
+                        image: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
+                        description: 'Lote detectado dinámicamente desde Odoo.'
+                    });
                 }
-            });
+            }
+        });
 
-        console.log(`[RESULTADO] ${matched.length} lotes procesados (local + Odoo)`);
-        return matched;
+        const finalResult = [...matched, ...dynamicLots];
+        console.log(`[DYNAMICS] ${dynamicLots.length} nuevos lotes detectados.`);
+        console.log(`[RESULTADO] ${finalResult.length} lotes totales (local + dinámicos)`);
+        return finalResult;
     }, [odooProducts]);
 
     // Estado que almacena la lista final de lotes a mostrar

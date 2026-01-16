@@ -194,10 +194,16 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
                                 className="!bg-transparent !border-0 !shadow-none p-0"
                                 opacity={1}
                             >
-                                <div className="flex flex-col items-center justify-center bg-white/95 backdrop-blur-md rounded-md shadow-lg border border-white/50 p-1.5 min-w-[58px] transform transition-all cursor-pointer">
-                                    <span className="text-slate-800 font-bold text-[8px] tracking-tight capitalize leading-tight text-center">{lot.name}</span>
+                                <div className="flex flex-col items-center justify-center bg-white/95 backdrop-blur-md rounded-md shadow-md border border-white/50 p-1 min-w-[52px] transform transition-all cursor-pointer">
+                                    <div className="flex flex-col items-center leading-[1.1]">
+                                        {lot.name.toLowerCase().split(' mz ').map((part, i) => (
+                                            <span key={i} className="text-slate-800 font-bold text-[7px] tracking-tight capitalize text-center">
+                                                {i === 1 ? `Mz ${part}` : part}
+                                            </span>
+                                        ))}
+                                    </div>
                                     <div className="h-[0.5px] w-full bg-slate-100 my-0.5"></div>
-                                    <span className="text-blue-600 text-[7px] font-bold bg-blue-50 px-1 py-0.5 rounded-full tracking-wide shadow-sm">
+                                    <span className="text-blue-600 text-[6px] font-bold bg-blue-50 px-1 py-0.5 rounded-full tracking-wide shadow-sm">
                                         {lot.x_area} m²
                                     </span>
                                 </div>
