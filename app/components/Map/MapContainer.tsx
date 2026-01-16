@@ -21,6 +21,7 @@ interface MapContainerProps {
     onLotSelect: (lot: Lot) => void;
     mapType: 'street' | 'satellite' | 'blank';
     userLocation?: [number, number] | null;
+    preferCanvas?: boolean;
 }
 
 export default function MapContainerWrapper(props: MapContainerProps) {

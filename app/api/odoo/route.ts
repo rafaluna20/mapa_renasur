@@ -1,40 +1,52 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { fetchOdoo } from '@/app/services/odooService';
 
-export async function POST(request: Request) {
-    const body = await request.json();
-    const { url, method, params } = body;
 
-    if (!url || !method) {
-        return NextResponse.json({ error: 'Missing url or method' }, { status: 400 });
-    }
-
-    const ODOO_URL = process.env.NEXT_PUBLIC_ODOO_URL;
-
-    if (!ODOO_URL) {
-        console.error('Server configuration error: NEXT_PUBLIC_ODOO_URL not set');
-        return NextResponse.json({ error: 'Server configuration error: NEXT_PUBLIC_ODOO_URL not set' }, { status: 500 });
-    }
-
-    const targetUrl = `${ODOO_URL}${url}`;
-
+export async function GET(request: NextRequest) {
     try {
-        const response = await fetch(targetUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                jsonrpc: '2.0',
-                method: method,
-                params: params,
-                id: Math.floor(Math.random() * 1000000000),
-            }),
-        });
+        const { searchParams } = new URL(request.url);
+        const search = searchParams.get('search');
+        const etapa = searchParams.get('etapa');
+        const manzana = searchParams.get('manzana');
+        const estado = searchParams.get('estado');
 
-        const data = await response.json();
-        return NextResponse.json(data);
-    } catch (error) {
-        console.error('Odoo Proxy Error:', error);
-        return NextResponse.json({ error: 'Failed to communicate with Odoo' }, { status: 500 });
+        // Base domain: Only active products
+        const domain: any[] = [["active", "=", true]];
+
+        // Add filters if they exist
+        if (search) {
+            domain.push("|", ["name", "ilike", search], ["default_code", "ilike", search]);
+        }
+        if (etapa) {
+            domain.push(["x_etapa", "=", etapa]);
+        }
+        if (manzana) {
+            domain.push(["x_mz", "=", manzana]);
+        }
+        if (estado) {
+            domain.push(["x_statu", "=", estado]);
+        }
+
+        const fields = [
+            "id", "name", "default_code", "list_price",
+            "qty_available", "x_statu", "x_area",
+            "x_mz", "x_etapa", "x_lote"
+        ];
+
+        console.log("API Route: Fetching Odoo with domain:", JSON.stringify(domain));
+
+        const result = await fetchOdoo(
+            "product.template",
+            "search_read",
+            [domain], // Domain (Args)
+            { fields: fields, limit: 100 } // Kwargs
+        );
+
+        return NextResponse.json({ success: true, count: result.length, data: result });
+
+
+    } catch (error: any) {
+        console.error("API Route Error:", error);
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 }

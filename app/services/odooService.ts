@@ -1,6 +1,7 @@
 const PROXY_URL = '/api/odoo';
-const DB = process.env.NEXT_PUBLIC_ODOO_DB || 'odoo'; // Fallback or from env
+const DB = process.env.NEXT_PUBLIC_ODOO_DB || 'odoo';
 
+// --- Type Definitions ---
 export interface OdooUser {
     uid: number;
     name: string;
@@ -11,80 +12,103 @@ export interface OdooUser {
     is_system: boolean;
 }
 
+export interface OdooProduct {
+    id: number;
+    name: string;
+    default_code: string | false;
+    list_price: number;
+    qty_available: number;
+    x_statu?: string;
+    x_area?: number;
+    x_mz?: string;
+    x_etapa?: string;
+    x_lote?: string;
+}
+
+// --- Server-Side Fetch Utility ---
+// NOTA: Esta función DEBE usarse solo en Server Components o API Routes.
+// No la uses directamente en Client Components porque process.env no estará disponible.
+export async function fetchOdoo(model: string, method: string, args: any[], kwargs: any = {}) {
+    const url = process.env.ODOO_URL;
+    if (!url) {
+        // Fallback for debugging if run on client by mistake, though it will fail cors likely
+        console.error("Missing ODOO_URL. Ensure this is called server-side.");
+    }
+
+    const payload = {
+        jsonrpc: "2.0",
+        method: "call",
+        params: {
+            service: "object",
+            method: "execute_kw",
+            args: [
+                process.env.ODOO_DB,
+                parseInt(process.env.ODOO_USER_ID || "0"),
+                process.env.ODOO_PASSWORD,
+                model,
+                method,
+                args,
+                kwargs
+            ]
+        },
+        id: 2
+    };
+
+    try {
+        const res = await fetch(url!, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+            cache: "no-store",
+        });
+
+        if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`Odoo HTTP Error ${res.status}: ${text}`);
+        }
+
+        const data = await res.json();
+
+        if (data.error) {
+            console.error("Odoo JSON-RPC Error:", JSON.stringify(data.error, null, 2));
+            throw new Error(`Odoo Error: ${data.error.message} - ${data.error.data?.message || ''}`);
+        }
+
+
+
+
+
+        return data.result;
+    } catch (error) {
+        console.error("Fetch Odoo Error:", error);
+        throw error;
+    }
+}
+
+// --- Client-Side Auth Service ---
 export const odooService = {
     async login(login: string, pass: string): Promise<OdooUser> {
-        const response = await fetch(PROXY_URL, {
+        // We will hit our own API route which will handle the proxying
+        const response = await fetch('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                url: '/web/session/authenticate',
-                method: 'call',
-                params: {
-                    db: DB,
-                    login: login,
-                    password: pass,
-                },
-            }),
+            body: JSON.stringify({ login, password: pass }),
         });
 
         const result = await response.json();
 
-        if (result.error) {
-            throw new Error(result.error.data?.message || 'Authentication Failed');
+        if (!result.success) {
+            throw new Error(result.error || 'Authentication Failed');
         }
 
-        const { uid, name, username, session_id, partner_id, company_id, is_system } = result.result;
-
-        return {
-            uid,
-            name,
-            username,
-            session_id,
-            partner_id,
-            company_id,
-            is_system
-        };
+        // Return the user data structure
+        return result.user;
     },
 
     async getSalesCount(partnerId: number): Promise<number> {
-        // This assumes we can access 'stock.lot' or similar model where 'salesperson_id' or connected partner is tracked.
-        // Adjust model and domain as per specific Odoo customization for "Lots".
-        // For now, let's assume a model 'stock.quant' or a custom 'real.estate.lot' and status 'sold'.
-        // If we don't know the exact model, we might default to 0 or mock it if the RPC fails.
-
-        // NOTE: User mentioned "cada usuario vendedor muestra la cantidad de lotes vendido".
-        // We will assume a model map or similar. Since we don't have the exact model name, 
-        // we'll try to use a generic 'sale.order' count for now, or returns a mock if it fails,
-        // as we need to be careful with the exact model name.
-
-        // However, the prompt implies this app IS for the real estate.
-        // Let's assume the model is 'res.partner' (too generic) or better, let's assume we are counting 'sale.order' where user_id is the current user.
-
-        try {
-            const response = await fetch(PROXY_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    url: '/web/dataset/call_kw/sale.order/search_count',
-                    method: 'call',
-                    params: {
-                        model: 'sale.order',
-                        method: 'search_count',
-                        args: [[['user_id.partner_id', '=', partnerId], ['state', '=', 'sale']]], // sales orders confirmed
-                        kwargs: {},
-                    },
-                }),
-            });
-
-            const result = await response.json();
-            if (result.error) {
-                console.warn("Could not fetch sales count, returning 0", result.error);
-                return 0;
-            }
-            return result.result;
-        } catch (e) {
-            console.error("Error fetching sales stats", e);
-            return 0;
-        }
+        // Placeholder for future implementation
+        return 0;
     }
 };
