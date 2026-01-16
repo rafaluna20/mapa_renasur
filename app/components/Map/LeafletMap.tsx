@@ -6,10 +6,8 @@ import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility
 import 'leaflet-defaulticon-compatibility';
 import proj4 from 'proj4';
 import { Lot } from '@/app/data/lotsData';
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import L from 'leaflet';
-
-const ZOOM_THRESHOLD_LABELS = 14;
 
 // Define UTM zone 18L projection (WGS84)
 proj4.defs("EPSG:32718", "+proj=utm +zone=18 +south +datum=WGS84 +units=m +no_defs");
@@ -47,7 +45,7 @@ function MapController({ lots, selectedLotId, onZoomChange }: { lots: Lot[], sel
                     });
 
                     if (bounds.isValid()) {
-                        const targetZoom = map.getBoundsZoom(bounds, false, [50, 50] as any);
+                        const targetZoom = map.getBoundsZoom(bounds, false, L.point(50, 50));
                         const finalZoom = Math.min(targetZoom, 21);
                         map.flyTo(bounds.getCenter(), finalZoom, {
                             duration: 2,
@@ -78,8 +76,9 @@ function MapController({ lots, selectedLotId, onZoomChange }: { lots: Lot[], sel
     }, [selectedLotId, map, lots]);
 
     useEffect(() => {
-        const handleCenterMap = (event: any) => {
-            const { lat, lng, zoom } = event.detail;
+        const handleCenterMap = (event: Event) => {
+            const customEvent = event as CustomEvent<{ lat: number, lng: number, zoom: number }>;
+            const { lat, lng, zoom } = customEvent.detail;
             map.flyTo([lat, lng], zoom, { animate: true, duration: 2 });
         };
         window.addEventListener('centerMap', handleCenterMap);
@@ -101,7 +100,7 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
                 try {
                     const [lon, lat] = proj4("EPSG:32718", "EPSG:4326", [p[0], p[1]]);
                     return [lat, lon] as [number, number];
-                } catch (e) {
+                } catch {
                     return [0, 0] as [number, number];
                 }
             });

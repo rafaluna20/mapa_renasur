@@ -14,20 +14,7 @@ export interface Lot {
     default_code: string; // Código de Odoo para matching (ej: E01MZX001)
 }
 
-/**
- * Genera el default_code basado en el patrón de Odoo: E[etapa]MZ[manzana][lote]
- * Ejemplo: Lote 01, Etapa 04, Manzana X => E04MZX001
- */
-function generateDefaultCode(name: string, etapa: string, manzana: string): string {
-    // Extrae el número del lote del nombre o del campo x_lote si existiera
-    const loteMatch = name.match(/(\d+)/);
-    if (!loteMatch) return '';
 
-    const loteNum = loteMatch[1].padStart(3, '0');
-    const etapaNum = etapa.padStart(2, '0');
-
-    return `E${etapaNum}MZ${manzana}${loteNum}`;
-}
 
 
 // Array RAW de lotes (sin defaultCode)
@@ -36,7 +23,7 @@ const lotsDataRaw: Lot[] = [
         id: '1',
         name: 'etapa 01 mz T lote 01',
         x_statu: 'separado',
-        default_code: 'E01MZT001',  
+        default_code: 'E01MZT001',
         list_price: 10000,
         x_lote: '01',
         x_mz: 'T',
@@ -44,7 +31,7 @@ const lotsDataRaw: Lot[] = [
         x_area: 450,
         points: [
             [308291.4827, 8623340.869], [308750.1099, 8623077.248], [308640.4756, 8623051.1366]
-        ],  
+        ],
         image: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
         description: 'Amplio lote con vista panorámica.'
     },

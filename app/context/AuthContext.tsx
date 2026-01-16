@@ -31,7 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 const parsedUser = JSON.parse(storedUser);
                 setUser(parsedUser);
                 refreshStats(parsedUser.partner_id);
-            } catch (e) {
+            } catch (_e) {
                 localStorage.removeItem('odoo_user');
             }
         }
@@ -69,8 +69,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             await refreshStats(odooUser.partner_id);
 
             router.push('/');
-        } catch (error) {
-            throw error;
+        } catch (_e) {
+            router.push('/login');
         }
     };
 

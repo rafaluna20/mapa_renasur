@@ -8,7 +8,8 @@ import { OdooProduct } from '@/app/services/odooService';
 import Header from '@/app/components/UI/Header';
 import LotCard from '@/app/components/UI/LotCard';
 import { lotsData, Lot } from '@/app/data/lotsData';
-import geometriesJson from '@/app/data/geometries.json';
+import geometriesJsonRaw from '@/app/data/geometries.json';
+const geometriesJson = geometriesJsonRaw as unknown as Record<string, [number, number][]>;
 import { Menu, Filter, Loader2 } from 'lucide-react';
 import { useAuth } from '@/app/context/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -76,6 +77,7 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
      */
     function getOdooVal<T>(val: T | false | undefined | null, fallback: T): T {
         if (val === false || val === undefined || val === null) return fallback;
+        if (typeof val === 'string' && val.trim() === '') return fallback;
         return val;
     }
 
@@ -96,7 +98,7 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
         });
 
         // Helper para procesar valores numéricos de Odoo (maneja strings con coma/punto)
-        const parseVal = (v: any, fallback: number, isArea: boolean = false) => {
+        const parseVal = (v: string | number | boolean | undefined | null, fallback: number, isArea: boolean = false): number => {
             if (v === undefined || v === null || v === false) return fallback;
 
             let s = v.toString().trim();
@@ -133,7 +135,7 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
 
             if (odooMatch) {
                 const mappedStatus = mapOdooStatus(odooMatch.x_statu);
-                const registryPoints = (geometriesJson as any)[localCode];
+                const registryPoints = geometriesJson[localCode];
 
                 return {
                     ...lot,
@@ -153,7 +155,7 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
         odooProducts.forEach(odooMatch => {
             const code = (odooMatch.default_code || '').toString().trim().toUpperCase();
             if (code && !processedLocalCode.has(code)) {
-                const registryPoints = (geometriesJson as any)[code];
+                const registryPoints = geometriesJson[code];
                 if (registryPoints) {
                     dynamicLots.push({
                         id: odooMatch.id.toString(),

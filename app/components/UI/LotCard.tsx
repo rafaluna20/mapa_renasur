@@ -1,5 +1,13 @@
 import { Lot } from '@/app/data/lotsData';
-import { CheckCircle, AlertCircle, XCircle } from 'lucide-react';
+import { LucideIcon, CheckCircle, AlertCircle, XCircle } from 'lucide-react';
+
+interface StatusConfigItem {
+    color: string;
+    label: string;
+    bg: string;
+    text: string;
+    icon: LucideIcon;
+}
 
 interface LotCardProps {
     lot: Lot;
@@ -7,7 +15,7 @@ interface LotCardProps {
     isSelected: boolean;
 }
 
-const STATUS_CONFIG: Record<string, any> = {
+const STATUS_CONFIG: Record<string, StatusConfigItem> = {
     libre: { color: "#10B981", label: "Disponible", bg: "bg-emerald-100", text: "text-emerald-800", icon: CheckCircle },
     separado: { color: "#F59E0B", label: "Reservado", bg: "bg-amber-100", text: "text-amber-800", icon: AlertCircle },
     vendido: { color: "#EF4444", label: "Vendido", bg: "bg-red-100", text: "text-red-800", icon: XCircle },

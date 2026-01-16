@@ -1,5 +1,12 @@
 import { Lot } from '@/app/data/lotsData';
-import { X, User, CheckCircle, AlertCircle, XCircle } from 'lucide-react';
+import { X, User } from 'lucide-react';
+
+interface StatusConfigItem {
+    color: string;
+    label: string;
+    bg: string;
+    text: string;
+}
 
 interface LotDetailModalProps {
     lot: Lot | null;
@@ -7,7 +14,7 @@ interface LotDetailModalProps {
     onUpdateStatus?: (id: string, status: string) => void;
 }
 
-const STATUS_CONFIG: Record<string, any> = {
+const STATUS_CONFIG: Record<string, StatusConfigItem> = {
     libre: { color: "#10B981", label: "Disponible", bg: "bg-emerald-100", text: "text-emerald-800" },
     separado: { color: "#F59E0B", label: "Reservado", bg: "bg-amber-100", text: "text-amber-800" },
     vendido: { color: "#EF4444", label: "Vendido", bg: "bg-red-100", text: "text-red-800" },

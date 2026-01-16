@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
         const estado = searchParams.get('estado');
 
         // Base domain: Only active products
-        const domain: any[] = [["active", "=", true]];
+        const domain: (string | [string, string, string | number | boolean])[] = [["active", "=", true]];
 
         // Add filters if they exist
         if (search) {
@@ -45,8 +45,9 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ success: true, count: result.length, data: result });
 
 
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : "Internal Server Error";
         console.error("API Route Error:", error);
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+        return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
     }
 }

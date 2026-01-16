@@ -1,7 +1,7 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect } from 'react';
 import { OdooUser } from '@/app/context/AuthContext';
 import { lotsData } from '@/app/data/lotsData';
-import { X, User, Trophy, Clock, CheckCircle, TrendingUp } from 'lucide-react';
+import { X, User, Trophy, Clock, TrendingUp } from 'lucide-react';
 
 interface UserProfileModalProps {
     user: OdooUser;
@@ -10,22 +10,16 @@ interface UserProfileModalProps {
 
 export default function UserProfileModal({ user, onClose }: UserProfileModalProps) {
     const modalRef = useRef<HTMLDivElement>(null);
-    const [stats, setStats] = useState({ sold: 0, reserved: 0, totalValue: 0 });
 
-    useEffect(() => {
-        // Calculate stats from local lotsData matching the user's partner_id
-        // Note: In a real app, this might come from Odoo directly.
-        // We use user.partner_id as the salespersonId matcher.
-        const userLots = lotsData.filter(lot => lot.salespersonId === user.partner_id);
+    // Calculate stats directly in the component body to avoid cascading renders
+    const userLots = lotsData.filter(lot => lot.salespersonId === user.partner_id);
+    const soldCount = userLots.filter(l => l.x_statu === 'vendido').length;
+    const reservedCount = userLots.filter(l => l.x_statu === 'separado').length;
+    const totalValue = userLots
+        .filter(l => l.x_statu === 'vendido')
+        .reduce((acc, lot) => acc + lot.list_price, 0);
 
-        const sold = userLots.filter(l => l.x_statu === 'vendido').length;
-        const reserved = userLots.filter(l => l.x_statu === 'separado').length;
-        const totalValue = userLots
-            .filter(l => l.x_statu === 'vendido')
-            .reduce((acc, lot) => acc + lot.list_price, 0);
-
-        setStats({ sold, reserved, totalValue });
-    }, [user]);
+    const stats = { sold: soldCount, reserved: reservedCount, totalValue };
 
     // Close on click outside
     useEffect(() => {

@@ -19,8 +19,9 @@ export default function LoginPage() {
         try {
             await login(username, password);
             // Redirect happens in login function
-        } catch (err: any) {
-            setError(err.message || 'Error al iniciar sesión');
+        } catch (err: unknown) {
+            const errorMessage = err instanceof Error ? err.message : 'Error al iniciar sesión';
+            setError(errorMessage);
             setIsSubmitting(false);
         }
     };

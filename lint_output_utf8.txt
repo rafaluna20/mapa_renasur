@@ -1,0 +1,70 @@
+﻿
+C:\Users\henry\OneDrive\Escritorio\terra lima documentos\anti_app\mapa_renasur\app\api\auth\login\route.ts
+  78:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\henry\OneDrive\Escritorio\terra lima documentos\anti_app\mapa_renasur\app\api\odoo\route.ts
+  14:23  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  48:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\henry\OneDrive\Escritorio\terra lima documentos\anti_app\mapa_renasur\app\components\HomeClient.tsx
+   99:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  136:59  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  156:59  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\henry\OneDrive\Escritorio\terra lima documentos\anti_app\mapa_renasur\app\components\Map\LeafletMap.tsx
+    9:21  warning  'useRef' is defined but never used                          @typescript-eslint/no-unused-vars
+   12:7   warning  'ZOOM_THRESHOLD_LABELS' is assigned a value but never used  @typescript-eslint/no-unused-vars
+   50:89  error    Unexpected any. Specify a different type                    @typescript-eslint/no-explicit-any
+   81:41  error    Unexpected any. Specify a different type                    @typescript-eslint/no-explicit-any
+  104:26  warning  'e' is defined but never used                               @typescript-eslint/no-unused-vars
+
+C:\Users\henry\OneDrive\Escritorio\terra lima documentos\anti_app\mapa_renasur\app\components\UI\LotCard.tsx
+  10:37  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\henry\OneDrive\Escritorio\terra lima documentos\anti_app\mapa_renasur\app\components\UI\LotDetailModal.tsx
+   2:19  warning  'CheckCircle' is defined but never used   @typescript-eslint/no-unused-vars
+   2:32  warning  'AlertCircle' is defined but never used   @typescript-eslint/no-unused-vars
+   2:45  warning  'XCircle' is defined but never used       @typescript-eslint/no-unused-vars
+  10:37  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\henry\OneDrive\Escritorio\terra lima documentos\anti_app\mapa_renasur\app\components\UI\UserProfileModal.tsx
+   4:34  warning  'CheckCircle' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         @typescript-eslint/no-unused-vars
+  27:9   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\henry\OneDrive\Escritorio\terra lima documentos\anti_app\mapa_renasur\app\components\UI\UserProfileModal.tsx:27:9
+  25 |             .reduce((acc, lot) => acc + lot.list_price, 0);
+  26 |
+> 27 |         setStats({ sold, reserved, totalValue });
+     |         ^^^^^^^^ Avoid calling setState() directly within an effect
+  28 |     }, [user]);
+  29 |
+  30 |     // Close on click outside  react-hooks/set-state-in-effect
+
+C:\Users\henry\OneDrive\Escritorio\terra lima documentos\anti_app\mapa_renasur\app\context\AuthContext.tsx
+  34:22  warning  'e' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\henry\OneDrive\Escritorio\terra lima documentos\anti_app\mapa_renasur\app\data\lotsData.ts
+  21:10  warning  'generateDefaultCode' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\henry\OneDrive\Escritorio\terra lima documentos\anti_app\mapa_renasur\app\login\page.tsx
+  22:23  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\henry\OneDrive\Escritorio\terra lima documentos\anti_app\mapa_renasur\app\services\odooService.ts
+    1:7   warning  'PROXY_URL' is assigned a value but never used  @typescript-eslint/no-unused-vars
+    2:7   warning  'DB' is assigned a value but never used         @typescript-eslint/no-unused-vars
+   31:70  error    Unexpected any. Specify a different type        @typescript-eslint/no-explicit-any
+   31:85  error    Unexpected any. Specify a different type        @typescript-eslint/no-explicit-any
+  110:25  warning  'partnerId' is defined but never used           @typescript-eslint/no-unused-vars
+
+C:\Users\henry\OneDrive\Escritorio\terra lima documentos\anti_app\mapa_renasur\scripts\sync-lots.js
+  1:12  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+  2:14  error  A `require()` style import is forbidden  @typescript-eslint/no-require-imports
+
+Ô£û 28 problems (16 errors, 12 warnings)
+

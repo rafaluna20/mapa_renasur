@@ -1,6 +1,3 @@
-const PROXY_URL = '/api/odoo';
-const DB = process.env.NEXT_PUBLIC_ODOO_DB || 'odoo';
-
 // --- Type Definitions ---
 export interface OdooUser {
     uid: number;
@@ -28,7 +25,12 @@ export interface OdooProduct {
 // --- Server-Side Fetch Utility ---
 // NOTA: Esta función DEBE usarse solo en Server Components o API Routes.
 // No la uses directamente en Client Components porque process.env no estará disponible.
-export async function fetchOdoo(model: string, method: string, args: any[], kwargs: any = {}) {
+export async function fetchOdoo(
+    model: string,
+    method: string,
+    args: unknown[],
+    kwargs: Record<string, unknown> = {}
+) {
     const url = process.env.ODOO_URL;
     if (!url) {
         // Fallback for debugging if run on client by mistake, though it will fail cors likely
@@ -107,7 +109,7 @@ export const odooService = {
         return result.user;
     },
 
-    async getSalesCount(partnerId: number): Promise<number> {
+    async getSalesCount(_partnerId: number): Promise<number> {
         // Placeholder for future implementation
         return 0;
     }
