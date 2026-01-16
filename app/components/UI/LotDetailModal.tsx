@@ -40,7 +40,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus }: LotDeta
                     </div>
                     <div className="bg-slate-50 p-3 rounded-lg text-center">
                         <p className="text-xs text-slate-500 mb-1">Área Aprox.</p>
-                        <p className="font-bold text-slate-800 text-lg">{lot.x_area.toLocaleString()} m²</p>
+                        <p className="font-bold text-slate-800 text-lg">{Number(lot.x_area).toFixed(2)} m²</p>
                     </div>
                 </div>
 

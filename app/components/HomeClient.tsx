@@ -95,6 +95,35 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
             }
         });
 
+        // Helper para procesar valores numéricos de Odoo (maneja strings con coma/punto)
+        const parseVal = (v: any, fallback: number, isArea: boolean = false) => {
+            if (v === undefined || v === null || v === false) return fallback;
+
+            let s = v.toString().trim();
+
+            // Si tiene coma Y punto, el punto suele ser de miles (formato europeo)
+            if (s.includes(',') && s.includes('.')) {
+                s = s.replace(/\./g, '').replace(',', '.');
+            } else if (s.includes(',')) {
+                s = s.replace(',', '.');
+            }
+
+            let n = parseFloat(s);
+            if (isNaN(n)) return fallback;
+
+            // CORRECCIÓN DE ESCALA: Si es un área de Odoo, aplicamos el factor /100 
+            // solicitado por el usuario (12000 -> 120.00)
+            if (isArea && n > 0) {
+                // Solo dividimos si el valor original de Odoo es grande (ej: > 1000)
+                // y no parece ser un área ya corregida.
+                if (n >= 1000) {
+                    n = n / 100;
+                }
+            }
+
+            return n;
+        };
+
         // 2. Procesar lotes locales
         const processedLocalCode = new Set<string>();
         const matched = lotsData.map(lot => {
@@ -109,8 +138,8 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
                 return {
                     ...lot,
                     x_statu: mappedStatus || lot.x_statu,
-                    list_price: odooMatch.list_price || lot.list_price,
-                    x_area: getOdooVal(odooMatch.x_area, lot.x_area),
+                    list_price: parseVal(odooMatch.list_price, lot.list_price),
+                    x_area: parseVal(odooMatch.x_area, lot.x_area, true),
                     x_mz: getOdooVal(odooMatch.x_mz, lot.x_mz),
                     x_etapa: getOdooVal(odooMatch.x_etapa, lot.x_etapa),
                     points: registryPoints || lot.points
@@ -130,8 +159,8 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
                         id: odooMatch.id.toString(),
                         name: odooMatch.name || `Lote ${code}`,
                         x_statu: mapOdooStatus(odooMatch.x_statu) || 'libre',
-                        list_price: odooMatch.list_price || 0,
-                        x_area: odooMatch.x_area || 0,
+                        list_price: parseVal(odooMatch.list_price, 0),
+                        x_area: parseVal(odooMatch.x_area, 0, true),
                         x_mz: odooMatch.x_mz || '',
                         x_etapa: odooMatch.x_etapa || '',
                         x_lote: odooMatch.x_lote || '',

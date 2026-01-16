@@ -30,7 +30,7 @@ export default function LotCard({ lot, onClick, isSelected }: LotCardProps) {
                 </span>
             </div>
             <div className="flex justify-between text-sm text-slate-500">
-                <span>{lot.x_area.toLocaleString()} m²</span>
+                <span>{Number(lot.x_area).toFixed(2)} m²</span>
                 <span className="font-semibold text-slate-700">$ {lot.list_price.toLocaleString()}</span>
             </div>
         </div>
