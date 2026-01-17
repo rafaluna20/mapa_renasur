@@ -124,5 +124,23 @@ export const odooService = {
         }
 
         return result.stats;
+    },
+
+    async updateLotStatus(productId: string | number, status: string): Promise<boolean> {
+        try {
+            const response = await fetch('/api/odoo/update_status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ productId, newStatus: status }),
+            });
+            const result = await response.json();
+            if (!result.success) {
+                throw new Error(result.error || "Error desconocido en API");
+            }
+            return true;
+        } catch (error) {
+            console.error("Error updating status:", error);
+            throw error;
+        }
     }
 };

@@ -261,10 +261,45 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
     const selectedLot = useMemo(() => lots.find(l => l.id === selectedLotId) || null, [lots, selectedLotId]);
 
     // Función para manejar cambio manual de estado (desde modal)
-    const handleUpdateStatus = (id: string, newStatus: string) => {
+    const handleUpdateStatus = async (id: string, newStatus: string) => {
+        // Validación: No intentar actualizar lotes que no existen en Odoo (Fallback)
+        if (id.startsWith('fb-')) {
+            alert("⚠️ No se puede actualizar este lote en Odoo porque no está sincronizado (Falta coincidencia de código).\n\nSolo se actualizará visualmente en el mapa temporalmente.");
+            // Actualización solo local (visual)
+            setLots(prev => prev.map(lot =>
+                lot.id === id ? { ...lot, x_statu: newStatus } : lot
+            ));
+            return;
+        }
+
+        // 1. Optimistic Update (Actualizar UI inmediatamente)
         setLots(prev => prev.map(lot =>
             lot.id === id ? { ...lot, x_statu: newStatus } : lot
         ));
+
+        // 2. Enviar cambio a Odoo
+        try {
+            const success = await import('@/app/services/odooService').then(m => m.odooService.updateLotStatus(id, newStatus));
+
+            if (success) {
+                // Opcional: Mostrar feedback sutil
+                console.log("Estado actualizado en Odoo correctamente");
+            } else {
+                throw new Error("Falló la actualización en Odoo");
+            }
+        } catch (error: any) {
+            console.error("Error al actualizar estado:", error);
+            // Mostrar el mensaje de error real si viene de la API
+            const msg = error.message || "Error desconocido";
+            alert(`Error al guardar cambios en Odoo: ${msg}\n\nPor favor revisa la consola para más detalles.`);
+
+            // Revertir cambio en UI (Optimistic rollback)
+            setLots(prev => prev.map(lot =>
+                lot.id === id ? { ...lot, x_statu: lot.x_statu } : lot // Esto requeriría guardar el estado anterior, 
+                // pero como simplificación forzamos un refresh si falla
+            ));
+            router.refresh();
+        }
     };
 
     // Función para recargar la página y traer datos frescos del servidor
