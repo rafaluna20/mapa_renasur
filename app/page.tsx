@@ -19,12 +19,12 @@ export default async function Home() {
       [[["active", "=", true]]],
       {
         fields: ["id", "name", "default_code", "list_price", "qty_available", "x_statu", "x_area", "x_mz", "x_etapa", "x_lote"],
-        limit: 200 // Adjust limit as needed
+        limit: 2000 // Adjust limit as needed
       }
     );
 
 
-    
+
   } catch (error) {
     console.error("Failed to fetch initial Odoo data:", error);
     // We don't crash the whole app, just pass empty array. 

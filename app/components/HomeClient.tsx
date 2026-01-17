@@ -152,11 +152,14 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
 
         // 3. INTEGRACIÓN DINÁMICA: Añadir lotes que están en Odoo y tienen geometría, pero NO en lotsData.ts
         const dynamicLots: Lot[] = [];
+        const integratedCodes = new Set<string>(processedLocalCode);
+
         odooProducts.forEach(odooMatch => {
             const code = (odooMatch.default_code || '').toString().trim().toUpperCase();
-            if (code && !processedLocalCode.has(code)) {
+            if (code && !integratedCodes.has(code)) {
                 const registryPoints = geometriesJson[code];
                 if (registryPoints) {
+                    integratedCodes.add(code);
                     dynamicLots.push({
                         id: odooMatch.id.toString(),
                         name: odooMatch.name || `Lote ${code}`,
@@ -175,9 +178,32 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
             }
         });
 
-        const finalResult = [...matched, ...dynamicLots];
-        console.log(`[DYNAMICS] ${dynamicLots.length} nuevos lotes detectados.`);
-        console.log(`[RESULTADO] ${finalResult.length} lotes totales (local + dinámicos)`);
+        // 4. FALLBACK: Cualquier geometría en el JSON que no esté en Odoo ni en lotsData
+        const fallbackLots: Lot[] = [];
+        Object.keys(geometriesJson).forEach(code => {
+            const upCode = code.toUpperCase();
+            if (!integratedCodes.has(upCode)) {
+                fallbackLots.push({
+                    id: `fb-${upCode}`,
+                    name: `Lote ${upCode}`,
+                    x_statu: 'libre',
+                    list_price: 0,
+                    x_area: 0,
+                    x_mz: '',
+                    x_etapa: '',
+                    x_lote: '',
+                    default_code: upCode,
+                    points: geometriesJson[code],
+                    image: '',
+                    description: 'Lote cargado desde geometría (Sin vinculación en Odoo).'
+                });
+            }
+        });
+
+        const finalResult = [...matched, ...dynamicLots, ...fallbackLots];
+        console.log(`[DYNAMICS] ${dynamicLots.length} nuevos lotes desde Odoo.`);
+        console.log(`[FALLBACK] ${fallbackLots.length} lotes desde geometrías puras.`);
+        console.log(`[RESULTADO] ${finalResult.length} lotes totales en el mapa.`);
         return finalResult;
     }, [odooProducts]);
 
