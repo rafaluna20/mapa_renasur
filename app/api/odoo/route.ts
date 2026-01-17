@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
             "product.template",
             "search_read",
             [domain], // Domain (Args)
-            { fields: fields, limit: 100 } // Kwargs
+            { fields: fields, limit:600 } // Kwargs
         );
 
         return NextResponse.json({ success: true, count: result.length, data: result });
