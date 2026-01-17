@@ -30,7 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             try {
                 const parsedUser = JSON.parse(storedUser);
                 setUser(parsedUser);
-                refreshStats(parsedUser.partner_id);
+                refreshStats(parsedUser);
             } catch (_e) {
                 localStorage.removeItem('odoo_user');
             }
@@ -38,22 +38,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setLoading(false);
     }, []);
 
-    const refreshStats = async (partnerId: number) => {
+    const refreshStats = async (user: OdooUser) => {
         try {
-            // Import lotsData dynamically to calculate local stats
-            const { lotsData } = await import('@/app/data/lotsData');
+            // Fetch stats from Odoo API
+            const stats = await odooService.getSalesStats(user.uid);
 
-            // Calculate from local data
-            const userLots = lotsData.filter(lot => lot.salespersonId === partnerId);
-            const sold = userLots.filter(l => l.x_statu === 'vendido').length;
-            const reserved = userLots.filter(l => l.x_statu === 'separado').length;
-
-            setSalesCount(sold);
-            setReservedCount(reserved);
-
-            // Optionally fetch from Odoo as well (uncomment to use)
-            // const count = await odooService.getSalesCount(partnerId);
-            // setSalesCount(count);
+            setSalesCount(stats.sold);
+            setReservedCount(stats.reserved);
         } catch (error) {
             console.error("Error refreshing stats", error);
         }
@@ -66,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             localStorage.setItem('odoo_user', JSON.stringify(odooUser));
 
             // Fetch stats immediately
-            await refreshStats(odooUser.partner_id);
+            await refreshStats(odooUser);
 
             router.push('/');
         } catch (_e) {

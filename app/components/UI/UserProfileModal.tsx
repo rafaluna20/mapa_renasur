@@ -1,7 +1,7 @@
-import { useRef, useEffect } from 'react';
-import { OdooUser } from '@/app/context/AuthContext';
-import { lotsData } from '@/app/data/lotsData';
-import { X, User, Trophy, Clock, TrendingUp } from 'lucide-react';
+import { useRef, useEffect, useState } from 'react';
+import { OdooUser, useAuth } from '@/app/context/AuthContext';
+// import { lotsData } from '@/app/data/lotsData'; // Ya no se usa para stats
+import { X, User, Trophy, Clock, TrendingUp, Loader2 } from 'lucide-react';
 
 interface UserProfileModalProps {
     user: OdooUser;
@@ -10,16 +10,27 @@ interface UserProfileModalProps {
 
 export default function UserProfileModal({ user, onClose }: UserProfileModalProps) {
     const modalRef = useRef<HTMLDivElement>(null);
+    const { logout } = useAuth();
 
-    // Calculate stats directly in the component body to avoid cascading renders
-    const userLots = lotsData.filter(lot => lot.salespersonId === user.partner_id);
-    const soldCount = userLots.filter(l => l.x_statu === 'vendido').length;
-    const reservedCount = userLots.filter(l => l.x_statu === 'separado').length;
-    const totalValue = userLots
-        .filter(l => l.x_statu === 'vendido')
-        .reduce((acc, lot) => acc + lot.list_price, 0);
+    const [stats, setStats] = useState({ sold: 0, reserved: 0, totalValue: 0 });
+    const [loading, setLoading] = useState(true);
 
-    const stats = { sold: soldCount, reserved: reservedCount, totalValue };
+    useEffect(() => {
+        const loadStats = async () => {
+            try {
+                if (user && user.uid) {
+                    const data = await import('@/app/services/odooService').then(m => m.odooService.getSalesStats(user.uid));
+                    setStats(data);
+                }
+            } catch (error) {
+                console.error("Error loading stats:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadStats();
+    }, [user]);
 
     // Close on click outside
     useEffect(() => {
@@ -59,7 +70,10 @@ export default function UserProfileModal({ user, onClose }: UserProfileModalProp
 
                 {/* Stats Grid */}
                 <div className="p-6">
-                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Rendimiento</h3>
+                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                        Rendimiento
+                        {loading && <Loader2 size={14} className="animate-spin text-blue-500" />}
+                    </h3>
 
                     <div className="grid grid-cols-2 gap-4 mb-6">
                         <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 flex flex-col items-center justify-center">
@@ -93,12 +107,21 @@ export default function UserProfileModal({ user, onClose }: UserProfileModalProp
                         <p className="text-[10px] text-slate-400 mt-2 text-right">Actualizado: Hoy</p>
                     </div>
 
-                    <button
-                        onClick={onClose}
-                        className="w-full mt-6 bg-slate-900 hover:bg-slate-800 text-white py-3 rounded-xl font-medium transition-colors"
-                    >
-                        Cerrar Perfil
-                    </button>
+                    <div className="flex gap-2 mt-6">
+                        <button
+                            onClick={onClose}
+                            className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-xl font-medium transition-colors"
+                        >
+                            Volver
+                        </button>
+                        <button
+                            onClick={logout}
+                            className="flex-1 bg-red-600 hover:bg-red-700 text-white py-3 rounded-xl font-medium transition-colors flex items-center justify-center gap-2"
+                        >
+                            <User size={18} />
+                            Cerrar Sesión
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

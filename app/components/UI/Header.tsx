@@ -18,10 +18,13 @@ export default function Header({ onSync }: HeaderProps) {
                     <Home size={24} />
                 </div>
                 <div>
-                    <h1 className="font-bold text-lg leading-tight">UrbanaSales GIS</h1>
-                    <p className="text-xs text-slate-400">Mapa Satelital + Odoo 18</p>
+                    <h1 className="font-bold text-lg leading-tight">HABILITACION TERRA LIMA</h1>
+                    <p className="text-xs text-slate-400">Mapa + Odoo</p>
                 </div>
             </div>
+
+
+
 
             <div className="flex items-center gap-4">
                 {user && (
@@ -77,6 +80,9 @@ export default function Header({ onSync }: HeaderProps) {
                     )}
                 </div>
             </div>
+
+
+
 
             {showProfile && user && (
                 <UserProfileModal user={user} onClose={() => setShowProfile(false)} />

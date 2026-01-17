@@ -112,5 +112,17 @@ export const odooService = {
     async getSalesCount(_partnerId: number): Promise<number> {
         // Placeholder for future implementation
         return 0;
+    },
+
+    async getSalesStats(userId: number): Promise<{ sold: number, reserved: number, totalValue: number }> {
+        const response = await fetch(`/api/odoo/stats?userId=${userId}`);
+        const result = await response.json();
+
+        if (!result.success) {
+            console.error("Failed to fetch stats:", result.error);
+            return { sold: 0, reserved: 0, totalValue: 0 };
+        }
+
+        return result.stats;
     }
 };

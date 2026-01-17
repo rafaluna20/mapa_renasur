@@ -183,6 +183,25 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
                         }}
                         eventHandlers={{
                             click: () => onLotSelect(lot),
+                            mouseover: (e) => {
+                                const layer = e.target;
+                                layer.setStyle({
+                                    weight: 3,
+                                    fillOpacity: 0.8,
+                                    color: '#FFFFFF' // Borde blanco brillante al pasar el mouse
+                                });
+                                layer.bringToFront(); // Traer al frente para que el borde no quede tapado
+                            },
+                            mouseout: (e) => {
+                                const layer = e.target;
+                                // Resetear al estilo original
+                                const isSelected = selectedLotId === lot.id;
+                                layer.setStyle({
+                                    weight: isSelected ? 3 : 1,
+                                    fillOpacity: 0.6,
+                                    color: isSelected ? '#2563EB' : (mapType === 'satellite' ? 'white' : '#64748b')
+                                });
+                            }
                         }}
                     >
                         {zoom > 16 && (
