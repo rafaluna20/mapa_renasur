@@ -126,17 +126,19 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
             return n;
         };
 
-        // 2. Procesar lotes locales
-        const processedLocalCode = new Set<string>();
+        // 1. Identificar códigos integrados para evitar duplicados
+        const integratedCodes = new Set<string>();
+
+        // 2. Procesar lotes locales (Base fija)
         const matched = lotsData.map(lot => {
-            const localCode = lot.default_code.toUpperCase();
-            processedLocalCode.add(localCode);
-            const odooMatch = odooMap.get(localCode);
+            const upCode = lot.default_code.trim().toUpperCase();
+            integratedCodes.add(upCode);
+
+            const odooMatch = odooMap.get(upCode);
+            const registryPoints = geometriesJson[upCode];
 
             if (odooMatch) {
                 const mappedStatus = mapOdooStatus(odooMatch.x_statu);
-                const registryPoints = geometriesJson[localCode];
-
                 return {
                     ...lot,
                     x_statu: mappedStatus || lot.x_statu,
@@ -144,21 +146,24 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
                     x_area: parseVal(odooMatch.x_area, lot.x_area, true),
                     x_mz: getOdooVal(odooMatch.x_mz, lot.x_mz),
                     x_etapa: getOdooVal(odooMatch.x_etapa, lot.x_etapa),
-                    points: registryPoints || lot.points
+                    points: registryPoints && registryPoints.length > 0 ? registryPoints : lot.points
                 };
             }
-            return lot;
+
+            // Si no hay match en Odoo, igual usamos la geometría del JSON si existe
+            return {
+                ...lot,
+                points: registryPoints && registryPoints.length > 0 ? registryPoints : lot.points
+            };
         });
 
-        // 3. INTEGRACIÓN DINÁMICA: Añadir lotes que están en Odoo y tienen geometría, pero NO en lotsData.ts
+        // 3. INTEGRACIÓN DINÁMICA: Añadir lotes de Odoo que NO están en lotsData.ts pero tienen geometría
         const dynamicLots: Lot[] = [];
-        const integratedCodes = new Set<string>(processedLocalCode);
-
         odooProducts.forEach(odooMatch => {
             const code = (odooMatch.default_code || '').toString().trim().toUpperCase();
             if (code && !integratedCodes.has(code)) {
                 const registryPoints = geometriesJson[code];
-                if (registryPoints) {
+                if (registryPoints && registryPoints.length > 0) {
                     integratedCodes.add(code);
                     dynamicLots.push({
                         id: odooMatch.id.toString(),
@@ -178,32 +183,37 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
             }
         });
 
-        // 4. FALLBACK: Cualquier geometría en el JSON que no esté en Odoo ni en lotsData
+        // 4. FALLBACK: Cualquier geometría en el JSON que falte tanto en lotsData como en Odoo
         const fallbackLots: Lot[] = [];
         Object.keys(geometriesJson).forEach(code => {
-            const upCode = code.toUpperCase();
+            const upCode = code.trim().toUpperCase();
             if (!integratedCodes.has(upCode)) {
+                // Extraer metadata del código (Pattern: E01MZ[Manzana][Lote])
+                const metadataMatch = upCode.match(/E(\d+)MZ([A-Z]+)(\w+)/);
+                const etapa = metadataMatch ? metadataMatch[1] : '';
+                const manzana = metadataMatch ? metadataMatch[2] : '';
+                const lote = metadataMatch ? metadataMatch[3] : '';
+
                 fallbackLots.push({
                     id: `fb-${upCode}`,
-                    name: `Lote ${upCode}`,
+                    name: `Lote ${upCode} (Geometría)`,
                     x_statu: 'libre',
                     list_price: 0,
                     x_area: 0,
-                    x_mz: '',
-                    x_etapa: '',
-                    x_lote: '',
+                    x_mz: manzana,
+                    x_etapa: etapa,
+                    x_lote: lote,
                     default_code: upCode,
                     points: geometriesJson[code],
                     image: '',
-                    description: 'Lote cargado desde geometría (Sin vinculación en Odoo).'
+                    description: 'Lote detectado únicamente por geometría.'
                 });
             }
         });
 
         const finalResult = [...matched, ...dynamicLots, ...fallbackLots];
-        console.log(`[DYNAMICS] ${dynamicLots.length} nuevos lotes desde Odoo.`);
-        console.log(`[FALLBACK] ${fallbackLots.length} lotes desde geometrías puras.`);
-        console.log(`[RESULTADO] ${finalResult.length} lotes totales en el mapa.`);
+        console.log(`[MAP_SYNC] Local: ${matched.length}, Odoo: ${dynamicLots.length}, Fallback: ${fallbackLots.length}`);
+        console.log(`[MAP_TOTAL] ${finalResult.length} lotes totales en el mapa.`);
         return finalResult;
     }, [odooProducts]);
 
