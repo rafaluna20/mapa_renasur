@@ -26,7 +26,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus }: LotDeta
     const config = STATUS_CONFIG[lot.x_statu] || STATUS_CONFIG.libre;
 
     return (
-        <div className="fixed md:absolute bottom-0 left-0 md:left-auto md:bottom-auto md:top-4 md:right-4 w-full md:w-80 bg-white rounded-t-2xl md:rounded-xl shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.2)] md:shadow-2xl border-t md:border border-slate-200 overflow-hidden z-[1000] animate-in slide-in-from-bottom-12 md:slide-in-from-right-8 fade-in duration-300 md:origin-top-right md:scale-[0.7]">
+        <div className="fixed md:absolute bottom-6 left-1/2 -translate-x-1/2 md:translate-x-0 md:left-auto md:bottom-auto md:top-4 md:right-4 w-[90%] md:w-80 bg-white rounded-2xl md:rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] md:shadow-2xl border border-slate-200 overflow-hidden z-[1000] animate-in slide-in-from-bottom-12 md:slide-in-from-right-8 fade-in duration-300 origin-bottom md:origin-top-right scale-[0.8] md:scale-[0.7]">
             <div className={`h-24 ${config.bg} flex items-center justify-center relative`}>
                 <button
                     onClick={onClose}
@@ -52,9 +52,9 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus }: LotDeta
                     </div>
                 </div>
 
-                {/* Dimensiones Detalladas */}
+                {/* Dimensiones Detalladas - Visibles solo en Desktop para ahorrar espacio en móvil */}
                 {lot.measurements && (
-                    <div className="bg-slate-50 rounded-lg border border-slate-200 overflow-hidden">
+                    <div className="hidden md:block bg-slate-50 rounded-lg border border-slate-200 overflow-hidden">
                         <div className="bg-slate-100 px-3 py-2 border-b border-slate-200 flex justify-between items-center">
                             <div className="flex items-center gap-2">
                                 <Ruler size={14} className="text-slate-500" />
