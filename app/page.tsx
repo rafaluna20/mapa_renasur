@@ -11,18 +11,16 @@ export default async function Home() {
   let products: OdooProduct[] = [];
 
   try {
-    console.log("Fetching products from Odoo...");
-
     products = await fetchOdoo(
       "product.template",
       "search_read",
       [[["active", "=", true]]],
       {
         fields: ["id", "name", "default_code", "list_price", "qty_available", "x_statu", "x_area", "x_mz", "x_etapa", "x_lote"],
-        limit: 2000 // Adjust limit as needed
+        limit: 1000
       }
     );
-
+    console.log(`Successfully fetched ${products.length} products from Odoo.`);
 
 
   } catch (error) {

@@ -1,0 +1,33 @@
+{
+    "jsonrpc": "2.0",
+    "method": "call",
+    "params": {
+        "service": "object",
+        "method": "execute_kw",
+        "args": [
+            "odoo_akallpav1",
+            2,
+            "842992cc1b6be60de147fab63e53c5aaa5bcf580",
+            "product.product",
+            "search_read",
+            [
+                [
+                    [
+                        "active",
+                        "=",
+                        true
+                    ]
+                ]
+            ],
+            {
+                "fields": [
+                    "id",
+                    "name",
+                    "default_code"
+                ],
+                "limit": 10
+            }
+        ]
+    },
+    "id": 1
+}

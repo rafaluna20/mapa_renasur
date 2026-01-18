@@ -106,59 +106,63 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
      * Se recalcula solo cuando 'odooProducts' cambia.
      */
     const mergedLots = useMemo(() => {
-        // 1. Crear un mapa rápido de productos Odoo
-        const odooMap = new Map<string, OdooProduct>();
-        odooProducts.forEach(p => {
-            if (p.default_code) {
-                odooMap.set(p.default_code.toString().trim().toUpperCase(), p);
-            }
-        });
+        // Helpers de procesamiento -----------------------------------------------
+        const normalizeCode = (c: string) => (c || '').toString().replace(/\s+/g, '').toUpperCase().trim();
 
-        // Helper para procesar valores numéricos de Odoo (maneja strings con coma/punto)
-        const parseVal = (v: string | number | boolean | undefined | null, fallback: number, isArea: boolean = false): number => {
+        const getOdooVal = (v: any, fallback: string): string => {
             if (v === undefined || v === null || v === false) return fallback;
+            return v.toString();
+        };
 
-            let s = v.toString().trim();
-
-            // Si tiene coma Y punto, el punto suele ser de miles (formato europeo)
-            if (s.includes(',') && s.includes('.')) {
-                s = s.replace(/\./g, '').replace(',', '.');
-            } else if (s.includes(',')) {
-                s = s.replace(',', '.');
-            }
-
+        const parseVal = (v: any, fallback: number, isArea: boolean = false): number => {
+            if (v === undefined || v === null || v === false) return fallback;
+            let s = v.toString().trim().replace(/\./g, '').replace(',', '.');
             let n = parseFloat(s);
             if (isNaN(n)) return fallback;
-
-            // CORRECCIÓN DE ESCALA: Si es un área de Odoo, aplicamos el factor /100 
-            // solicitado por el usuario (12000 -> 120.00)
-            if (isArea && n > 0) {
-                // Solo dividimos si el valor original de Odoo es grande (ej: > 1000)
-                // y no parece ser un área ya corregida.
-                if (n >= 1000) {
-                    n = n / 100;
-                }
-            }
-
+            if (isArea && n >= 1000) n = n / 100;
             return n;
         };
 
-        // 1. Identificar códigos integrados para evitar duplicados
+        const mapOdooStatus = (s: string | undefined): string | null => {
+            if (!s) return null;
+            const status = s.toLowerCase();
+            if (status.includes('disponible')) return 'libre';
+            if (status.includes('reservado')) return 'separado';
+            if (status.includes('vendido')) return 'vendido';
+            return status;
+        };
+
+        // 1. Mapa de productos Odoo
+        const odooMap = new Map<string, OdooProduct>();
+        odooProducts.forEach(p => {
+            if (p.default_code) {
+                const code = normalizeCode(p.default_code);
+                odooMap.set(code, p);
+            }
+        });
+
+        console.log("[SYNC_DEBUG] Odoo Map entries:", odooMap.size);
         const integratedCodes = new Set<string>();
 
-        // 2. Procesar lotes locales (Base fija)
+        // 2. Procesar lotes locales (Base fija lotsData.ts)
         const matched = lotsData.map(lot => {
-            const upCode = lot.default_code.trim().toUpperCase();
-            integratedCodes.add(upCode);
+            const rawCode = lot.default_code;
+            const normCode = normalizeCode(rawCode);
+            integratedCodes.add(normCode);
 
-            const odooMatch = odooMap.get(upCode);
-            const registryGeometry = geometriesJson[upCode];
+            // Intentar match con y sin sufijo 'P'
+            let odooMatch = odooMap.get(normCode);
+            if (!odooMatch) {
+                odooMatch = normCode.endsWith('P') ? odooMap.get(normCode.slice(0, -1)) : odooMap.get(normCode + 'P');
+            }
+
+            const registryGeometry = geometriesJson[normCode] || geometriesJson[rawCode];
 
             if (odooMatch) {
                 const mappedStatus = mapOdooStatus(odooMatch.x_statu);
                 return {
                     ...lot,
-                    id: odooMatch.id.toString(), // USAR EL ID DE ODOO como ID principal
+                    id: odooMatch.id.toString(),
                     x_statu: mappedStatus || lot.x_statu,
                     list_price: parseVal(odooMatch.list_price, lot.list_price),
                     x_area: parseVal(odooMatch.x_area, lot.x_area, true),
@@ -169,18 +173,18 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
                 };
             }
 
-            // Si no hay match en Odoo, igual usamos la geometría del JSON si existe
             return {
                 ...lot,
+                id: `local-${lot.id}`,
                 points: registryGeometry?.coordinates || lot.points,
                 measurements: registryGeometry?.measurements
             };
         });
 
-        // 3. INTEGRACIÓN DINÁMICA: Añadir lotes de Odoo que NO están en lotsData.ts pero tienen geometría
+        // 3. INTEGRACIÓN DINÁMICA: Productos Odoo no incluidos en lotsData
         const dynamicLots: Lot[] = [];
         odooProducts.forEach(odooMatch => {
-            const code = (odooMatch.default_code || '').toString().trim().toUpperCase();
+            const code = normalizeCode(odooMatch.default_code || '');
             if (code && !integratedCodes.has(code)) {
                 const registryGeometry = geometriesJson[code];
                 if (registryGeometry?.coordinates && registryGeometry.coordinates.length > 0) {
@@ -191,9 +195,9 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
                         x_statu: mapOdooStatus(odooMatch.x_statu) || 'libre',
                         list_price: parseVal(odooMatch.list_price, 0),
                         x_area: parseVal(odooMatch.x_area, 0, true),
-                        x_mz: odooMatch.x_mz || '',
-                        x_etapa: odooMatch.x_etapa || '',
-                        x_lote: odooMatch.x_lote || '',
+                        x_mz: getOdooVal(odooMatch.x_mz, ''),
+                        x_etapa: getOdooVal(odooMatch.x_etapa, ''),
+                        x_lote: getOdooVal(odooMatch.x_lote, ''),
                         default_code: code,
                         points: registryGeometry.coordinates,
                         measurements: registryGeometry.measurements,
@@ -204,28 +208,23 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
             }
         });
 
-        // 4. FALLBACK: Cualquier geometría en el JSON que falte tanto en lotsData como en Odoo
+        // 4. FALLBACK: Geometrías en JSON no cubiertas
         const fallbackLots: Lot[] = [];
         Object.keys(geometriesJson).forEach(code => {
-            const upCode = code.trim().toUpperCase();
-            if (!integratedCodes.has(upCode)) {
-                // Extraer metadata del código (Pattern: E01MZ[Manzana][Lote])
-                const metadataMatch = upCode.match(/E(\d+)MZ([A-Z]+)(\w+)/);
-                const etapa = metadataMatch ? metadataMatch[1] : '';
-                const manzana = metadataMatch ? metadataMatch[2] : '';
-                const lote = metadataMatch ? metadataMatch[3] : '';
+            const normCode = normalizeCode(code);
+            if (!integratedCodes.has(normCode)) {
+                const metadataMatch = normCode.match(/E(\d+)MZ([A-Z]+)(\w+)/);
                 const geometry = geometriesJson[code];
-
                 fallbackLots.push({
-                    id: `fb-${upCode}`,
-                    name: `Lote ${upCode} (Geometría)`,
+                    id: `fb-${normCode}`,
+                    name: `Lote ${normCode} (Geometría)`,
                     x_statu: 'libre',
                     list_price: 0,
                     x_area: geometry.measurements?.area || 0,
-                    x_mz: manzana,
-                    x_etapa: etapa,
-                    x_lote: lote,
-                    default_code: upCode,
+                    x_mz: metadataMatch ? metadataMatch[2] : '',
+                    x_etapa: metadataMatch ? metadataMatch[1] : '',
+                    x_lote: metadataMatch ? metadataMatch[3] : '',
+                    default_code: normCode,
                     points: geometry.coordinates,
                     measurements: geometry.measurements,
                     image: '',
@@ -236,7 +235,6 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
 
         const finalResult = [...matched, ...dynamicLots, ...fallbackLots];
         console.log(`[MAP_SYNC] Local: ${matched.length}, Odoo: ${dynamicLots.length}, Fallback: ${fallbackLots.length}`);
-        console.log(`[MAP_TOTAL] ${finalResult.length} lotes totales en el mapa.`);
         return finalResult;
     }, [odooProducts]);
 
@@ -289,7 +287,7 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
         // 1. Fallback Lots (fb-...)
         // 2. Local Static Lots (IDs cortos '1', '2', '3') que no se han emparejado con Odoo (si se emparejan, usan el ID largo de Odoo)
 
-        const isLocalId = id.startsWith('fb-') || (id.length < 5 && !isNaN(Number(id)));
+        const isLocalId = id.startsWith('fb-') || id.startsWith('local-');
 
         if (isLocalId) {
             alert("⚠️ Este lote es LOCAL (no sincronizado con Odoo).\n\nEl estado se actualizará solo visualmente en este mapa, pero NO se guardará en la base de datos.");
