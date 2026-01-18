@@ -1,4 +1,4 @@
-import { Map as MapIcon, Layers, Square, Navigation } from 'lucide-react';
+import { Map as MapIcon, Layers, Square, Navigation, Ruler } from 'lucide-react';
 import MapContainerWrapper from './MapContainer';
 import LotDetailModal from '../UI/LotDetailModal';
 import { Lot } from '@/app/data/lotsData';
@@ -15,6 +15,8 @@ interface MapAreaProps {
     selectedLot: Lot | null;
     onUpdateStatus: (id: string, status: string) => void;
     preferCanvas?: boolean;
+    showMeasurements: boolean;
+    onToggleMeasurements: () => void;
 }
 
 export default function MapArea({
@@ -22,10 +24,11 @@ export default function MapArea({
     mapType, onMapTypeChange,
     userLocation, onUserLocationChange,
     selectedLot, onUpdateStatus,
-    preferCanvas
+    preferCanvas,
+    showMeasurements, onToggleMeasurements
 }: MapAreaProps) {
     return (
-        <div className="flex-1 bg-slate-200 relative overflow-hidden flex flex-col">
+        <div id="map-export-area" className="flex-1 bg-slate-200 relative overflow-hidden flex flex-col">
             {/* Map Controls (Floating) */}
             <div className="absolute top-4 right-4 z-[400] flex flex-col gap-2">
                 <div className="bg-white rounded-lg shadow-md p-1 border border-slate-200 flex flex-col gap-1">
@@ -49,6 +52,14 @@ export default function MapArea({
                         title="Fondo Blanco"
                     >
                         <Square size={20} />
+                    </button>
+                    <div className="h-[1px] bg-slate-100 mx-1"></div>
+                    <button
+                        onClick={onToggleMeasurements}
+                        className={`p-2 rounded hover:bg-slate-100 transition-colors ${showMeasurements ? 'bg-emerald-50 text-emerald-600' : 'text-slate-400'}`}
+                        title={showMeasurements ? "Ocultar Medidas" : "Mostrar Medidas"}
+                    >
+                        <Ruler size={20} />
                     </button>
                 </div>
                 <button
@@ -105,6 +116,7 @@ export default function MapArea({
                     mapType={mapType}
                     userLocation={userLocation}
                     preferCanvas={preferCanvas}
+                    showMeasurements={showMeasurements}
                 />
             </div>
 

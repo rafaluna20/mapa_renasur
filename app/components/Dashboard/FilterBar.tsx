@@ -1,4 +1,4 @@
-import { Search, Layers, Map as MapIcon } from 'lucide-react';
+import { Search, Layers, Map as MapIcon, FileDown } from 'lucide-react';
 
 interface FilterBarProps {
     searchQuery: string;
@@ -11,6 +11,8 @@ interface FilterBarProps {
     onEtapaChange: (val: string) => void;
     filteredCount: number;
     onClearFilters: () => void;
+    onExport: () => void;
+    onExportPdf: () => void;
 }
 
 export default function FilterBar({
@@ -18,7 +20,8 @@ export default function FilterBar({
     statusFilter, onStatusChange,
     manzanaFilter, onManzanaChange,
     etapaFilter, onEtapaChange,
-    filteredCount, onClearFilters
+    filteredCount, onClearFilters,
+    onExport, onExportPdf
 }: FilterBarProps) {
     return (
         <div className="p-4 border-b border-slate-200 bg-gradient-to-b from-white to-slate-50 space-y-4">
@@ -103,20 +106,27 @@ export default function FilterBar({
                 </div>
             </div>
 
-            {/* Active Filters Count */}
-            {(statusFilter !== 'all' || manzanaFilter !== 'all' || etapaFilter !== 'all' || searchQuery) && (
-                <div className="flex items-center justify-between px-3 py-2 bg-blue-50 border border-blue-100 rounded-lg">
-                    <span className="text-xs font-medium text-blue-700">
-                        {filteredCount} lotes encontrados
-                    </span>
-                    <button
-                        onClick={onClearFilters}
-                        className="text-xs font-semibold text-blue-600 hover:text-blue-700 underline"
-                    >
-                        Limpiar
-                    </button>
-                </div>
-            )}
+            {/* Export Buttons */}
+            <div className="pt-2 flex gap-2">
+                <button
+                    onClick={onExport}
+                    className="flex-1 py-2 bg-white border border-slate-300 text-slate-700 font-medium rounded-lg text-sm hover:bg-slate-50 transition-colors flex items-center justify-center gap-2 shadow-sm"
+                    title="Exportar SVG"
+                >
+                    <MapIcon size={16} />
+                    <span className="hidden sm:inline">SVG</span>
+                </button>
+                <button
+                    onClick={onExportPdf}
+                    className="flex-1 py-2 bg-white border border-slate-300 text-slate-700 font-medium rounded-lg text-sm hover:bg-slate-50 transition-colors flex items-center justify-center gap-2 shadow-sm"
+                    title="Descargar PDF"
+                >
+                    <FileDown size={16} />
+                    <span className="hidden sm:inline">PDF</span>
+                </button>
+            </div>
         </div>
-    );
+    )
 }
+
+

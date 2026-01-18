@@ -1,3 +1,10 @@
+export interface LotMeasurements {
+    sides: number[];              // Length of each side in meters
+    area: number;                 // Area in square meters
+    perimeter: number;            // Total perimeter in meters
+    centroid: [number, number];   // Centroid coordinates [x, y]
+}
+
 export interface Lot {
     id: string; // using name as id for now
     name: string;
@@ -12,6 +19,7 @@ export interface Lot {
     x_etapa: string; // Phase identifier (01, 02, 03, 04)
     x_lote: string; // Número de lote
     default_code: string; // Código de Odoo para matching (ej: E01MZX001)
+    measurements?: LotMeasurements; // Pre-calculated geometry measurements
 }
 
 
@@ -53,56 +61,16 @@ const lotsDataRaw: Lot[] = [
         image: 'https://images.unsplash.com/photo-1516156008625-3a9d60da923c?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
         description: 'Lote ideal para desarrollo residencial.'
     },
-    {
-        id: '3',
-        name: 'etapa 01 mz T lote 03',
-        x_statu: 'vendido',
-        default_code: 'E01MZT003',
-        list_price: 30000,
-        x_lote: '03',
-        x_mz: 'T',
-        x_etapa: '01',
-        x_area: 2500,
-        salespersonId: 3,
-        points: [
-            [308198.1585, 8623150.4783], [308017.3558, 8623248.9168], [307990.8568, 8623285.3908]
-        ],
-        image: 'https://images.unsplash.com/photo-1524813686514-a57563d77965?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
-        description: 'Terreno con gran potencial.'
-    },
-    {
-        id: '4',
-        name: 'etapa 04 mz X lote 04',
-        x_statu: 'libre',
-        default_code: 'E04MZX004',
-        list_price: 40000,
-        x_lote: '04',
-        x_mz: 'X',
-        x_etapa: '04',
-        x_area: 2500,
-        points: [
-            [308198.1585, 8623150.4783], [308017.3558, 8623248.9168], [307990.8568, 8623285.3908]
-        ],
-        image: 'https://images.unsplash.com/photo-1524813686514-a57563d77965?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
-        description: 'Terreno con gran potencial.'
-    },
-    {
-        id: '5',
-        name: 'etapa 04 mz X lote 05',
-        x_statu: 'vendido',
-        default_code: 'E04MZX005',
-        list_price: 50000,
-        x_lote: '05',
-        x_mz: 'X',
-        x_etapa: '04',
-        x_area: 1200,
-        points: [
-            [308019.022, 8623384.37],
-            [308076.5769, 8623466.2157], [308178.828, 8623409.9244]
-        ],
-        image: 'https://images.unsplash.com/photo-1502005229766-939760a7cb0d?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
-        description: 'Lote vendido recientemente.'
-    },
+
+
+
+
+
+
+
+
+
+
     {
         id: '11',
         name: 'etapa 02 mz T lote 11',

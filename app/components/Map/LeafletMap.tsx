@@ -8,6 +8,7 @@ import proj4 from 'proj4';
 import { Lot } from '@/app/data/lotsData';
 import { useEffect, useState, useMemo } from 'react';
 import L from 'leaflet';
+import { calculateMidpoint } from '@/app/utils/geometryUtils';
 
 // Define UTM zone 18L projection (WGS84)
 proj4.defs("EPSG:32718", "+proj=utm +zone=18 +south +datum=WGS84 +units=m +no_defs");
@@ -19,6 +20,7 @@ interface LeafletMapProps {
     mapType: 'street' | 'satellite' | 'blank';
     userLocation?: [number, number] | null;
     preferCanvas?: boolean;
+    showMeasurements?: boolean;
 }
 
 function MapController({ lots, selectedLotId, onZoomChange }: { lots: Lot[], selectedLotId: string | null, onZoomChange: (z: number) => void }) {
@@ -67,7 +69,10 @@ function MapController({ lots, selectedLotId, onZoomChange }: { lots: Lot[], sel
                 });
 
                 if (bounds.isValid()) {
-                    map.fitBounds(bounds, { padding: [20, 20], maxZoom: 22 });
+                    // map.fitBounds(bounds, { padding: [20, 20], maxZoom: 22 });
+                    // REQUERIMIENTO: Zoom inicial más cercano (30% más cerca que el ajuste automático)
+                    // En lugar de encajar todo, centramos en el medio y aplicamos zoom 17.5
+                    map.flyTo(bounds.getCenter(), 17.5, { animate: false });
                 }
             } catch (e) {
                 console.error("FitBounds error", e);
@@ -88,9 +93,105 @@ function MapController({ lots, selectedLotId, onZoomChange }: { lots: Lot[], sel
     return null;
 }
 
-export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, userLocation, preferCanvas = true }: LeafletMapProps) {
+// Component to render side measurements for selected lot
+function SideMeasurementTooltips({ lot, map }: { lot: Lot; map: L.Map }) {
+    const [tooltips, setTooltips] = useState<L.Tooltip[]>([]);
+
+    useEffect(() => {
+        // Clear previous tooltips
+        tooltips.forEach(t => t.remove());
+        const newTooltips: L.Tooltip[] = [];
+
+        // Only show if lot has measurements and points
+        if (!lot.measurements?.sides || !lot.points || lot.points.length < 2) {
+            setTooltips([]);
+            return;
+        }
+
+        // Helper function to determine tooltip direction based on edge orientation
+        const getTooltipDirection = (p1: [number, number], p2: [number, number]): 'top' | 'bottom' | 'left' | 'right' => {
+            const dx = p2[0] - p1[0];
+            const dy = p2[1] - p1[1];
+
+            // Calculate angle in degrees (0-360)
+            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+            const normalizedAngle = (angle + 360) % 360;
+
+            // Determine direction based on angle
+            // Top: 45-135 degrees (edge goes up-right to up-left)
+            // Bottom: 225-315 degrees (edge goes down-left to down-right)
+            // Right: 315-45 degrees (edge goes right)
+            // Left: 135-225 degrees (edge goes left)
+
+            if (normalizedAngle >= 45 && normalizedAngle < 135) {
+                return 'top';
+            } else if (normalizedAngle >= 135 && normalizedAngle < 225) {
+                return 'left';
+            } else if (normalizedAngle >= 225 && normalizedAngle < 315) {
+                return 'bottom';
+            } else {
+                return 'right';
+            }
+        };
+
+        // Create a tooltip for each side
+        lot.points.forEach((point, index) => {
+            const nextIndex = (index + 1) % lot.points.length;
+            const nextPoint = lot.points[nextIndex];
+
+            // Calculate midpoint in UTM
+            const midpointUTM = calculateMidpoint(point, nextPoint);
+
+            // Determine tooltip direction
+            const direction = getTooltipDirection(point, nextPoint);
+
+            // Convert to lat/lng for display
+            try {
+                const [lon, lat] = proj4("EPSG:32718", "EPSG:4326", [midpointUTM[0], midpointUTM[1]]);
+                const sideLength = lot.measurements!.sides[index];
+
+                const tooltip = L.tooltip({
+                    permanent: true,
+                    direction: direction,
+                    className: 'side-measurement-tooltip',
+                    opacity: 1,
+                    offset: [0, 0] // No offset needed, let direction handle it
+                })
+                    .setLatLng([lat, lon])
+                    .setContent(`${sideLength.toFixed(2)}m`)
+                    .addTo(map);
+
+                newTooltips.push(tooltip);
+            } catch (error) {
+                console.error('Error creating measurement tooltip:', error);
+            }
+        });
+
+        setTooltips(newTooltips);
+
+        // Cleanup on unmount
+        return () => {
+            newTooltips.forEach(t => t.remove());
+        };
+        // Optimization: Only re-run if geometry/measurements or map changes.
+        // We use JSON.stringify to create stable dependencies for arrays/objects.
+    }, [map, JSON.stringify(lot.points), JSON.stringify(lot.measurements)]);
+
+    return null;
+}
+
+function MeasurementController({ selectedLotId, lots }: { selectedLotId: string | null; lots: Lot[] }) {
+    const map = useMap();
+    const selectedLot = useMemo(() => lots.find(l => l.id === selectedLotId), [lots, selectedLotId]);
+
+    if (!selectedLot) return null;
+
+    return <SideMeasurementTooltips lot={selectedLot} map={map} />;
+}
+
+export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, userLocation, preferCanvas = true, showMeasurements = true }: LeafletMapProps) {
     const center: [number, number] = [-12.0464, -77.0428];
-    const [zoom, setZoom] = useState(16);
+    const [zoom, setZoom] = useState(17.5);
 
     // OPTIMIZACIÓN CRÍTICA: Memoizar todas las posiciones Lat/Lng
     const memoizedPositionsMap = useMemo(() => {
@@ -228,6 +329,7 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
             })}
 
             <MapController lots={lots} selectedLotId={selectedLotId} onZoomChange={setZoom} />
+            {showMeasurements && <MeasurementController selectedLotId={selectedLotId} lots={lots} />}
         </MapContainer>
     );
 }

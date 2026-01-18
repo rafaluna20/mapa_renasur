@@ -8,8 +8,20 @@ import { OdooProduct } from '@/app/services/odooService';
 import Header from '@/app/components/UI/Header';
 import LotCard from '@/app/components/UI/LotCard';
 import { lotsData, Lot } from '@/app/data/lotsData';
-import geometriesJsonRaw from '@/app/data/geometries.json';
-const geometriesJson = geometriesJsonRaw as unknown as Record<string, [number, number][]>;
+import geometriesEnrichedRaw from '@/app/data/geometries-enriched.json';
+
+// Type for enriched geometries with measurements
+interface EnrichedGeometry {
+    coordinates: [number, number][];
+    measurements: {
+        sides: number[];
+        area: number;
+        perimeter: number;
+        centroid: [number, number];
+    };
+}
+
+const geometriesJson = geometriesEnrichedRaw as unknown as Record<string, EnrichedGeometry>;
 import { Menu, Filter, Loader2 } from 'lucide-react';
 import { useAuth } from '@/app/context/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -19,6 +31,8 @@ import FilterBar from './Dashboard/FilterBar';       // Barra de filtros lateral
 import ProductDashboard from './Dashboard/ProductDashboard'; // Resumen de estadisticas (footer sidebar)
 import FloatingControls from './UI/FloatingControls'; // Menú flotante para móviles
 import MapArea from './Map/MapArea';                 // Área del mapa y sus controles
+import { exportToSvg } from '@/app/utils/svgExporter'; // Utilidad para exportar SVG
+import { exportToPdf } from '@/app/utils/pdfExporter'; // Utilidad para exportar PDF
 
 // ----------------------------------------------------------------------
 // Tipos y Interfaces
@@ -67,6 +81,9 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
 
     // Ubicación del usuario (Geolocalización)
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+
+    // Visibilidad de medidas en el mapa
+    const [showMeasurements, setShowMeasurements] = useState(true);
 
     // ------------------------------------------------------------------
     // Lógica de Fusión de Datos (Backend + Local)
@@ -135,25 +152,28 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
             integratedCodes.add(upCode);
 
             const odooMatch = odooMap.get(upCode);
-            const registryPoints = geometriesJson[upCode];
+            const registryGeometry = geometriesJson[upCode];
 
             if (odooMatch) {
                 const mappedStatus = mapOdooStatus(odooMatch.x_statu);
                 return {
                     ...lot,
+                    id: odooMatch.id.toString(), // USAR EL ID DE ODOO como ID principal
                     x_statu: mappedStatus || lot.x_statu,
                     list_price: parseVal(odooMatch.list_price, lot.list_price),
                     x_area: parseVal(odooMatch.x_area, lot.x_area, true),
                     x_mz: getOdooVal(odooMatch.x_mz, lot.x_mz),
                     x_etapa: getOdooVal(odooMatch.x_etapa, lot.x_etapa),
-                    points: registryPoints && registryPoints.length > 0 ? registryPoints : lot.points
+                    points: registryGeometry?.coordinates || lot.points,
+                    measurements: registryGeometry?.measurements
                 };
             }
 
             // Si no hay match en Odoo, igual usamos la geometría del JSON si existe
             return {
                 ...lot,
-                points: registryPoints && registryPoints.length > 0 ? registryPoints : lot.points
+                points: registryGeometry?.coordinates || lot.points,
+                measurements: registryGeometry?.measurements
             };
         });
 
@@ -162,8 +182,8 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
         odooProducts.forEach(odooMatch => {
             const code = (odooMatch.default_code || '').toString().trim().toUpperCase();
             if (code && !integratedCodes.has(code)) {
-                const registryPoints = geometriesJson[code];
-                if (registryPoints && registryPoints.length > 0) {
+                const registryGeometry = geometriesJson[code];
+                if (registryGeometry?.coordinates && registryGeometry.coordinates.length > 0) {
                     integratedCodes.add(code);
                     dynamicLots.push({
                         id: odooMatch.id.toString(),
@@ -175,7 +195,8 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
                         x_etapa: odooMatch.x_etapa || '',
                         x_lote: odooMatch.x_lote || '',
                         default_code: code,
-                        points: registryPoints,
+                        points: registryGeometry.coordinates,
+                        measurements: registryGeometry.measurements,
                         image: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
                         description: 'Lote detectado dinámicamente desde Odoo.'
                     });
@@ -193,18 +214,20 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
                 const etapa = metadataMatch ? metadataMatch[1] : '';
                 const manzana = metadataMatch ? metadataMatch[2] : '';
                 const lote = metadataMatch ? metadataMatch[3] : '';
+                const geometry = geometriesJson[code];
 
                 fallbackLots.push({
                     id: `fb-${upCode}`,
                     name: `Lote ${upCode} (Geometría)`,
                     x_statu: 'libre',
                     list_price: 0,
-                    x_area: 0,
+                    x_area: geometry.measurements?.area || 0,
                     x_mz: manzana,
                     x_etapa: etapa,
                     x_lote: lote,
                     default_code: upCode,
-                    points: geometriesJson[code],
+                    points: geometry.coordinates,
+                    measurements: geometry.measurements,
                     image: '',
                     description: 'Lote detectado únicamente por geometría.'
                 });
@@ -262,9 +285,14 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
 
     // Función para manejar cambio manual de estado (desde modal)
     const handleUpdateStatus = async (id: string, newStatus: string) => {
-        // Validación: No intentar actualizar lotes que no existen en Odoo (Fallback)
-        if (id.startsWith('fb-')) {
-            alert("⚠️ No se puede actualizar este lote en Odoo porque no está sincronizado (Falta coincidencia de código).\n\nSolo se actualizará visualmente en el mapa temporalmente.");
+        // Validación: No intentar actualizar lotes que no existen en Odoo
+        // 1. Fallback Lots (fb-...)
+        // 2. Local Static Lots (IDs cortos '1', '2', '3') que no se han emparejado con Odoo (si se emparejan, usan el ID largo de Odoo)
+
+        const isLocalId = id.startsWith('fb-') || (id.length < 5 && !isNaN(Number(id)));
+
+        if (isLocalId) {
+            alert("⚠️ Este lote es LOCAL (no sincronizado con Odoo).\n\nEl estado se actualizará solo visualmente en este mapa, pero NO se guardará en la base de datos.");
             // Actualización solo local (visual)
             setLots(prev => prev.map(lot =>
                 lot.id === id ? { ...lot, x_statu: newStatus } : lot
@@ -364,6 +392,8 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
                             setEtapaFilter('all');
                             setSearchQuery('');
                         }}
+                        onExport={() => exportToSvg(filteredLots)}
+                        onExportPdf={() => exportToPdf('map-export-area', 'Mapa-Renasur.pdf')}
                     />
 
                     {/* Lista Renderizada de Tarjetas de Lote */}
@@ -422,6 +452,8 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
                     onCloseModal={() => setSelectedLotId(null)}
                     onUpdateStatus={handleUpdateStatus}
                     preferCanvas={true} // IMPORTANTE: Renderizado optimizado
+                    showMeasurements={showMeasurements}
+                    onToggleMeasurements={() => setShowMeasurements(!showMeasurements)}
                 />
 
                 {/* 

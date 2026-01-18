@@ -22,6 +22,7 @@ interface MapContainerProps {
     mapType: 'street' | 'satellite' | 'blank';
     userLocation?: [number, number] | null;
     preferCanvas?: boolean;
+    showMeasurements?: boolean;
 }
 
 export default function MapContainerWrapper(props: MapContainerProps) {
