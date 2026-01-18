@@ -1,6 +1,6 @@
 'use client';
 
-import { MapContainer, TileLayer, Polygon, useMap, Tooltip, Circle, CircleMarker } from 'react-leaflet';
+import { MapContainer, TileLayer, Polygon, useMap, Tooltip, Circle, CircleMarker, ImageOverlay } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.css';
 import 'leaflet-defaulticon-compatibility';
@@ -210,6 +210,22 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
         return map;
     }, [lots]);
 
+    // COORDENADAS DEL PLANO GENERAL (MASTERPLAN)
+    // Proporcionadas por el usuario (Actualizadas):
+    // Top-Left (NO): X=308132.686, Y=8623379.426
+    // Bottom-Right (SE): X=309193.741, Y=8622631.289
+    const imageBounds = useMemo(() => {
+        try {
+            const tl = proj4("EPSG:32718", "EPSG:4326", [309192.39, 8622652.56]); // -1m Sur
+            const br = proj4("EPSG:32718", "EPSG:4326", [308126.61, 8623393.44]); // -1m Sur
+            // Leaflet expects [lat, lng], so we swap [1] (lat) and [0] (lon)
+            return [[tl[1], tl[0]], [br[1], br[0]]] as L.LatLngBoundsExpression;
+        } catch (e) {
+            console.error("Error calculating image bounds", e);
+            return null;
+        }
+    }, []);
+
     const getColor = (status: string) => {
         switch (status) {
             case 'libre': return '#10B981';
@@ -247,6 +263,16 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
                     attribution='Tiles &copy; Esri'
                     url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
                     maxNativeZoom={19}
+                />
+            )}
+
+            {/* SUPERPOSICIÓN DEL PLANO MASTER (RENDER) */}
+            {imageBounds && (
+                <ImageOverlay
+                    url="/plano_general.webp"
+                    bounds={imageBounds}
+                    opacity={1}
+                    zIndex={10}
                 />
             )}
 
