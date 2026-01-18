@@ -18,8 +18,7 @@ export default function Header({ onSync }: HeaderProps) {
                     <Home size={24} />
                 </div>
                 <div>
-                    <h1 className="font-bold text-lg leading-tight">HABILITACION TERRA LIMA</h1>
-                    <p className="text-xs text-slate-400">Mapa + Odoo</p>
+                    <h1 className="font-bold text-lg leading-tight">TERRA-LIMA</h1>
                 </div>
             </div>
 

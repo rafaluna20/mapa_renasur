@@ -27,7 +27,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus }: LotDeta
 
     return (
         <div className="fixed md:absolute bottom-6 left-1/2 -translate-x-1/2 md:translate-x-0 md:left-auto md:bottom-auto md:top-4 md:right-4 w-[90%] md:w-80 bg-white rounded-2xl md:rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] md:shadow-2xl border border-slate-200 overflow-hidden z-[1000] animate-in slide-in-from-bottom-12 md:slide-in-from-right-8 fade-in duration-300 origin-bottom md:origin-top-right scale-[0.8] md:scale-[0.7]">
-            <div className={`h-24 ${config.bg} flex items-center justify-center relative`}>
+            <div className={`h-20 md:h-24 ${config.bg} flex items-center justify-center relative`}>
                 <button
                     onClick={onClose}
                     className="absolute top-2 right-2 p-1 bg-white/50 hover:bg-white rounded-full transition-colors"
@@ -35,20 +35,20 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus }: LotDeta
                     <X size={16} className="text-slate-600" />
                 </button>
                 <div className="text-center">
-                    <h2 className={`text-2xl font-bold ${config.text} capitalize px-4 truncate w-full`}>{lot.name}</h2>
-                    <span className={`text-sm font-medium ${config.text} opacity-80 uppercase tracking-wide`}>{config.label}</span>
+                    <h2 className={`text-lg md:text-2xl font-bold ${config.text} capitalize px-4 truncate w-full`}>{lot.name}</h2>
+                    <span className={`text-[10px] md:text-sm font-medium ${config.text} opacity-80 uppercase tracking-wide`}>{config.label}</span>
                 </div>
             </div>
 
             <div className="p-4 space-y-4 overflow-y-auto max-h-[70vh] md:max-h-none">
                 <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-slate-50 p-3 rounded-lg text-center border border-slate-100 flex flex-col justify-center">
-                        <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Precio</p>
-                        <p className="font-bold text-slate-800 text-base">$ {lot.list_price.toLocaleString()}</p>
+                    <div className="bg-slate-50 p-2 md:p-3 rounded-lg text-center border border-slate-100 flex flex-col justify-center">
+                        <p className="text-[9px] md:text-[10px] uppercase font-bold text-slate-400 mb-1">Precio</p>
+                        <p className="font-bold text-slate-800 text-sm md:text-base">$ {lot.list_price.toLocaleString()}</p>
                     </div>
-                    <div className="bg-slate-50 p-3 rounded-lg text-center border border-slate-100 flex flex-col justify-center">
-                        <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Área Total</p>
-                        <p className="font-bold text-blue-700 text-base">{Number(lot.x_area).toFixed(2)} m²</p>
+                    <div className="bg-slate-50 p-2 md:p-3 rounded-lg text-center border border-slate-100 flex flex-col justify-center">
+                        <p className="text-[9px] md:text-[10px] uppercase font-bold text-slate-400 mb-1">Área Total</p>
+                        <p className="font-bold text-blue-700 text-sm md:text-base">{Number(lot.x_area).toFixed(2)} m²</p>
                     </div>
                 </div>
 
@@ -76,7 +76,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus }: LotDeta
                 )}
 
                 {lot.points && lot.points.length > 0 && (
-                    <div className="text-xs text-slate-400 text-center font-mono">
+                    <div className="hidden md:block text-xs text-slate-400 text-center font-mono">
                         UTM: {lot.points[0][0].toFixed(2)}, {lot.points[0][1].toFixed(2)}
                     </div>
                 )}

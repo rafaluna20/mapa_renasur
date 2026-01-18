@@ -47,12 +47,24 @@ function MapController({ lots, selectedLotId, onZoomChange }: { lots: Lot[], sel
                     });
 
                     if (bounds.isValid()) {
-                        const targetZoom = map.getBoundsZoom(bounds, false, L.point(50, 50));
-                        const finalZoom = Math.min(targetZoom, 21);
-                        map.flyTo(bounds.getCenter(), finalZoom, {
-                            duration: 2,
-                            easeLinearity: 0.25
-                        });
+                        const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
+                        if (isMobile) {
+                            // En móvil, usamos fitBounds con padding inferior para empujar el lote a la parte superior
+                            map.fitBounds(bounds, {
+                                paddingBottomRight: [0, 300], // 300px de padding inferior para dejar espacio al modal
+                                animate: true,
+                                duration: 2,
+                                maxZoom: 20
+                            });
+                        } else {
+                            const targetZoom = map.getBoundsZoom(bounds, false, L.point(50, 50));
+                            const finalZoom = Math.min(targetZoom, 21);
+                            map.flyTo(bounds.getCenter(), finalZoom, {
+                                duration: 2,
+                                easeLinearity: 0.25
+                            });
+                        }
                     }
                 } catch (e) {
                     console.error("Zoom to lot error", e);
