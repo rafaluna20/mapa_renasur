@@ -17,14 +17,21 @@ interface LotCardProps {
 }
 
 const STATUS_CONFIG: Record<string, StatusConfigItem> = {
-    libre: { color: "#10B981", label: "Disponible", bg: "bg-emerald-100", text: "text-emerald-800", icon: CheckCircle },
-    cotizacion: { color: "#FBBF24", label: "En Cotización", bg: "bg-yellow-100", text: "text-yellow-800", icon: FileText },
-    separado: { color: "#F59E0B", label: "Reservado", bg: "bg-amber-100", text: "text-amber-800", icon: AlertCircle },
-    vendido: { color: "#EF4444", label: "Vendido", bg: "bg-red-100", text: "text-red-800", icon: XCircle },
+    libre: { color: "#34D399", label: "Disponible", bg: "bg-emerald-100", text: "text-emerald-800", icon: CheckCircle },
+    disponible: { color: "#34D399", label: "Disponible", bg: "bg-emerald-100", text: "text-emerald-800", icon: CheckCircle },
+
+    cotizacion: { color: "#FDE047", label: "En Cotización", bg: "bg-yellow-100", text: "text-yellow-800", icon: FileText },
+    'no vender': { color: "#94A3B8", label: "No Vender", bg: "bg-slate-100", text: "text-slate-800", icon: AlertCircle },
+
+    // Reservado (Purple - Requested)
+    reservado: { color: "#C084FC", label: "Reservado", bg: "bg-purple-100", text: "text-purple-800", icon: AlertCircle },
+    separado: { color: "#C084FC", label: "Reservado", bg: "bg-purple-100", text: "text-purple-800", icon: AlertCircle },
+
+    vendido: { color: "#F87171", label: "Vendido", bg: "bg-red-100", text: "text-red-800", icon: XCircle },
 };
 
 export default function LotCard({ lot, onClick, isSelected, quoteCount }: LotCardProps) {
-    const config = STATUS_CONFIG[lot.x_statu] || STATUS_CONFIG.libre;
+    const config = STATUS_CONFIG[lot.x_statu?.toLowerCase()] || STATUS_CONFIG.libre;
     const Icon = config.icon;
 
     return (

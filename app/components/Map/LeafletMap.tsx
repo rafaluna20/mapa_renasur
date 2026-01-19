@@ -238,13 +238,24 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
         }
     }, []);
 
+    // Expert Soft Palette + User Requests (Gray & Purple)
     const getColor = (status: string) => {
-        switch (status) {
-            case 'libre': return '#10B981';
-            case 'cotizacion': return '#FBBF24'; // Yellow/Amber
-            case 'separado': return '#F59E0B';
-            case 'vendido': return '#EF4444';
-            default: return '#3b82f6';
+        const s = status?.toLowerCase().trim() || '';
+        switch (s) {
+            case 'libre':
+            case 'disponible': return '#34D399'; // Emerald-400 (Soft Green)
+
+            case 'cotizacion':
+            case 'cotización': return '#FDE047'; // Yellow-300 (Soft Yellow)
+
+            case 'no vender': return '#94A3B8'; // Slate-400 (Gray)
+
+            case 'reservado':
+            case 'separado': return '#C084FC'; // Purple-400 (Morado Suave)
+
+            case 'vendido': return '#F87171'; // Red-400 (Soft Red)
+
+            default: return '#94A3B8'; // Slate-400 (Neutral Grey)
         }
     };
 
