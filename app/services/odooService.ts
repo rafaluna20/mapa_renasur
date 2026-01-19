@@ -331,27 +331,6 @@ export const odooService = {
         }
     },
 
-    // Upload attachment to Odoo (e.g. PDF Quote, Payment Proof)
-    async addAttachmentToOrder(orderId: number, file: File): Promise<boolean> {
-        try {
-            const formData = new FormData();
-            formData.append('orderId', orderId.toString());
-            formData.append('file', file);
-
-            const response = await fetch('/api/odoo/add_attachment', {
-                method: 'POST',
-                body: formData
-            });
-
-            const result = await response.json();
-            if (!result.success) throw new Error(result.error);
-            return true;
-        } catch (error) {
-            console.error("❌ Add Attachment Failed:", error);
-            throw error;
-        }
-    },
-
     // Reserve a lot that already has a confirmed quote (draft order)
     async reserveQuotedLot(defaultCode: string, file: File, notes: string) {
         try {

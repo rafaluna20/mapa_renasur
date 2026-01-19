@@ -231,6 +231,23 @@ export default function QuotePage({ params }: QuotePageProps) {
             // If selectedClient has an ID, we use it directly?
             // confirmLocalQuote expects clientData + lot + terms.
 
+            // Generate PDF Blob for upload to Odoo
+            const pdfBlob = await exportQuoteToPdf(
+                lot,
+                calculations,
+                user?.name || 'Vendedor',
+                selectedClient.name,
+                true // Request Blob return instead of download
+            );
+
+            if (!pdfBlob) {
+                throw new Error('Failed to generate PDF quote');
+            }
+
+            const pdfFile = new File([pdfBlob as Blob], `Cotizacion_${lot.name.replace(/\s+/g, '_')}.pdf`, {
+                type: 'application/pdf'
+            });
+
             const result = await odooService.confirmLocalQuote(
                 lot.default_code || '',
                 {
@@ -240,7 +257,8 @@ export default function QuotePage({ params }: QuotePageProps) {
                     // But usually, Search results only have ID/Name.
                 },
                 calculations.discountedPrice,
-                `Cotización para ${lot.name}. Inicial: ${initialPayment}. Plazo: ${numInstallments} meses.`
+                `Cotización para ${lot.name}. Inicial: ${initialPayment}. Plazo: ${numInstallments} meses.`,
+                pdfFile // Pass the generated PDF file
             );
 
             // If success
