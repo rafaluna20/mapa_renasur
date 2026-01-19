@@ -2,13 +2,14 @@
 
 import { use, useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, Download, Calculator, Calendar, Tag, DollarSign, Table, Loader2, Percent } from 'lucide-react';
+import { ChevronLeft, Download, Calculator, Calendar, Tag, DollarSign, Table, Loader2, Percent, User, Search, Check, Plus, X } from 'lucide-react';
 import { lotsData, Lot } from '@/app/data/lotsData';
 import { financeService, QuoteCalculations } from '@/app/services/financeService';
 import Header from '@/app/components/UI/Header';
 import { exportQuoteToPdf } from '@/app/utils/quotePdfExporter';
 import geometriesJson from '@/app/data/geometries.json';
 import { useAuth } from '@/app/context/AuthContext';
+import { odooService } from '@/app/services/odooService';
 
 interface QuotePageProps {
     params: Promise<{ lotId: string }>;
@@ -75,6 +76,67 @@ export default function QuotePage({ params }: QuotePageProps) {
     const [initialPayment, setInitialPayment] = useState<number>(0);
     const [numInstallments, setNumInstallments] = useState<number>(72);
     const [startDate, setStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
+
+    // Cliente (Búsqueda de Odoo)
+    const [searchTerm, setSearchTerm] = useState('');
+    const [searchResults, setSearchResults] = useState<{ id: number; name: string }[]>([]);
+    const [selectedClient, setSelectedClient] = useState<{ id: number; name: string } | null>(null);
+    const [isSearching, setIsSearching] = useState(false);
+    const [showCreateClient, setShowCreateClient] = useState(false);
+    const [isCreatingClient, setIsCreatingClient] = useState(false);
+    const [newClientData, setNewClientData] = useState({ name: '', vat: '', phone: '', email: '' });
+
+    // Debounced client search
+    useEffect(() => {
+        if (!searchTerm || selectedClient) {
+            setSearchResults([]);
+            return;
+        }
+
+        const timer = setTimeout(async () => {
+            setIsSearching(true);
+            try {
+                const results = await odooService.searchPartners(searchTerm);
+                setSearchResults(results || []);
+            } catch (error) {
+                console.error('Error searching partners:', error);
+                setSearchResults([]);
+            } finally {
+                setIsSearching(false);
+            }
+        }, 500);
+
+        return () => clearTimeout(timer);
+    }, [searchTerm, selectedClient]);
+
+    const selectClient = (client: { id: number; name: string }) => {
+        setSelectedClient(client);
+        setSearchTerm(client.name);
+        setSearchResults([]);
+    };
+
+    const handleCreateClient = async () => {
+        if (!newClientData.name || !newClientData.vat) return;
+
+        setIsCreatingClient(true);
+        try {
+            const newClient = await odooService.createPartner({
+                name: newClientData.name,
+                vat: newClientData.vat,
+                phone: newClientData.phone,
+                email: newClientData.email
+            });
+
+            selectClient(newClient);
+            setShowCreateClient(false);
+            setNewClientData({ name: '', vat: '', phone: '', email: '' });
+        } catch (error) {
+            console.error('Error creating client:', error);
+            alert('Error al crear el cliente. Intente nuevamente.');
+        } finally {
+            setIsCreatingClient(false);
+        }
+    };
 
     // Sincronizar entradas de descuento
     const handleDiscountPercentChange = (val: number) => {
@@ -175,6 +237,127 @@ export default function QuotePage({ params }: QuotePageProps) {
                                 </h2>
 
                                 <div className="space-y-6">
+                                    {/* CLIENT SEARCH */}
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-2">
+                                            <User size={14} className="text-slate-400" />
+                                            Cliente (Comprador)
+                                        </label>
+
+                                        {!showCreateClient ? (
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Buscar cliente por nombre o DNI..."
+                                                    value={searchTerm}
+                                                    onChange={(e) => {
+                                                        setSearchTerm(e.target.value);
+                                                        if (selectedClient && e.target.value !== selectedClient.name) {
+                                                            setSelectedClient(null);
+                                                        }
+                                                    }}
+                                                    className={`w-full px-3 py-2 text-sm text-black border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all ${selectedClient ? 'border-blue-500 bg-blue-50 text-blue-900 font-semibold' : 'border-slate-200'}`}
+                                                />
+                                                {selectedClient && (
+                                                    <div className="absolute right-3 top-2.5 text-blue-600">
+                                                        <Check size={16} />
+                                                    </div>
+                                                )}
+                                                {isSearching && (
+                                                    <div className="absolute right-3 top-2.5 animate-spin">
+                                                        <Search size={16} className="text-slate-400" />
+                                                    </div>
+                                                )}
+
+                                                {/* Dropdown Results */}
+                                                {searchResults.length > 0 ? (
+                                                    <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-slate-300 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto ring-1 ring-black/5">
+                                                        {searchResults.map((client, index) => (
+                                                            <button
+                                                                key={client.id}
+                                                                onClick={() => selectClient(client)}
+                                                                className={`w-full text-left px-4 py-3 text-sm hover:bg-blue-50 transition-colors flex items-center gap-3 ${index !== searchResults.length - 1 ? 'border-b border-slate-100' : ''}`}
+                                                            >
+                                                                <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-xs font-bold text-slate-600 shrink-0">
+                                                                    {client.name.charAt(0).toUpperCase()}
+                                                                </div>
+                                                                <span className="font-bold text-slate-700">{client.name}</span>
+                                                            </button>
+                                                        ))}
+                                                        {/* Always show option to create at the bottom of valid results too */}
+                                                        <button
+                                                            onClick={() => setShowCreateClient(true)}
+                                                            className="w-full text-left px-4 py-3 text-sm bg-slate-50 text-blue-700 hover:bg-blue-100 transition-colors flex items-center gap-2 border-t border-slate-200 font-medium"
+                                                        >
+                                                            <div className="w-8 h-8 flex items-center justify-center">
+                                                                <Plus size={16} />
+                                                            </div>
+                                                            Crear Nuevo Cliente
+                                                        </button>
+                                                    </div>
+                                                ) : searchTerm.length > 0 && !isSearching && !selectedClient && (
+                                                    <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-slate-300 rounded-xl shadow-2xl z-50 p-4 text-center">
+                                                        <p className="text-xs text-slate-500 mb-3 font-medium">No se encontraron resultados para "{searchTerm}"</p>
+                                                        <button
+                                                            onClick={() => setShowCreateClient(true)}
+                                                            className="w-full py-2 bg-blue-100 text-blue-800 rounded-lg text-xs font-bold hover:bg-blue-200 transition-colors flex items-center justify-center gap-2"
+                                                        >
+                                                            <Plus size={14} /> Crear Nuevo Cliente
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 animate-in fade-in slide-in-from-top-2">
+                                                <div className="flex justify-between items-center mb-3 text-xs font-bold text-slate-500 uppercase">
+                                                    <span>Nuevo Cliente</span>
+                                                    <button onClick={() => setShowCreateClient(false)} className="text-slate-400 hover:text-slate-600">
+                                                        <X size={14} />
+                                                    </button>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Nombre Completo (Obligatorio)"
+                                                        className="w-full px-2 py-1.5 text-sm border rounded placeholder:text-slate-500"
+                                                        value={newClientData.name}
+                                                        onChange={e => setNewClientData({ ...newClientData, name: e.target.value })}
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        placeholder="DNI / RUC (Obligatorio)"
+                                                        className="w-full px-2 py-1.5 text-sm border rounded placeholder:text-slate-500"
+                                                        value={newClientData.vat}
+                                                        onChange={e => setNewClientData({ ...newClientData, vat: e.target.value })}
+                                                    />
+                                                    <div className="flex gap-2">
+                                                        <input
+                                                            type="tel"
+                                                            placeholder="Teléfono"
+                                                            className="w-full px-2 py-1.5 text-sm border rounded placeholder:text-slate-500"
+                                                            value={newClientData.phone}
+                                                            onChange={e => setNewClientData({ ...newClientData, phone: e.target.value })}
+                                                        />
+                                                        <input
+                                                            type="email"
+                                                            placeholder="Email"
+                                                            className="w-full px-2 py-1.5 text-sm border rounded placeholder:text-slate-500"
+                                                            value={newClientData.email}
+                                                            onChange={e => setNewClientData({ ...newClientData, email: e.target.value })}
+                                                        />
+                                                    </div>
+                                                    <button
+                                                        onClick={handleCreateClient}
+                                                        disabled={!newClientData.name || !newClientData.vat || isCreatingClient}
+                                                        className="w-full py-2 bg-slate-800 text-white rounded text-xs font-bold hover:bg-black transition-colors disabled:opacity-50"
+                                                    >
+                                                        {isCreatingClient ? 'Guardando...' : 'Guardar Cliente'}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
                                     {/* Descuento Dual */}
                                     <div className="space-y-3">
                                         <label className="block text-sm font-bold text-slate-700">Descuento aplicado</label>
