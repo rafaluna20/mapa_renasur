@@ -21,6 +21,9 @@ export default async function Home() {
       }
     );
     console.log(`Successfully fetched ${products.length} products from Odoo.`);
+    if (products.length > 0) {
+      console.log("Sample Product Data:", JSON.stringify(products[0], null, 2));
+    }
 
 
   } catch (error) {

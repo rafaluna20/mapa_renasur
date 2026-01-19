@@ -172,22 +172,159 @@ export const odooService = {
         };
     },
 
-    // --- Advanced Features (Mocked for Implementation) ---
+    // --- LEVEL 2: Real Exchange Architecture (Sales & Partners) ---
 
-    async reserveLotWithEvidence(productId: string | number, userId: number, file: File, notes: string): Promise<boolean> {
-        console.log("Reserving Lot:", productId, "User:", userId, "File:", file.name, "Notes:", notes);
+    // 1. Search for clients (res.partner) for the dropdown
+    async searchPartners(query: string): Promise<any[]> {
+        if (!query) return [];
+        try {
+            const response = await fetch('/api/odoo/search_partners', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query }),
+            });
+            const result = await response.json();
+            if (!result.success) throw new Error(result.error);
+            return result.results;
+        } catch (error) {
+            console.error("Error searching partners:", error);
+            return [];
+        }
+    },
 
-        // Simulating API call to lock status
-        // In real implementation: Upload file -> Get URL -> Call Odoo execute_kw to write status and link attachment
+    // 1b. Create a new client/partner in Odoo
+    async createPartner(data: { name: string; vat: string; phone?: string; email?: string }): Promise<{ id: number; name: string }> {
+        try {
+            const response = await fetch('/api/odoo/create_partner', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+            });
+            const result = await response.json();
+            if (!result.success) throw new Error(result.error);
+            return { id: result.partnerId, name: data.name };
+        } catch (error) {
+            console.error("Error creating partner:", error);
+            throw error;
+        }
+    },
 
+    // 2. Create a Real Sale Order in Odoo
+    async createSaleOrder(partnerId: number, defaultCode: string, price: number, notes?: string): Promise<number> {
+        try {
+            const response = await fetch('/api/odoo/create_sale_order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ partnerId, defaultCode, price, notes }),
+            });
+            const result = await response.json();
+            if (!result.success) throw new Error(result.error);
+            console.log(`✅ Sale Order Created: ${result.orderId}`);
+            return result.orderId;
+        } catch (error) {
+            console.error("Error creating sale order:", error);
+            throw error;
+        }
+    },
+
+    // 3. Attach Evidence to the Order
+    async addAttachmentToOrder(orderId: number, file: File): Promise<boolean> {
+        try {
+            const formData = new FormData();
+            formData.append('orderId', orderId.toString());
+            formData.append('file', file);
+
+            const response = await fetch('/api/odoo/add_attachment', {
+                method: 'POST',
+                body: formData,
+            });
+            const result = await response.json();
+            if (!result.success) throw new Error(result.error);
+            console.log(`✅ Attachment uploaded: ${file.name}`);
+            return true;
+        } catch (error) {
+            console.error("Error uploading attachment:", error);
+            throw error;
+        }
+    },
+
+    // Refactored Reserve Method to use the new flow
+    // This is the "Orchestrator" function called by the UI
+    async processReservationLevel2(defaultCode: string, partnerId: number, price: number, file: File, notes: string) {
+        try {
+            // Step A: Create the Order in Odoo (Draft state)
+            const orderId = await this.createSaleOrder(partnerId, defaultCode, price, notes);
+            console.log("✅ Sale Order Created:", orderId);
+
+            // Step B: Upload Payment Evidence
+            await this.addAttachmentToOrder(orderId, file);
+            console.log("✅ Payment proof attached");
+
+            // Step C: Update Lot Status to 'Reservado'
+            // Note: We can't use productId here since we don't have it. 
+            // This would need to be done via a separate lookup or workflow
+            console.log("⚠️ Lot status update skipped - requires product lookup");
+
+            return { success: true, orderId };
+        } catch (error) {
+            console.error("❌ Level 2 Reservation Failed:", error);
+            throw error;
+        }
+    },
+
+    // --- MOCK: Reservation Logic with Evidence (Legacy/Simple) ---
+    async reserveLotWithEvidence(productId: number, userId: number, file: File, notes: string): Promise<any> {
+        // Deprecated in favor of processReservationLevel2 for the new flow,
+        // but kept for backward compatibility if needed.
         return this.updateLotStatus(productId, 'separado');
     },
 
-    // Check if a lot is currently being acted upon by another user
-    // This would use a realtime DB or Redis in production
-    async checkLotLock(productId: string) {
-        // MOCK: Randomly return true for locking demo purpose if needed
-        // For now, always return false (unlocked) unless strictly demo-ing concurrency
-        return { isLocked: false, lockedBy: null };
+    // --- MOCK: Locking System ---
+    async checkLotLock(productId: number): Promise<{ isLocked: boolean; lockedBy?: string }> {
+        // Simulation: Lots ending in '5' are locked by another user
+        // In production, this would call a real endpoint checking an ephemeral lock (Redis/Odoo)
+        return { isLocked: false }; // The UI does the mock logic for now based on name
+    },
+
+    // --- MOCK: Management Dashboard ---
+    async getPendingReservations(): Promise<any[]> {
+        // Simulate a delay
+        await new Promise(resolve => setTimeout(resolve, 800));
+
+        return [
+            {
+                id: 101,
+                lotName: "A-05",
+                advisor: "Carlos V.",
+                customer: "Juan Pérez",
+                date: "Hace 10 min",
+                amount: 156000,
+                evidenceUrl: "https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&q=80&w=300&h=400", // Sample receipt
+                status: "pending_approval"
+            },
+            {
+                id: 102,
+                lotName: "C-12",
+                advisor: "Ana M.",
+                customer: "Maria Rodriguez",
+                date: "Hace 2 horas",
+                amount: 142000,
+                evidenceUrl: "https://images.unsplash.com/photo-1628102491629-778571d893a3?auto=format&fit=crop&q=80&w=300&h=400", // Sample receipt
+                status: "pending_approval"
+            }
+        ];
+    },
+
+    async approveReservation(reservationId: number): Promise<boolean> {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        console.log(`[MOCK] Review approved for reservation ${reservationId}`);
+        return true;
+    },
+
+    async rejectReservation(reservationId: number, reason: string): Promise<boolean> {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        console.log(`[MOCK] Review rejected for reservation ${reservationId}. Reason: ${reason}`);
+        // In real app, this would free the lot (updateLotStatus -> libre)
+        return true;
     }
 };

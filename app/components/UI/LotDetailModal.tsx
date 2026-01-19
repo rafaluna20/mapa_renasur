@@ -43,8 +43,8 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
     }
 
     return (
-        <div className="fixed md:absolute bottom-6 left-1/2 -translate-x-1/2 md:translate-x-0 md:left-auto md:bottom-auto md:top-4 md:right-4 w-[90%] md:w-80 bg-white rounded-2xl md:rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] md:shadow-2xl border border-slate-200 overflow-hidden z-[1000] animate-in slide-in-from-bottom-12 md:slide-in-from-right-8 fade-in duration-300 origin-bottom md:origin-top-right scale-[0.8] md:scale-[0.7]">
-            <div className={`h-20 md:h-24 ${config.bg} flex items-center justify-center relative`}>
+        <div className="fixed md:absolute bottom-6 left-1/2 -translate-x-1/2 md:translate-x-0 md:left-auto md:bottom-auto md:top-4 md:right-4 w-[60%] md:w-80 bg-white rounded-2xl md:rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] md:shadow-2xl border border-slate-200 overflow-hidden z-[1000] animate-in slide-in-from-bottom-12 md:slide-in-from-right-8 fade-in duration-300 origin-bottom md:origin-top-right scale-[0.85] md:scale-[0.75] flex flex-col max-h-[95vh]">
+            <div className={`h-18 md:h-24 ${config.bg} flex items-center justify-center relative shrink-0`}>
                 <button
                     onClick={onClose}
                     className="absolute top-2 right-2 p-1 bg-white/50 hover:bg-white rounded-full transition-colors"
@@ -64,7 +64,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                 )}
             </div>
 
-            <div className="p-4 space-y-4 overflow-y-auto max-h-[70vh] md:max-h-none">
+            <div className="p-4 space-y-4 overflow-y-auto flex-1 min-h-0">
                 <div className="grid grid-cols-2 gap-3">
                     <div className="bg-slate-50 p-2 md:p-3 rounded-lg text-center border border-slate-100 flex flex-col justify-center">
                         <p className="text-[9px] md:text-[10px] uppercase font-bold text-slate-400 mb-1">Precio</p>
@@ -97,49 +97,50 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                     </div>
                 )}
 
-                <div className="pt-4 border-t border-slate-100">
-                    <p className="text-xs font-semibold text-slate-400 mb-2 uppercase">Acciones Rápidas</p>
-                    <div className="grid grid-cols-2 gap-2">
-                        {lot.x_statu === 'libre' && onUpdateStatus && (
-                            <button
-                                onClick={() => {
-                                    if (isLocked) return; // Prevent action if locked
-                                    setShowReservationModal(true);
-                                }}
-                                disabled={isLocked}
-                                className={`bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-lg font-medium text-sm transition-colors ${isLocked ? 'opacity-50 cursor-not-allowed grayscale' : ''
-                                    }`}
-                            >
-                                {isLocked ? 'En Gestión' : 'Reservar'}
-                            </button>
-                        )}
-                        {lot.x_statu === 'separado' && onUpdateStatus && (
-                            <button
-                                onClick={() => onUpdateStatus(lot.id, 'vendido')}
-                                className="bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-medium text-sm transition-colors"
-                            >
-                                Vender
-                            </button>
-                        )}
-                        {(lot.x_statu === 'separado' || lot.x_statu === 'vendido') && onUpdateStatus && (
-                            <button
-                                onClick={() => onUpdateStatus(lot.id, 'libre')}
-                                className="border border-slate-300 hover:bg-slate-50 text-slate-600 py-2 rounded-lg font-medium text-sm transition-colors"
-                            >
-                                Liberar
-                            </button>
-                        )}
+            </div>
+
+            <div className="p-4 border-t border-slate-100 bg-white shrink-0">
+                <p className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-wider text-center">Acciones Rápidas</p>
+                <div className="grid grid-cols-2 gap-2">
+                    {lot.x_statu === 'libre' && onUpdateStatus && (
                         <button
-                            onClick={() => onQuotation?.(lot)}
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg font-medium text-sm transition-colors flex items-center justify-center gap-2"
+                            onClick={() => {
+                                if (isLocked) return; // Prevent action if locked
+                                setShowReservationModal(true);
+                            }}
+                            disabled={isLocked}
+                            className={`bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-lg font-medium text-sm transition-colors ${isLocked ? 'opacity-50 cursor-not-allowed grayscale' : ''
+                                }`}
                         >
-                            <FileText size={16} />
-                            COTIZACIÓN
+                            {isLocked ? 'En Gestión' : 'Reservar'}
                         </button>
-                        <button className="border border-slate-300 hover:bg-slate-50 text-slate-600 py-2 rounded-lg font-medium text-sm transition-colors">
-                            Ver en Odoo
+                    )}
+                    {lot.x_statu === 'separado' && onUpdateStatus && (
+                        <button
+                            onClick={() => onUpdateStatus(lot.id, 'vendido')}
+                            className="bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-medium text-sm transition-colors"
+                        >
+                            Vender
                         </button>
-                    </div>
+                    )}
+                    {(lot.x_statu === 'separado' || lot.x_statu === 'vendido') && onUpdateStatus && (
+                        <button
+                            onClick={() => onUpdateStatus(lot.id, 'libre')}
+                            className="border border-slate-300 hover:bg-slate-50 text-slate-600 py-2 rounded-lg font-medium text-sm transition-colors"
+                        >
+                            Liberar
+                        </button>
+                    )}
+                    <button
+                        onClick={() => onQuotation?.(lot)}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-lg font-medium text-sm transition-colors flex items-center justify-center gap-2"
+                    >
+                        <FileText size={16} />
+                        COTIZACIÓN
+                    </button>
+                    <button className="border border-slate-300 hover:bg-slate-50 text-slate-600 py-2 rounded-lg font-medium text-sm transition-colors">
+                        Ver en Odoo
+                    </button>
                 </div>
             </div>
 
