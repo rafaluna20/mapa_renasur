@@ -13,12 +13,15 @@ export default function Header({ onSync }: HeaderProps) {
 
     return (
         <header className="bg-slate-900 text-white p-4 shadow-lg flex justify-between items-center z-20 relative">
-            <div className="flex items-center gap-2">
-                <div className="bg-blue-600 p-2 rounded-lg">
+            <div
+                className="flex items-center gap-2 cursor-pointer group"
+                onClick={() => window.location.href = '/'}
+            >
+                <div className="bg-indigo-600 p-2 rounded-lg group-hover:bg-indigo-500 transition-colors">
                     <Home size={24} />
                 </div>
                 <div>
-                    <h1 className="font-bold text-lg leading-tight">TERRA-LIMA</h1>
+                    <h1 className="font-bold text-lg leading-tight group-hover:text-indigo-400 transition-colors">TERRA-LIMA</h1>
                 </div>
             </div>
 

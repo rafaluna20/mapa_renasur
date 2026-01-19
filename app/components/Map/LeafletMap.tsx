@@ -217,7 +217,7 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
                     return [0, 0] as [number, number];
                 }
             });
-            map.set(lot.id, positions);
+            map.set(`${lot.id}-${lot.default_code}`, positions);
         });
         return map;
     }, [lots]);
@@ -304,7 +304,7 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
             )}
 
             {lots.map((lot) => {
-                const positions = memoizedPositionsMap.get(lot.id);
+                const positions = memoizedPositionsMap.get(`${lot.id}-${lot.default_code}`);
                 if (!positions || positions.length === 0) return null;
 
                 const isSelected = selectedLotId === lot.id;
@@ -312,7 +312,7 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
 
                 return (
                     <Polygon
-                        key={lot.id}
+                        key={`${lot.id}-${lot.default_code}`}
                         positions={positions}
                         pathOptions={{
                             color: isSelected ? '#2563EB' : (mapType === 'satellite' ? 'white' : '#64748b'),

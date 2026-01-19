@@ -143,6 +143,7 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
 
         console.log("[SYNC_DEBUG] Odoo Map entries:", odooMap.size);
         const integratedCodes = new Set<string>();
+        const integratedIds = new Set<string>();
 
         // 2. Procesar lotes locales (Base fija lotsData.ts)
         const matched = lotsData.map(lot => {
@@ -159,6 +160,10 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
             const registryGeometry = geometriesJson[normCode] || geometriesJson[rawCode];
 
             if (odooMatch) {
+                // Registrar tanto el código buscado como el código real de Odoo e ID para evitar duplicados
+                if (odooMatch.default_code) integratedCodes.add(normalizeCode(odooMatch.default_code));
+                integratedIds.add(odooMatch.id.toString());
+
                 const mappedStatus = mapOdooStatus(odooMatch.x_statu);
                 return {
                     ...lot,
@@ -185,10 +190,13 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
         const dynamicLots: Lot[] = [];
         odooProducts.forEach(odooMatch => {
             const code = normalizeCode(odooMatch.default_code || '');
-            if (code && !integratedCodes.has(code)) {
+            const odooId = odooMatch.id.toString();
+
+            if (code && !integratedCodes.has(code) && !integratedIds.has(odooId)) {
                 const registryGeometry = geometriesJson[code];
                 if (registryGeometry?.coordinates && registryGeometry.coordinates.length > 0) {
                     integratedCodes.add(code);
+                    integratedIds.add(odooId);
                     dynamicLots.push({
                         id: odooMatch.id.toString(),
                         name: odooMatch.name || `Lote ${code}`,
@@ -328,6 +336,14 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
         }
     };
 
+    /**
+     * Función para redirigir a la página de cotización avanzada.
+     */
+    const handleQuotation = (lot: Lot) => {
+        console.log("Navegando a cotización para:", lot.name, lot.id);
+        router.push(`/quote/${lot.id}`);
+    };
+
     // Función para recargar la página y traer datos frescos del servidor
     const handleSync = () => {
         router.refresh();
@@ -404,7 +420,7 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
                         ) : (
                             filteredLots.map(lot => (
                                 <LotCard
-                                    key={lot.id}
+                                    key={`${lot.id}-${lot.default_code}`}
                                     lot={lot}
                                     onClick={() => {
                                         setSelectedLotId(lot.id);
@@ -449,6 +465,7 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
                     selectedLot={selectedLot}
                     onCloseModal={() => setSelectedLotId(null)}
                     onUpdateStatus={handleUpdateStatus}
+                    onQuotation={handleQuotation}
                     preferCanvas={true} // IMPORTANTE: Renderizado optimizado
                     showMeasurements={showMeasurements}
                     onToggleMeasurements={() => setShowMeasurements(!showMeasurements)}

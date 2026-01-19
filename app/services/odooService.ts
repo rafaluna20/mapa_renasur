@@ -20,6 +20,7 @@ export interface OdooProduct {
     x_mz?: string;
     x_etapa?: string;
     x_lote?: string;
+    x_cliente?: string | false;
 }
 
 // --- Server-Side Fetch Utility ---

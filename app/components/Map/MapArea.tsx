@@ -14,6 +14,7 @@ interface MapAreaProps {
     onUserLocationChange: (loc: [number, number]) => void;
     selectedLot: Lot | null;
     onUpdateStatus: (id: string, status: string) => void;
+    onQuotation?: (lot: Lot) => void;
     preferCanvas?: boolean;
     showMeasurements: boolean;
     onToggleMeasurements: () => void;
@@ -24,6 +25,7 @@ export default function MapArea({
     mapType, onMapTypeChange,
     userLocation, onUserLocationChange,
     selectedLot, onUpdateStatus,
+    onQuotation,
     preferCanvas,
     showMeasurements, onToggleMeasurements
 }: MapAreaProps) {
@@ -125,6 +127,7 @@ export default function MapArea({
                 lot={selectedLot}
                 onClose={onCloseModal}
                 onUpdateStatus={onUpdateStatus}
+                onQuotation={onQuotation}
             />
         </div>
     );
