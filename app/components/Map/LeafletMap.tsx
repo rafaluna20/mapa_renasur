@@ -241,6 +241,7 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
     const getColor = (status: string) => {
         switch (status) {
             case 'libre': return '#10B981';
+            case 'cotizacion': return '#FBBF24'; // Yellow/Amber
             case 'separado': return '#F59E0B';
             case 'vendido': return '#EF4444';
             default: return '#3b82f6';

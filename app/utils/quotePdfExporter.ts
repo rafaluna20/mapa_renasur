@@ -7,7 +7,12 @@ import { Lot } from '../data/lotsData';
  * Exporta una cotización a un archivo PDF profesional.
  * Utiliza jsPDF y jspdf-autotable para manejar tablas multi-página.
  */
-export const exportQuoteToPdf = async (lot: Lot, calcs: QuoteCalculations, vendorName: string = 'No especificado') => {
+export const exportQuoteToPdf = async (
+    lot: Lot,
+    calcs: QuoteCalculations,
+    vendorName: string = 'No especificado',
+    clientName?: string
+) => {
     const doc = new jsPDF({
         orientation: 'p',
         unit: 'mm',
@@ -54,7 +59,7 @@ export const exportQuoteToPdf = async (lot: Lot, calcs: QuoteCalculations, vendo
             ['Proyecto:', 'Condominio Renasur', 'Manzana:', lot.x_mz || '-'],
             ['Lote:', lot.name, 'Etapa:', lot.x_etapa || '-'],
             ['Área Total:', `${lot.x_area} m²`, 'Asesor:', vendorName],
-            ['Estado Lote:', lot.x_statu.toUpperCase(), '', '']
+            ['Cliente:', clientName || 'No especificado', 'Estado Lote:', lot.x_statu.toUpperCase()]
         ],
         styles: { fontSize: 9, cellPadding: 2 },
         columnStyles: {

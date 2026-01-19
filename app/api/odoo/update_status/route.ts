@@ -30,6 +30,9 @@ export async function POST(request: NextRequest) {
             case 'vendido':
                 odooValue = 'vendido';
                 break;
+            case 'cotizacion':
+                odooValue = 'cotizacion';
+                break;
             default:
                 return NextResponse.json({ success: false, error: "Invalid status" }, { status: 400 });
         }

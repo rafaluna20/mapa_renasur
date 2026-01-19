@@ -272,6 +272,91 @@ export const odooService = {
         }
     },
 
+    // Confirm a local quote and create it in Odoo
+    async confirmLocalQuote(
+        lotDefaultCode: string,
+        clientData: { id?: number; name: string; vat?: string; phone?: string; email?: string },
+        price: number,
+        notes: string
+    ): Promise<{ orderId: number; partnerId: number }> {
+        try {
+            // Step 1: Create or find partner (skip if we already have an ID)
+            let partnerId = clientData.id;
+
+            if (!partnerId) {
+                if (!clientData.vat) {
+                    throw new Error('VAT/DNI is required to confirm quote for new clients');
+                }
+                const partner = await this.createPartner({
+                    name: clientData.name,
+                    vat: clientData.vat,
+                    phone: clientData.phone,
+                    email: clientData.email
+                });
+                partnerId = partner.id;
+                console.log("✅ Partner Created:", partnerId);
+            } else {
+                console.log("✅ Using Existing Partner:", partnerId);
+            }
+
+            // Step 2: Create sale order in draft state
+            const orderId = await this.createSaleOrder(partnerId, lotDefaultCode, price, notes);
+            console.log("✅ Sale Order Created:", orderId);
+
+            // Step 3: Update lot status to 'cotizacion'
+            // Note: We need to search for the product by default_code first
+            const products = await fetch('/api/odoo/search_product_by_code', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ defaultCode: lotDefaultCode })
+            }).then(r => r.json());
+
+            if (products.success && products.productId) {
+                await this.updateLotStatus(products.productId, 'cotizacion');
+                console.log("✅ Lot status updated to 'cotizacion'");
+            }
+
+            return { orderId, partnerId };
+        } catch (error) {
+            console.error("❌ Quote Confirmation Failed:", error);
+            throw error;
+        }
+    },
+
+    // Reserve a lot that already has a confirmed quote (draft order)
+    async reserveQuotedLot(defaultCode: string, file: File, notes: string) {
+        try {
+            // 1. Find the existing draft order
+            const searchRes = await fetch('/api/odoo/find_draft_order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ defaultCode })
+            }).then(r => r.json());
+
+            if (!searchRes.success || !searchRes.order) {
+                throw new Error("No se encontró una cotización activa para este lote en Odoo.");
+            }
+
+            const { id: orderId, productId } = searchRes.order;
+            console.log(`✅ Found existing draft order: ${orderId} for product ${productId}`);
+
+            // 2. Upload Payment Evidence
+            await this.addAttachmentToOrder(orderId, file);
+            console.log("✅ Payment proof attached to existing order");
+
+            // 3. Update Lot Status to 'reservado'
+            if (productId) {
+                await this.updateLotStatus(productId, 'reservado');
+                console.log("✅ Lot status updated to 'reservado'");
+            }
+
+            return { success: true, orderId };
+        } catch (error) {
+            console.error("❌ Reserve Quoted Lot Failed:", error);
+            throw error;
+        }
+    },
+
     // --- MOCK: Reservation Logic with Evidence (Legacy/Simple) ---
     async reserveLotWithEvidence(productId: number, userId: number, file: File, notes: string): Promise<any> {
         // Deprecated in favor of processReservationLevel2 for the new flow,

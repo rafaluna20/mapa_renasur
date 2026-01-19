@@ -1,5 +1,5 @@
 import { Lot } from '@/app/data/lotsData';
-import { LucideIcon, CheckCircle, AlertCircle, XCircle } from 'lucide-react';
+import { LucideIcon, CheckCircle, AlertCircle, XCircle, FileText } from 'lucide-react';
 
 interface StatusConfigItem {
     color: string;
@@ -17,6 +17,7 @@ interface LotCardProps {
 
 const STATUS_CONFIG: Record<string, StatusConfigItem> = {
     libre: { color: "#10B981", label: "Disponible", bg: "bg-emerald-100", text: "text-emerald-800", icon: CheckCircle },
+    cotizacion: { color: "#FBBF24", label: "En Cotización", bg: "bg-yellow-100", text: "text-yellow-800", icon: FileText },
     separado: { color: "#F59E0B", label: "Reservado", bg: "bg-amber-100", text: "text-amber-800", icon: AlertCircle },
     vendido: { color: "#EF4444", label: "Vendido", bg: "bg-red-100", text: "text-red-800", icon: XCircle },
 };

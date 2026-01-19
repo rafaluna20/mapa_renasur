@@ -58,24 +58,39 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
     };
 
     const handleSubmit = async () => {
-        if (!file || !selectedClient) return;
+        // Validation: If NOT in cotizacion, we need a client. If in cotizacion, we assume client exists in order.
+        if (!file) {
+            alert("Por favor suba un comprobante de pago");
+            return;
+        }
+
+        if (lot.x_statu !== 'cotizacion' && !selectedClient) {
+            alert("Por favor seleccione un cliente");
+            return;
+        }
 
         setIsSubmitting(true);
         try {
-            // Use the new Level 2 Process (Create Order -> Upload Evidence)
-            await odooService.processReservationLevel2(
-                lot.default_code,  // Use default_code to find correct product.product
-                selectedClient.id,
-                lot.list_price,
-                file,
-                notes
-            );
+            if (lot.x_statu === 'cotizacion') {
+                // Flow for already quoted lots: Find order, attach file, update status
+                await odooService.reserveQuotedLot(lot.default_code, file, notes);
+            } else {
+                // Flow for direct reservation (legacy or admin override): Create Order -> Attach -> Status
+                if (!selectedClient) return; // Should be caught above
+                await odooService.processReservationLevel2(
+                    lot.default_code,
+                    selectedClient.id,
+                    lot.list_price,
+                    file,
+                    notes
+                );
+            }
 
             onSuccess();
             onClose();
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error reserving lot:', error);
-            alert('Error al procesar la reserva. Intente nuevamente.');
+            alert(`Error al procesar la reserva: ${error.message || 'Intente nuevamente'}`);
         } finally {
             setIsSubmitting(false);
         }
@@ -133,126 +148,138 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
                         <p>Para reservar el lote <strong>{lot.name}</strong>, es necesario crear una orden y adjuntar el pago.</p>
                     </div>
 
-                    {/* Client Selection (Level 2) */}
-                    <div>
-                        <label className="block text-[13px] font-bold text-slate-700 mb-1.5 flex items-center gap-2">
-                            <User size={14} className="text-slate-400" />
-                            Cliente (Comprador)
-                        </label>
+                    {/* Client Selection (Level 2) - Only if NOT already quoted */}
+                    {lot.x_statu !== 'cotizacion' ? (
+                        <div>
+                            <label className="block text-[13px] font-bold text-slate-700 mb-1.5 flex items-center gap-2">
+                                <User size={14} className="text-slate-400" />
+                                Cliente (Comprador)
+                            </label>
 
-                        {!showCreateClient ? (
-                            <div className="relative">
-                                <input
-                                    type="text"
-                                    placeholder="Buscar cliente por nombre o DNI..."
-                                    value={searchTerm}
-                                    onChange={(e) => {
-                                        setSearchTerm(e.target.value);
-                                        if (selectedClient && e.target.value !== selectedClient.name) {
-                                            setSelectedClient(null);
-                                        }
-                                    }}
-                                    className={`w-full px-3 py-2 text-sm text-black border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all ${selectedClient ? 'border-blue-500 bg-blue-50 text-blue-900 font-semibold' : 'border-slate-200'}`}
-                                />
-                                {selectedClient && (
-                                    <div className="absolute right-3 top-2.5 text-blue-600">
-                                        <Check size={16} />
-                                    </div>
-                                )}
-                                {isSearching && (
-                                    <div className="absolute right-3 top-2.5 animate-spin">
-                                        <Search size={16} className="text-slate-400" />
-                                    </div>
-                                )}
+                            {!showCreateClient ? (
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar cliente por nombre o DNI..."
+                                        value={searchTerm}
+                                        onChange={(e) => {
+                                            setSearchTerm(e.target.value);
+                                            if (selectedClient && e.target.value !== selectedClient.name) {
+                                                setSelectedClient(null);
+                                            }
+                                        }}
+                                        className={`w-full px-3 py-2 text-sm text-black border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all ${selectedClient ? 'border-blue-500 bg-blue-50 text-blue-900 font-semibold' : 'border-slate-200'}`}
+                                    />
+                                    {selectedClient && (
+                                        <div className="absolute right-3 top-2.5 text-blue-600">
+                                            <Check size={16} />
+                                        </div>
+                                    )}
+                                    {isSearching && (
+                                        <div className="absolute right-3 top-2.5 animate-spin">
+                                            <Search size={16} className="text-slate-400" />
+                                        </div>
+                                    )}
 
-                                {/* Dropdown Results */}
-                                {searchResults.length > 0 ? (
-                                    <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-slate-300 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto ring-1 ring-black/5">
-                                        {searchResults.map((client, index) => (
+                                    {/* Dropdown Results */}
+                                    {searchResults.length > 0 ? (
+                                        <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-slate-300 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto ring-1 ring-black/5">
+                                            {searchResults.map((client, index) => (
+                                                <button
+                                                    key={client.id}
+                                                    onClick={() => selectClient(client)}
+                                                    className={`w-full text-left px-4 py-3 text-sm hover:bg-blue-50 transition-colors flex items-center gap-3 ${index !== searchResults.length - 1 ? 'border-b border-slate-100' : ''}`}
+                                                >
+                                                    <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-xs font-bold text-slate-600 shrink-0">
+                                                        {client.name.charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <span className="font-bold text-slate-700">{client.name}</span>
+                                                </button>
+                                            ))}
+                                            {/* Always show option to create at the bottom of valid results too */}
                                             <button
-                                                key={client.id}
-                                                onClick={() => selectClient(client)}
-                                                className={`w-full text-left px-4 py-3 text-sm hover:bg-blue-50 transition-colors flex items-center gap-3 ${index !== searchResults.length - 1 ? 'border-b border-slate-100' : ''}`}
+                                                onClick={() => setShowCreateClient(true)}
+                                                className="w-full text-left px-4 py-3 text-sm bg-slate-50 text-blue-700 hover:bg-blue-100 transition-colors flex items-center gap-2 border-t border-slate-200 font-medium"
                                             >
-                                                <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-xs font-bold text-slate-600 shrink-0">
-                                                    {client.name.charAt(0).toUpperCase()}
+                                                <div className="w-8 h-8 flex items-center justify-center">
+                                                    <Plus size={16} />
                                                 </div>
-                                                <span className="font-bold text-slate-700">{client.name}</span>
+                                                Crear Nuevo Cliente
                                             </button>
-                                        ))}
-                                        {/* Always show option to create at the bottom of valid results too */}
-                                        <button
-                                            onClick={() => setShowCreateClient(true)}
-                                            className="w-full text-left px-4 py-3 text-sm bg-slate-50 text-blue-700 hover:bg-blue-100 transition-colors flex items-center gap-2 border-t border-slate-200 font-medium"
-                                        >
-                                            <div className="w-8 h-8 flex items-center justify-center">
-                                                <Plus size={16} />
-                                            </div>
-                                            Crear Nuevo Cliente
+                                        </div>
+                                    ) : searchTerm.length > 0 && !isSearching && !selectedClient && (
+                                        <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-slate-300 rounded-xl shadow-2xl z-50 p-4 text-center">
+                                            <p className="text-xs text-slate-500 mb-3 font-medium">No se encontraron resultados para "{searchTerm}"</p>
+                                            <button
+                                                onClick={() => setShowCreateClient(true)}
+                                                className="w-full py-2 bg-blue-100 text-blue-800 rounded-lg text-xs font-bold hover:bg-blue-200 transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                <Plus size={14} /> Crear Nuevo Cliente
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 animate-in fade-in slide-in-from-top-2">
+                                    <div className="flex justify-between items-center mb-3 text-xs font-bold text-slate-500 uppercase">
+                                        <span>Nuevo Cliente</span>
+                                        <button onClick={() => setShowCreateClient(false)} className="text-slate-400 hover:text-slate-600">
+                                            <X size={14} />
                                         </button>
                                     </div>
-                                ) : searchTerm.length > 0 && !isSearching && !selectedClient && (
-                                    <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-slate-300 rounded-xl shadow-2xl z-50 p-4 text-center">
-                                        <p className="text-xs text-slate-500 mb-3 font-medium">No se encontraron resultados para "{searchTerm}"</p>
+                                    <div className="space-y-2">
+                                        <input
+                                            type="text"
+                                            placeholder="Nombre Completo (Obligatorio)"
+                                            className="w-full px-2 py-1.5 text-sm border rounded placeholder:text-slate-400"
+                                            value={newClientData.name}
+                                            onChange={e => setNewClientData({ ...newClientData, name: e.target.value })}
+                                        />
+                                        <input
+                                            type="text"
+                                            placeholder="DNI / RUC (Obligatorio)"
+                                            className="w-full px-2 py-1.5 text-sm border rounded placeholder:text-slate-300"
+                                            value={newClientData.vat}
+                                            onChange={e => setNewClientData({ ...newClientData, vat: e.target.value })}
+                                        />
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="tel"
+                                                placeholder="Teléfono"
+                                                className="w-full px-2 py-1.5 text-sm border rounded placeholder:text-slate-300"
+                                                value={newClientData.phone}
+                                                onChange={e => setNewClientData({ ...newClientData, phone: e.target.value })}
+                                            />
+                                            <input
+                                                type="email"
+                                                placeholder="Email"
+                                                className="w-full px-2 py-1.5 text-sm border rounded placeholder:text-slate-300"
+                                                value={newClientData.email}
+                                                onChange={e => setNewClientData({ ...newClientData, email: e.target.value })}
+                                            />
+                                        </div>
                                         <button
-                                            onClick={() => setShowCreateClient(true)}
-                                            className="w-full py-2 bg-blue-100 text-blue-800 rounded-lg text-xs font-bold hover:bg-blue-200 transition-colors flex items-center justify-center gap-2"
+                                            onClick={handleCreateClient}
+                                            disabled={!newClientData.name || !newClientData.vat || isCreatingClient}
+                                            className="w-full py-2 bg-slate-800 text-white rounded text-xs font-bold hover:bg-black transition-colors disabled:opacity-50"
                                         >
-                                            <Plus size={14} /> Crear Nuevo Cliente
+                                            {isCreatingClient ? 'Guardando...' : 'Guardar Cliente'}
                                         </button>
                                     </div>
-                                )}
-                            </div>
-                        ) : (
-                            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 animate-in fade-in slide-in-from-top-2">
-                                <div className="flex justify-between items-center mb-3 text-xs font-bold text-slate-500 uppercase">
-                                    <span>Nuevo Cliente</span>
-                                    <button onClick={() => setShowCreateClient(false)} className="text-slate-400 hover:text-slate-600">
-                                        <X size={14} />
-                                    </button>
                                 </div>
-                                <div className="space-y-2">
-                                    <input
-                                        type="text"
-                                        placeholder="Nombre Completo (Obligatorio)"
-                                        className="w-full px-2 py-1.5 text-sm border rounded placeholder:text-slate-400"
-                                        value={newClientData.name}
-                                        onChange={e => setNewClientData({ ...newClientData, name: e.target.value })}
-                                    />
-                                    <input
-                                        type="text"
-                                        placeholder="DNI / RUC (Obligatorio)"
-                                        className="w-full px-2 py-1.5 text-sm border rounded placeholder:text-slate-300"
-                                        value={newClientData.vat}
-                                        onChange={e => setNewClientData({ ...newClientData, vat: e.target.value })}
-                                    />
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="tel"
-                                            placeholder="Teléfono"
-                                            className="w-full px-2 py-1.5 text-sm border rounded placeholder:text-slate-300"
-                                            value={newClientData.phone}
-                                            onChange={e => setNewClientData({ ...newClientData, phone: e.target.value })}
-                                        />
-                                        <input
-                                            type="email"
-                                            placeholder="Email"
-                                            className="w-full px-2 py-1.5 text-sm border rounded placeholder:text-slate-300"
-                                            value={newClientData.email}
-                                            onChange={e => setNewClientData({ ...newClientData, email: e.target.value })}
-                                        />
-                                    </div>
-                                    <button
-                                        onClick={handleCreateClient}
-                                        disabled={!newClientData.name || !newClientData.vat || isCreatingClient}
-                                        className="w-full py-2 bg-slate-800 text-white rounded text-xs font-bold hover:bg-black transition-colors disabled:opacity-50"
-                                    >
-                                        {isCreatingClient ? 'Guardando...' : 'Guardar Cliente'}
-                                    </button>
-                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 flex items-start gap-3">
+                            <User className="text-amber-600 shrink-0 mt-0.5" size={16} />
+                            <div>
+                                <h4 className="text-xs font-bold text-amber-800">Cliente Pre-asignado</h4>
+                                <p className="text-[11px] text-amber-600 mt-1 leading-relaxed">
+                                    Este lote ya tiene una cotización activa. La reserva se asociará automáticamente a la orden existente.
+                                </p>
                             </div>
-                        )}
-                    </div>
+                        </div>
+                    )}
 
                     {/* File Upload */}
                     <div className="space-y-2">

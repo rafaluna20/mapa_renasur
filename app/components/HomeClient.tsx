@@ -127,6 +127,7 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
             if (!s) return null;
             const status = s.toLowerCase();
             if (status.includes('disponible')) return 'libre';
+            if (status.includes('cotizacion') || status.includes('cotización')) return 'cotizacion';
             if (status.includes('reservado')) return 'separado';
             if (status.includes('vendido')) return 'vendido';
             return status;

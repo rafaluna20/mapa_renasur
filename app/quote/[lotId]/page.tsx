@@ -2,7 +2,7 @@
 
 import { use, useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, Download, Calculator, Calendar, Tag, DollarSign, Table, Loader2, Percent, User, Search, Check, Plus, X } from 'lucide-react';
+import { ChevronLeft, Download, Calculator, Calendar, Tag, DollarSign, Table, Loader2, Percent, User, Search, Check, Plus, X, Save, Send, CheckCircle } from 'lucide-react';
 import { lotsData, Lot } from '@/app/data/lotsData';
 import { financeService, QuoteCalculations } from '@/app/services/financeService';
 import Header from '@/app/components/UI/Header';
@@ -10,6 +10,8 @@ import { exportQuoteToPdf } from '@/app/utils/quotePdfExporter';
 import geometriesJson from '@/app/data/geometries.json';
 import { useAuth } from '@/app/context/AuthContext';
 import { odooService } from '@/app/services/odooService';
+import { localQuoteService } from '@/app/services/localQuoteService';
+import { LocalQuote } from '@/app/types/localQuote';
 
 interface QuotePageProps {
     params: Promise<{ lotId: string }>;
@@ -86,6 +88,12 @@ export default function QuotePage({ params }: QuotePageProps) {
     const [isCreatingClient, setIsCreatingClient] = useState(false);
     const [newClientData, setNewClientData] = useState({ name: '', vat: '', phone: '', email: '' });
 
+    // Local Quote State
+    const [currentQuoteId, setCurrentQuoteId] = useState<string | null>(null);
+    const [isSavingQuote, setIsSavingQuote] = useState(false);
+    const [isConfirmingQuote, setIsConfirmingQuote] = useState(false);
+    const [quoteConfirmed, setQuoteConfirmed] = useState(false);
+
     // Debounced client search
     useEffect(() => {
         if (!searchTerm || selectedClient) {
@@ -144,6 +152,109 @@ export default function QuotePage({ params }: QuotePageProps) {
         if (lot) {
             const amount = lot.list_price * (val / 100);
             setDiscountAmount(amount);
+        }
+    };
+
+
+
+    // Save Quote Locally & Export PDF
+    const handleSaveQuote = async () => {
+        if (!lot || !calculations) return;
+
+        setIsSavingQuote(true);
+        try {
+            // 1. Create Quote Object
+            const quote: LocalQuote = {
+                id: currentQuoteId || localQuoteService.generateId(), // Reuse ID if updating
+                lotId: lot.id,
+                lotDefaultCode: lot.default_code || '',
+                lotName: lot.name,
+                clientData: selectedClient ? {
+                    name: selectedClient.name,
+                    // If we had more client data, we'd put it here
+                } : null,
+                terms: {
+                    originalPrice: lot.list_price,
+                    discountPercent,
+                    discountAmount,
+                    discountedPrice: calculations.discountedPrice,
+                    initialPayment,
+                    numInstallments,
+                    monthlyInstallment: calculations.monthlyInstallment,
+                    remainingBalance: calculations.remainingBalance,
+                    startDate
+                },
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                status: 'draft_local',
+                vendorName: user?.name || 'Vendedor'
+            };
+
+            // 2. Save to LocalStorage
+            localQuoteService.saveQuote(quote);
+            setCurrentQuoteId(quote.id);
+
+            // 3. Export PDF
+            exportQuoteToPdf(
+                lot,
+                calculations,
+                user?.name || 'No especificado',
+                selectedClient?.name
+            );
+
+            // Notify Success (could use a toast)
+            console.log("Quote saved locally:", quote.id);
+
+        } catch (error) {
+            console.error("Error saving quote:", error);
+            alert("Error al guardar la cotización");
+        } finally {
+            setIsSavingQuote(false);
+        }
+    };
+
+    // Confirm Quote in Odoo
+    const handleConfirmQuote = async () => {
+        if (!lot || !calculations || !currentQuoteId || !selectedClient) {
+            alert("Debe guardar la cotización y seleccionar un cliente antes de confirmar.");
+            return;
+        }
+
+        setIsConfirmingQuote(true);
+        try {
+            // Confirm via OdooService
+            // Note: odooService.confirmLocalQuote handles Partner creation/finding if VAT is provided
+            // But here we already have 'selectedClient' (which is minimal {id, name}).
+            // If the client was selected from search, we have the ID.
+
+            // We pass the data to confirmLocalQuote.
+            // If selectedClient has an ID, we use it directly?
+            // confirmLocalQuote expects clientData + lot + terms.
+
+            const result = await odooService.confirmLocalQuote(
+                lot.default_code || '',
+                {
+                    id: selectedClient.id,
+                    name: selectedClient.name,
+                    // If this was a newly created client in this session, we might have their VAT in a temporary state if we saved it
+                    // But usually, Search results only have ID/Name.
+                },
+                calculations.discountedPrice,
+                `Cotización para ${lot.name}. Inicial: ${initialPayment}. Plazo: ${numInstallments} meses.`
+            );
+
+            // If success
+            // result contains { orderId, partnerId }
+            localQuoteService.markAsConfirmed(currentQuoteId, result.orderId, result.partnerId);
+            setQuoteConfirmed(true);
+            alert("Cotización confirmada exitosamente en Odoo. Lote pasado a estado 'Cotización'.");
+            router.push('/');
+
+        } catch (error: any) {
+            console.error("Confirmation error:", error);
+            alert(`Error al confirmar en Odoo: ${error.message}`);
+        } finally {
+            setIsConfirmingQuote(false);
         }
     };
 
@@ -219,12 +330,40 @@ export default function QuotePage({ params }: QuotePageProps) {
                                 <p className="text-slate-500 font-medium">{lot.name} • {lot.x_mz} {lot.x_lote}</p>
                             </div>
                         </div>
-                        <button
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 transition-all active:scale-95"
-                            onClick={() => exportQuoteToPdf(lot, calculations, user?.name || 'No especificado')}
-                        >
-                            <Download size={20} /> Exportar PDF
-                        </button>
+                        <div className="flex items-center gap-2">
+                            {/* Guardar / Exportar */}
+                            <button
+                                onClick={handleSaveQuote}
+                                disabled={isSavingQuote || quoteConfirmed}
+                                className={`
+                                    px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all active:scale-95 text-sm
+                                    ${quoteConfirmed
+                                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                        : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm'
+                                    }
+                                `}
+                            >
+                                {isSavingQuote ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                                {currentQuoteId ? 'Guardar y Recalcular' : 'Guardar Cotización'}
+                            </button>
+
+                            {/* Confirmar en Odoo */}
+                            <button
+                                onClick={handleConfirmQuote}
+                                disabled={!currentQuoteId || !selectedClient || isConfirmingQuote || quoteConfirmed}
+                                className={`
+                                    px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-all active:scale-95 text-sm
+                                    ${(!currentQuoteId || !selectedClient || quoteConfirmed)
+                                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                                        : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200'
+                                    }
+                                `}
+                            >
+                                {isConfirmingQuote ? <Loader2 size={18} className="animate-spin" /> :
+                                    quoteConfirmed ? <CheckCircle size={18} /> : <Send size={18} />}
+                                {quoteConfirmed ? 'Enviado' : 'Confirmar en Odoo'}
+                            </button>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
