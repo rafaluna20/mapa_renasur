@@ -31,7 +31,7 @@ export default function Header({ onSync }: HeaderProps) {
             <div className="flex items-center gap-4">
                 {user && (
                     <button
-                        onClick={() => setShowProfile(true)}
+                        onClick={() => window.location.href = '/dashboard'}
                         className="hidden md:flex items-center gap-3 bg-slate-800 hover:bg-slate-700 transition-colors py-1.5 px-3 rounded-full border border-slate-700"
                     >
                         <div className="flex items-center gap-2 border-r border-slate-600 pr-3">
@@ -40,12 +40,16 @@ export default function Header({ onSync }: HeaderProps) {
                         </div>
                         <div className="flex items-center gap-2 text-xs">
                             <div>
-                                <span className="text-slate-400 mr-1">Ventas:</span>
-                                <span className="bg-emerald-500 text-white px-1.5 py-0.5 rounded font-bold">{salesCount}</span>
+                                <span className="text-slate-400 mr-1">Cotizadas:</span>
+                                <span className="bg-blue-500 text-white px-1.5 py-0.5 rounded font-bold">12</span>
                             </div>
                             <div>
                                 <span className="text-slate-400 mr-1">Separadas:</span>
-                                <span className="bg-amber-500 text-white px-1.5 py-0.5 rounded font-bold">{reservedCount}</span>
+                                <span className="bg-amber-500 text-white px-1.5 py-0.5 rounded font-bold">3</span>
+                            </div>
+                            <div>
+                                <span className="text-slate-400 mr-1">Ventas:</span>
+                                <span className="bg-emerald-500 text-white px-1.5 py-0.5 rounded font-bold">{salesCount}</span>
                             </div>
                         </div>
                     </button>
@@ -54,9 +58,9 @@ export default function Header({ onSync }: HeaderProps) {
                 <div className="flex items-center gap-2">
                     {user && (
                         <button
-                            onClick={() => setShowProfile(true)}
+                            onClick={() => window.location.href = '/dashboard'}
                             className="md:hidden flex items-center justify-center bg-slate-800 text-blue-400 w-9 h-9 rounded-md border border-slate-700 hover:bg-slate-700 transition-colors"
-                            title="Ver Perfil"
+                            title="Ver Dashboard"
                         >
                             <User size={18} />
                         </button>

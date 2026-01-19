@@ -9,6 +9,7 @@ interface AuthContextType {
     user: OdooUser | null;
     salesCount: number;
     reservedCount: number;
+    totalValue: number;
     loading: boolean;
     login: (login: string, pass: string) => Promise<void>;
     logout: () => void;
@@ -20,6 +21,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<OdooUser | null>(null);
     const [salesCount, setSalesCount] = useState(0);
     const [reservedCount, setReservedCount] = useState(0);
+    const [totalValue, setTotalValue] = useState(0);
     const [loading, setLoading] = useState(true);
     const router = useRouter();
 
@@ -45,6 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
             setSalesCount(stats.sold);
             setReservedCount(stats.reserved);
+            setTotalValue(stats.totalValue);
         } catch (error) {
             console.error("Error refreshing stats", error);
         }
@@ -69,12 +72,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
         setSalesCount(0);
         setReservedCount(0);
+        setTotalValue(0);
         localStorage.removeItem('odoo_user');
         router.push('/login');
     };
 
     return (
-        <AuthContext.Provider value={{ user, salesCount, reservedCount, loading, login, logout }}>
+        <AuthContext.Provider value={{ user, salesCount, reservedCount, totalValue, loading, login, logout }}>
             {children}
         </AuthContext.Provider>
     );

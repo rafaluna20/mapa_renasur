@@ -1,6 +1,7 @@
 import { Lot } from '@/app/data/lotsData';
-import { X, User, Ruler, FileText } from 'lucide-react';
+import { X, User, Ruler, FileText, Lock } from 'lucide-react';
 import { useState } from 'react';
+import ReservationModal from './ReservationModal';
 
 interface StatusConfigItem {
     color: string;
@@ -23,8 +24,15 @@ const STATUS_CONFIG: Record<string, StatusConfigItem> = {
 };
 
 export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotation }: LotDetailModalProps) {
+    const [showReservationModal, setShowReservationModal] = useState(false);
+
     if (!lot) return null;
     const config = STATUS_CONFIG[lot.x_statu] || STATUS_CONFIG.libre;
+
+    // MOCK: Simulation of a locked lot (e.g. if lot name ends in '5')
+    // This is just to demonstrate the UI to the user
+    const isLocked = lot.name.endsWith('5');
+    const lockedBy = "Carlos V.";
 
     // Determinar mensaje de cliente (Estático por ahora)
     let assignedClient = "Sin asignar";
@@ -47,6 +55,13 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                     <h2 className={`text-lg md:text-2xl font-bold ${config.text} capitalize px-4 truncate w-full`}>{lot.name}</h2>
                     <span className={`text-[10px] md:text-sm font-medium ${config.text} opacity-80 uppercase tracking-wide`}>{config.label}</span>
                 </div>
+
+                {isLocked && lot.x_statu === 'libre' && (
+                    <div className="absolute top-2 left-2 bg-slate-900/80 backdrop-blur-sm text-white px-2 py-1 rounded-full text-[10px] flex items-center gap-1 animate-pulse">
+                        <Lock size={10} />
+                        Gestionando: {lockedBy}
+                    </div>
+                )}
             </div>
 
             <div className="p-4 space-y-4 overflow-y-auto max-h-[70vh] md:max-h-none">
@@ -87,10 +102,15 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                     <div className="grid grid-cols-2 gap-2">
                         {lot.x_statu === 'libre' && onUpdateStatus && (
                             <button
-                                onClick={() => onUpdateStatus(lot.id, 'separado')}
-                                className="bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-lg font-medium text-sm transition-colors"
+                                onClick={() => {
+                                    if (isLocked) return; // Prevent action if locked
+                                    setShowReservationModal(true);
+                                }}
+                                disabled={isLocked}
+                                className={`bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-lg font-medium text-sm transition-colors ${isLocked ? 'opacity-50 cursor-not-allowed grayscale' : ''
+                                    }`}
                             >
-                                Reservar
+                                {isLocked ? 'En Gestión' : 'Reservar'}
                             </button>
                         )}
                         {lot.x_statu === 'separado' && onUpdateStatus && (
@@ -122,6 +142,21 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                     </div>
                 </div>
             </div>
-        </div>
+
+
+            {
+                showReservationModal && (
+                    <ReservationModal
+                        lot={lot}
+                        onClose={() => setShowReservationModal(false)}
+                        onSuccess={() => {
+                            // After successful reservation flow, trigger the status update locally to reflect changes immediately
+                            // The actual API call happened inside the modal
+                            if (onUpdateStatus) onUpdateStatus(lot.id, 'separado');
+                        }}
+                    />
+                )
+            }
+        </div >
     );
 }

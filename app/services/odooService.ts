@@ -143,5 +143,51 @@ export const odooService = {
             console.error("Error updating status:", error);
             throw error;
         }
+    },
+
+    async getDetailedSalesStats(userId: number) {
+        // MOCK DATA for Dashboard Prototype
+        // In the future, this will fetch real data from Odoo
+        return {
+            salesTrend: [
+                { name: 'Ene', ventas: 4000 },
+                { name: 'Feb', ventas: 3000 },
+                { name: 'Mar', ventas: 2000 },
+                { name: 'Abr', ventas: 2780 },
+                { name: 'May', ventas: 1890 },
+                { name: 'Jun', ventas: 2390 },
+                { name: 'Jul', ventas: 3490 },
+            ],
+            kpis: {
+                totalSales: 154000,
+                monthlyGoal: 200000,
+                commission: 4620,
+                pendingLeads: 12
+            },
+            recentActivity: [
+                { id: 1, action: "Reserva", lot: "Mz C Lote 12", date: "Hace 2 horas" },
+                { id: 2, action: "Venta", lot: "Mz A Lote 04", date: "Ayer" },
+                { id: 3, action: "Cotización", lot: "Mz D Lote 08", date: "Hace 2 días" }
+            ]
+        };
+    },
+
+    // --- Advanced Features (Mocked for Implementation) ---
+
+    async reserveLotWithEvidence(productId: string | number, userId: number, file: File, notes: string): Promise<boolean> {
+        console.log("Reserving Lot:", productId, "User:", userId, "File:", file.name, "Notes:", notes);
+
+        // Simulating API call to lock status
+        // In real implementation: Upload file -> Get URL -> Call Odoo execute_kw to write status and link attachment
+
+        return this.updateLotStatus(productId, 'separado');
+    },
+
+    // Check if a lot is currently being acted upon by another user
+    // This would use a realtime DB or Redis in production
+    async checkLotLock(productId: string) {
+        // MOCK: Randomly return true for locking demo purpose if needed
+        // For now, always return false (unlocked) unless strictly demo-ing concurrency
+        return { isLocked: false, lockedBy: null };
     }
 };
