@@ -258,7 +258,8 @@ export default function QuotePage({ params }: QuotePageProps) {
                 },
                 calculations.discountedPrice,
                 `Cotización para ${lot.name}. Inicial: ${initialPayment}. Plazo: ${numInstallments} meses.`,
-                pdfFile // Pass the generated PDF file
+                pdfFile, // Pass the generated PDF file
+                user?.uid // Pass the logged-in user's ID to assign as salesperson
             );
 
             // If success

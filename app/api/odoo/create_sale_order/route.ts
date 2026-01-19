@@ -3,11 +3,16 @@ import { fetchOdoo } from '@/app/services/odooService';
 
 export async function POST(request: Request) {
     try {
-        const { partnerId, defaultCode, price, notes } = await request.json();
+        const { partnerId, defaultCode, price, notes, userId } = await request.json();
 
         if (!partnerId || !defaultCode || !price) {
+            const missing = [];
+            if (!partnerId) missing.push('partnerId');
+            if (!defaultCode) missing.push('defaultCode');
+            if (!price) missing.push('price');
+
             return NextResponse.json(
-                { success: false, error: 'Missing required fields' },
+                { success: false, error: `Missing required fields: ${missing.join(', ')}` },
                 { status: 400 }
             );
         }
@@ -30,7 +35,7 @@ export async function POST(request: Request) {
         console.log(`✅ Found product.product ID: ${productId} (${products[0].name})`);
 
         // STEP 2: Create Sale Order in draft state
-        const orderData = {
+        const orderData: any = {
             partner_id: partnerId,
             state: 'draft',  // Draft state - waiting for approval
             note: notes || '',
@@ -42,6 +47,12 @@ export async function POST(request: Request) {
                 }]
             ]
         };
+
+        // Assign the logged-in user as the salesperson
+        if (userId) {
+            orderData.user_id = parseInt(userId);
+            console.log(`👤 Assigning salesperson: User ID ${userId}`);
+        }
 
         console.log('📤 Creating Sale Order with data:', JSON.stringify(orderData, null, 2));
 

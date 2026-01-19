@@ -1,5 +1,5 @@
 import { Lot } from '@/app/data/lotsData';
-import { LucideIcon, CheckCircle, AlertCircle, XCircle, FileText } from 'lucide-react';
+import { LucideIcon, CheckCircle, AlertCircle, XCircle, FileText, Flame } from 'lucide-react';
 
 interface StatusConfigItem {
     color: string;
@@ -13,6 +13,7 @@ interface LotCardProps {
     lot: Lot;
     onClick: (lot: Lot) => void;
     isSelected: boolean;
+    quoteCount?: number;
 }
 
 const STATUS_CONFIG: Record<string, StatusConfigItem> = {
@@ -22,7 +23,7 @@ const STATUS_CONFIG: Record<string, StatusConfigItem> = {
     vendido: { color: "#EF4444", label: "Vendido", bg: "bg-red-100", text: "text-red-800", icon: XCircle },
 };
 
-export default function LotCard({ lot, onClick, isSelected }: LotCardProps) {
+export default function LotCard({ lot, onClick, isSelected, quoteCount }: LotCardProps) {
     const config = STATUS_CONFIG[lot.x_statu] || STATUS_CONFIG.libre;
     const Icon = config.icon;
 
@@ -42,6 +43,12 @@ export default function LotCard({ lot, onClick, isSelected }: LotCardProps) {
                 <span>{Number(lot.x_area).toFixed(2)} m²</span>
                 <span className="font-semibold text-slate-700">$ {lot.list_price.toLocaleString()}</span>
             </div>
+            {quoteCount && quoteCount > 1 && (
+                <div className="mt-2 flex items-center gap-1 text-xs font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded-full w-fit">
+                    <Flame size={12} />
+                    {quoteCount} Cotizaciones
+                </div>
+            )}
         </div>
     );
 }

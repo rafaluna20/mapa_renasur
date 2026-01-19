@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
                 odooValue = 'disponible';
                 break;
             case 'separado':
+            case 'reservado': // Allow direct 'reservado' input
                 odooValue = 'reservado';
                 break;
             case 'vendido':
@@ -43,6 +44,8 @@ export async function POST(request: NextRequest) {
             vals["x_cliente"] = clientName;
         }
 
+        // Execute 'write' method on product.template
+        // write(ids, values)
         // Execute 'write' method on product.template
         // write(ids, values)
         const result = await fetchOdoo(

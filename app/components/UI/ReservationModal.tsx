@@ -73,7 +73,7 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
         try {
             if (lot.x_statu === 'cotizacion') {
                 // Flow for already quoted lots: Find order, attach file, update status
-                await odooService.reserveQuotedLot(lot.default_code, file, notes);
+                await odooService.reserveQuotedLot(lot.default_code, file, notes, user?.uid);
             } else {
                 // Flow for direct reservation (legacy or admin override): Create Order -> Attach -> Status
                 if (!selectedClient) return; // Should be caught above
@@ -345,7 +345,7 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
                     </button>
                     <button
                         onClick={handleSubmit}
-                        disabled={isSubmitting || !file || !selectedClient}
+                        disabled={isSubmitting || !file || (lot.x_statu !== 'cotizacion' && !selectedClient)}
                         className="flex-1 py-2.5 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm shadow-blue-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-[13px]"
                     >
                         {isSubmitting ? (

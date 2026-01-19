@@ -1,5 +1,5 @@
 import { Lot } from '@/app/data/lotsData';
-import { X, User, Ruler, FileText, Lock } from 'lucide-react';
+import { X, User, Ruler, FileText, Lock, Users, Clock } from 'lucide-react';
 import { useState } from 'react';
 import ReservationModal from './ReservationModal';
 
@@ -15,6 +15,7 @@ interface LotDetailModalProps {
     onClose: () => void;
     onUpdateStatus?: (id: string, status: string) => void;
     onQuotation?: (lot: Lot) => void;
+    activeQuotes?: { count: number; quotes: any[] };
 }
 
 const STATUS_CONFIG: Record<string, StatusConfigItem> = {
@@ -26,7 +27,7 @@ const STATUS_CONFIG: Record<string, StatusConfigItem> = {
     no_vender: { color: "#9CA3AF", label: "No Vender", bg: "bg-gray-200", text: "text-gray-800" }
 };
 
-export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotation }: LotDetailModalProps) {
+export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotation, activeQuotes }: LotDetailModalProps) {
     const [showReservationModal, setShowReservationModal] = useState(false);
 
     if (!lot) return null;
@@ -101,6 +102,49 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                     </div>
                 )}
 
+                {/* Cotizaciones Activas Section */}
+                {activeQuotes && activeQuotes.count > 0 && (
+                    <div className="mt-4 bg-gradient-to-br from-orange-50 to-red-50 rounded-lg border-2 border-orange-200 overflow-hidden">
+                        <div className="bg-orange-100 px-3 py-2 border-b border-orange-200 flex items-center gap-2">
+                            <Users size={14} className="text-orange-600" />
+                            <span className="text-xs font-bold text-orange-700 uppercase tracking-wider">
+                                🔥 {activeQuotes.count} Cotizacion{activeQuotes.count > 1 ? 'es' : ''} Activa{activeQuotes.count > 1 ? 's' : ''}
+                            </span>
+                        </div>
+                        <div className="p-3 space-y-2 max-h-40 overflow-y-auto">
+                            {activeQuotes.quotes.map((quote: any, index: number) => {
+                                // Calculate time elapsed
+                                const createdDate = new Date(quote.createdAt);
+                                const now = new Date();
+                                const hoursElapsed = Math.floor((now.getTime() - createdDate.getTime()) / (1000 * 60 * 60));
+                                const timeDisplay = hoursElapsed < 1 ? 'Hace menos de 1h' :
+                                    hoursElapsed < 24 ? `Hace ${hoursElapsed}h` :
+                                        `Hace ${Math.floor(hoursElapsed / 24)}d`;
+
+                                return (
+                                    <div key={quote.orderId} className="bg-white p-2 rounded border border-orange-200 text-xs">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <p className="font-bold text-slate-700">{quote.clientName}</p>
+                                                <p className="text-slate-500 text-[10px]">Asesor: {quote.vendorName}</p>
+                                            </div>
+                                            <div className="flex items-center gap-1 text-orange-600">
+                                                <Clock size={10} />
+                                                <span className="text-[10px]">{timeDisplay}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        <div className="bg-orange-50 px-3 py-2 border-t border-orange-200">
+                            <p className="text-[9px] text-orange-700 text-center italic">
+                                ⚡ Primera reserva confirmada gana el lote
+                            </p>
+                        </div>
+                    </div>
+                )}
+
             </div>
 
             <div className="p-4 border-t border-slate-100 bg-white shrink-0">
@@ -108,8 +152,8 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                 <div className="grid grid-cols-2 gap-2">
                     {/* FLUJO: Disponible -> Cotizar -> Reservar */}
 
-                    {/* ESTADO: DISPONIBLE (Muestra COTIZAR) */}
-                    {(lot.x_statu === 'libre' || lot.x_statu === 'disponible') && onUpdateStatus && (
+                    {/* ESTADO: DISPONIBLE o EN COTIZACIÓN (Muestra COTIZAR) */}
+                    {(lot.x_statu === 'libre' || lot.x_statu === 'disponible' || lot.x_statu === 'cotizacion') && onUpdateStatus && (
                         <>
                             <button
                                 onClick={() => onQuotation?.(lot)}
@@ -137,12 +181,6 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                             >
                                 <User size={18} />
                                 {isLocked ? 'En Gestión' : 'FINALIZAR RESERVA'}
-                            </button>
-                            <button
-                                onClick={() => onQuotation?.(lot)}
-                                className="col-span-2 border border-slate-200 hover:bg-slate-50 text-slate-600 py-2 rounded-lg font-medium text-xs transition-colors"
-                            >
-                                Ver Cotización
                             </button>
                         </>
                     )}

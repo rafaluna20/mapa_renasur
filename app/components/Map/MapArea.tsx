@@ -1,7 +1,9 @@
 import { Map as MapIcon, Layers, Square, Navigation, Ruler } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import MapContainerWrapper from './MapContainer';
 import LotDetailModal from '../UI/LotDetailModal';
 import { Lot } from '@/app/data/lotsData';
+import { odooService } from '@/app/services/odooService';
 
 interface MapAreaProps {
     lots: Lot[];
@@ -29,6 +31,17 @@ export default function MapArea({
     preferCanvas,
     showMeasurements, onToggleMeasurements
 }: MapAreaProps) {
+    const [activeQuotes, setActiveQuotes] = useState<{ count: number; quotes: any[] } | null>(null);
+
+    // Fetch active quotes when a lot is selected
+    useEffect(() => {
+        if (selectedLot && selectedLot.default_code) {
+            odooService.getActiveQuotesByLot(selectedLot.default_code).then(setActiveQuotes);
+        } else {
+            setActiveQuotes(null);
+        }
+    }, [selectedLot]);
+
     return (
         <div id="map-export-area" className="flex-1 bg-slate-200 relative overflow-hidden flex flex-col">
             {/* Map Controls (Floating) */}
@@ -132,6 +145,7 @@ export default function MapArea({
                 onClose={onCloseModal}
                 onUpdateStatus={onUpdateStatus}
                 onQuotation={onQuotation}
+                activeQuotes={activeQuotes || undefined}
             />
         </div>
     );

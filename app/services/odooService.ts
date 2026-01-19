@@ -209,13 +209,12 @@ export const odooService = {
         }
     },
 
-    // 2. Create a Real Sale Order in Odoo
-    async createSaleOrder(partnerId: number, defaultCode: string, price: number, notes?: string): Promise<number> {
+    async createSaleOrder(partnerId: number, defaultCode: string, price: number, notes?: string, userId?: number): Promise<number> {
         try {
             const response = await fetch('/api/odoo/create_sale_order', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ partnerId, defaultCode, price, notes }),
+                body: JSON.stringify({ partnerId, defaultCode, price, notes, userId }),
             });
             const result = await response.json();
             if (!result.success) throw new Error(result.error);
@@ -245,6 +244,26 @@ export const odooService = {
         } catch (error) {
             console.error("Error uploading attachment:", error);
             throw error;
+        }
+    },
+
+    // Get active quotations (draft orders) for a specific lot
+    async getActiveQuotesByLot(defaultCode: string): Promise<{ count: number; quotes: any[] }> {
+        try {
+            const response = await fetch('/api/odoo/get_active_quotes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ defaultCode })
+            });
+            const result = await response.json();
+            if (!result.success) throw new Error(result.error);
+            return {
+                count: result.quotes?.length || 0,
+                quotes: result.quotes || []
+            };
+        } catch (error) {
+            console.error("Error fetching active quotes:", error);
+            return { count: 0, quotes: [] };
         }
     },
 
@@ -278,7 +297,8 @@ export const odooService = {
         clientData: { id?: number; name: string; vat?: string; phone?: string; email?: string },
         price: number,
         notes: string,
-        pdfFile?: File // Archivo de cotización PDF opcional
+        pdfFile?: File, // Archivo de cotización PDF opcional
+        userId?: number // ID del usuario logueado para asignar como vendedor
     ): Promise<{ orderId: number; partnerId: number }> {
         try {
             // Step 1: Create or find partner (skip if we already have an ID)
@@ -301,7 +321,7 @@ export const odooService = {
             }
 
             // Step 2: Create sale order in draft state
-            const orderId = await this.createSaleOrder(partnerId, lotDefaultCode, price, notes);
+            const orderId = await this.createSaleOrder(partnerId, lotDefaultCode, price, notes, userId);
             console.log("✅ Sale Order Created:", orderId);
 
             // Step 3: Update lot status to 'cotizacion'
@@ -332,30 +352,57 @@ export const odooService = {
     },
 
     // Reserve a lot that already has a confirmed quote (draft order)
-    async reserveQuotedLot(defaultCode: string, file: File, notes: string) {
+    async reserveQuotedLot(defaultCode: string, file: File, notes: string, userId?: number) {
         try {
             // 1. Find the existing draft order
             const searchRes = await fetch('/api/odoo/find_draft_order', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ defaultCode })
+                body: JSON.stringify({ defaultCode, userId })
             }).then(r => r.json());
 
             if (!searchRes.success || !searchRes.order) {
                 throw new Error("No se encontró una cotización activa para este lote en Odoo.");
             }
 
-            const { id: orderId, productId } = searchRes.order;
+            const { id: orderId, productId, productTmplId } = searchRes.order;
             console.log(`✅ Found existing draft order: ${orderId} for product ${productId}`);
 
             // 2. Upload Payment Evidence
             await this.addAttachmentToOrder(orderId, file);
             console.log("✅ Payment proof attached to existing order");
 
-            // 3. Update Lot Status to 'reservado'
-            if (productId) {
+            // 3. CONFIRM ORDER (Draft -> Sale) - FIRST RESERVE WINS!
+            const confirmRes = await fetch('/api/odoo/confirm_order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderId })
+            });
+            const confirmResult = await confirmRes.json();
+            if (!confirmResult.success) {
+                throw new Error(confirmResult.error || 'Failed to confirm order');
+            }
+            console.log("🏆 Order confirmed! This reservation WINS the lot.");
+
+            // 4. Update Lot Status to 'reservado'
+            // Use Template ID if available (because update_status uses product.template), else fallback to Variant ID
+            if (productTmplId) {
+                await this.updateLotStatus(productTmplId, 'reservado');
+                console.log(`✅ Lot status updated to 'reservado' (Template: ${productTmplId})`);
+            } else if (productId) {
                 await this.updateLotStatus(productId, 'reservado');
-                console.log("✅ Lot status updated to 'reservado'");
+                console.log(`✅ Lot status updated to 'reservado' (Variant: ${productId})`);
+            }
+
+            // 5. Check for competing quotations and simulate notifications
+            const activeQuotes = await this.getActiveQuotesByLot(defaultCode);
+            if (activeQuotes.count > 1) {
+                console.warn(`⚠️ NOTIFICATION: ${activeQuotes.count - 1} competing quotation(s) are now obsolete for lot ${defaultCode}`);
+                activeQuotes.quotes.forEach((quote: any) => {
+                    if (quote.orderId !== orderId) {
+                        console.log(`📧 [MOCK] Notifying vendor ${quote.vendorName}: Client ${quote.clientName}'s quote is no longer valid.`);
+                    }
+                });
             }
 
             return { success: true, orderId };

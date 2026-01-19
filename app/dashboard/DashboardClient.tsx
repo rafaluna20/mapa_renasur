@@ -176,6 +176,77 @@ export default function DashboardClient({ user, stats }: DashboardClientProps) {
                 </div>
             </div>
 
+            {/* COMPETED LOTS SECTION - Manager Dashboard */}
+            <div className="mt-8 bg-gradient-to-br from-orange-50 to-red-50 rounded-2xl border-2 border-orange-200 shadow-sm overflow-hidden">
+                <div className="p-6 border-b border-orange-200 bg-orange-100 flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-orange-200 rounded-lg">
+                            <Users size={20} className="text-orange-700" />
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold text-orange-900">🔥 Lotes Competidos</h3>
+                            <p className="text-xs text-orange-700">Propiedades con múltiples cotizaciones activas</p>
+                        </div>
+                    </div>
+                    <span className="bg-orange-600 text-white px-3 py-1 rounded-full text-sm font-bold">3 Activos</span>
+                </div>
+                <div className="p-6 space-y-4">
+                    {/* Demo Data - In production, fetch from API */}
+                    {[
+                        {
+                            lot: 'Mz Q Lote 05', stage: 'Etapa 1', quotes: [
+                                { client: 'María García', advisor: 'Carlos V.', hours: 2 },
+                                { client: 'Pedro Sánchez', advisor: 'Ana M.', hours: 5 }
+                            ]
+                        },
+                        {
+                            lot: 'Mz R Lote 12', stage: 'Etapa 2', quotes: [
+                                { client: 'Luis Fernández', advisor: 'Carlos V.', hours: 12 },
+                                { client: 'Carmen Torres', advisor: 'Juan P.', hours: 18 },
+                                { client: 'Rosa Medina', advisor: 'Ana M.', hours: 24 }
+                            ]
+                        },
+                        {
+                            lot: 'Mz B Lote 08', stage: 'Etapa 1', quotes: [
+                                { client: 'Jorge Ramírez', advisor: 'Juan P.', hours: 3 },
+                                { client: 'Elena Cruz', advisor: 'Carlos V.', hours: 8 }
+                            ]
+                        }
+                    ].map((item, idx) => (
+                        <div key={idx} className="bg-white p-4 rounded-xl border-2 border-orange-200">
+                            <div className="flex justify-between items-start mb-3">
+                                <div>
+                                    <p className="font-bold text-slate-900">{item.lot}</p>
+                                    <p className="text-xs text-slate-500">{item.stage}</p>
+                                </div>
+                                <span className="bg-red-500 text-white px-2 py-1 rounded-full text-xs font-bold">
+                                    {item.quotes.length} Candidatos
+                                </span>
+                            </div>
+                            <div className="space-y-2">
+                                {item.quotes.map((quote, qIdx) => (
+                                    <div key={qIdx} className="flex justify-between items-center text-sm bg-slate-50 p-2 rounded">
+                                        <div>
+                                            <span className="font-semibold text-slate-700">{quote.client}</span>
+                                            <span className="text-slate-400 text-xs ml-2">· {quote.advisor}</span>
+                                        </div>
+                                        <span className="text-xs text-orange-600 flex items-center gap-1">
+                                            <Clock size={10} />
+                                            Hace {quote.hours}h
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="mt-3 pt-3 border-t border-orange-100">
+                                <p className="text-xs text-orange-700 italic text-center">
+                                    ⚡ Primera reserva confirmada gana
+                                </p>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
             {/* Assigned Lots Table */}
             <div className="mt-8 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-slate-100 flex justify-between items-center">
