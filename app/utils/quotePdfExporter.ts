@@ -11,8 +11,9 @@ export const exportQuoteToPdf = async (
     lot: Lot,
     calcs: QuoteCalculations,
     vendorName: string = 'No especificado',
-    clientName?: string
-) => {
+    clientName?: string,
+    returnBlob: boolean = false
+): Promise<Blob | void> => {
     const doc = new jsPDF({
         orientation: 'p',
         unit: 'mm',
@@ -139,5 +140,11 @@ export const exportQuoteToPdf = async (
     }
 
     // Descargar
+    // Si se solicita Blob (para subir a Odoo), lo devolvemos
+    if (returnBlob) {
+        return doc.output('blob');
+    }
+
+    // Descargar por defecto
     doc.save(`Cotizacion_Renasur_${lot.name.replace(/\s+/g, '_')}.pdf`);
 };

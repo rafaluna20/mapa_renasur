@@ -277,7 +277,8 @@ export const odooService = {
         lotDefaultCode: string,
         clientData: { id?: number; name: string; vat?: string; phone?: string; email?: string },
         price: number,
-        notes: string
+        notes: string,
+        pdfFile?: File // Archivo de cotización PDF opcional
     ): Promise<{ orderId: number; partnerId: number }> {
         try {
             // Step 1: Create or find partner (skip if we already have an ID)
@@ -317,9 +318,36 @@ export const odooService = {
                 console.log("✅ Lot status updated to 'cotizacion' with client: " + clientData.name);
             }
 
+            // Step 4: Attach PDF Quote if provided
+            if (pdfFile) {
+                await this.addAttachmentToOrder(orderId, pdfFile);
+                console.log("✅ Quote PDF attached to order");
+            }
+
             return { orderId, partnerId };
         } catch (error) {
             console.error("❌ Quote Confirmation Failed:", error);
+            throw error;
+        }
+    },
+
+    // Upload attachment to Odoo (e.g. PDF Quote, Payment Proof)
+    async addAttachmentToOrder(orderId: number, file: File): Promise<boolean> {
+        try {
+            const formData = new FormData();
+            formData.append('orderId', orderId.toString());
+            formData.append('file', file);
+
+            const response = await fetch('/api/odoo/add_attachment', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+            if (!result.success) throw new Error(result.error);
+            return true;
+        } catch (error) {
+            console.error("❌ Add Attachment Failed:", error);
             throw error;
         }
     },
