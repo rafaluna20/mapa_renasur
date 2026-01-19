@@ -37,12 +37,13 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
     const isLocked = lot.name.endsWith('5');
     const lockedBy = "Carlos V.";
 
-    // Determinar mensaje de cliente (Estático por ahora)
-    let assignedClient = "Sin asignar";
-    if (lot.x_statu === 'vendido') {
-        assignedClient = "Juan Pérez (Cliente VIP)";
-    } else if (lot.x_statu === 'separado') {
-        assignedClient = "María González (Interesada)";
+    // Determinar mensaje de cliente
+    let assignedClient = lot.x_cliente || "Sin asignar";
+
+    // MOCK: Fallback visual si no hay cliente real pero está en estado especial (solo para demo si falla datos)
+    if (assignedClient === "Sin asignar" && (lot.x_statu === 'vendido' || lot.x_statu === 'separado')) {
+        // Mantener "Sin asignar" o mostrar algo genérico si se prefiere. 
+        // Por ahora confiamos en la data de Odoo.
     }
 
     return (

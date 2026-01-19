@@ -174,6 +174,7 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
                     x_area: parseVal(odooMatch.x_area, lot.x_area, true),
                     x_mz: getOdooVal(odooMatch.x_mz, lot.x_mz),
                     x_etapa: getOdooVal(odooMatch.x_etapa, lot.x_etapa),
+                    x_cliente: getOdooVal(odooMatch.x_cliente, ''),
                     points: registryGeometry?.coordinates || lot.points,
                     measurements: registryGeometry?.measurements
                 };
@@ -206,6 +207,7 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
                         x_area: parseVal(odooMatch.x_area, 0, true),
                         x_mz: getOdooVal(odooMatch.x_mz, ''),
                         x_etapa: getOdooVal(odooMatch.x_etapa, ''),
+                        x_cliente: getOdooVal(odooMatch.x_cliente, ''),
                         x_lote: getOdooVal(odooMatch.x_lote, ''),
                         default_code: code,
                         points: registryGeometry.coordinates,

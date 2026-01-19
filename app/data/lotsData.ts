@@ -20,6 +20,7 @@ export interface Lot {
     x_lote: string; // Número de lote
     default_code: string; // Código de Odoo para matching (ej: E01MZX001)
     measurements?: LotMeasurements; // Pre-calculated geometry measurements
+    x_cliente?: string; // Nombre del cliente asignado (Odoo x_cliente)
 }
 
 

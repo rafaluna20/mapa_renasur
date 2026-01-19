@@ -4,7 +4,7 @@ import { fetchOdoo } from '@/app/services/odooService';
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { productId, newStatus } = body;
+        const { productId, newStatus, clientName } = body;
 
         if (!productId || !newStatus) {
             return NextResponse.json({ success: false, error: "Missing productId or newStatus" }, { status: 400 });
@@ -16,9 +16,6 @@ export async function POST(request: NextRequest) {
         }
 
         // Map local status to Odoo value
-        // Local: 'libre', 'separado', 'vendido'
-        // Odoo: 'disponible', 'reservado', 'vendido'
-        // Intentamos usar minúsculas que suelen ser las "keys" de los campos Selection en Odoo
         let odooValue = '';
         switch (newStatus) {
             case 'libre':
@@ -37,12 +34,21 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json({ success: false, error: "Invalid status" }, { status: 400 });
         }
 
+        // Prepare write values
+        const vals: any = { "x_statu": odooValue };
+
+        // If clientName is provided (e.g. for Quote Confirmation or Reservation), update x_cliente
+        // We allow empty string to clear it if needed, or check undefined
+        if (clientName !== undefined) {
+            vals["x_cliente"] = clientName;
+        }
+
         // Execute 'write' method on product.template
         // write(ids, values)
         const result = await fetchOdoo(
             "product.template",
             "write",
-            [[odooId], { "x_statu": odooValue }]
+            [[odooId], vals]
         );
 
         if (result) {

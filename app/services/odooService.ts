@@ -127,12 +127,12 @@ export const odooService = {
         return result.stats;
     },
 
-    async updateLotStatus(productId: string | number, status: string): Promise<boolean> {
+    async updateLotStatus(productId: string | number, status: string, clientName?: string): Promise<boolean> {
         try {
             const response = await fetch('/api/odoo/update_status', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ productId, newStatus: status }),
+                body: JSON.stringify({ productId, newStatus: status, clientName }),
             });
             const result = await response.json();
             if (!result.success) {
@@ -312,8 +312,9 @@ export const odooService = {
             }).then(r => r.json());
 
             if (products.success && products.productId) {
-                await this.updateLotStatus(products.productId, 'cotizacion');
-                console.log("✅ Lot status updated to 'cotizacion'");
+                // Pass the client name to be saved in x_cliente
+                await this.updateLotStatus(products.productId, 'cotizacion', clientData.name);
+                console.log("✅ Lot status updated to 'cotizacion' with client: " + clientData.name);
             }
 
             return { orderId, partnerId };

@@ -16,7 +16,7 @@ export default async function Home() {
       "search_read",
       [[["active", "=", true]]],
       {
-        fields: ["id", "name", "default_code", "list_price", "qty_available", "x_statu", "x_area", "x_mz", "x_etapa", "x_lote"],
+        fields: ["id", "name", "default_code", "list_price", "qty_available", "x_statu", "x_area", "x_mz", "x_etapa", "x_lote", "x_cliente"],
         limit: 1000
       }
     );
