@@ -365,8 +365,8 @@ export const odooService = {
                 throw new Error("No se encontró una cotización activa para este lote en Odoo.");
             }
 
-            const { id: orderId, productId, productTmplId } = searchRes.order;
-            console.log(`✅ Found existing draft order: ${orderId} for product ${productId}`);
+            const { id: orderId, productId, productTmplId, partnerName } = searchRes.order;
+            console.log(`✅ Found existing draft order: ${orderId} for product ${productId}, Client: ${partnerName}`);
 
             // 2. Upload Payment Evidence
             await this.addAttachmentToOrder(orderId, file);
@@ -384,14 +384,15 @@ export const odooService = {
             }
             console.log("🏆 Order confirmed! This reservation WINS the lot.");
 
-            // 4. Update Lot Status to 'reservado'
+            // 4. Update Lot Status to 'reservado' AND Force Client Name Update
             // Use Template ID if available (because update_status uses product.template), else fallback to Variant ID
             if (productTmplId) {
-                await this.updateLotStatus(productTmplId, 'reservado');
-                console.log(`✅ Lot status updated to 'reservado' (Template: ${productTmplId})`);
+                // FORCE WRITE the client name from the winning order to ensure data consistency
+                await this.updateLotStatus(productTmplId, 'reservado', partnerName);
+                console.log(`✅ Lot status updated to 'reservado' with Client '${partnerName}' (Template: ${productTmplId})`);
             } else if (productId) {
-                await this.updateLotStatus(productId, 'reservado');
-                console.log(`✅ Lot status updated to 'reservado' (Variant: ${productId})`);
+                await this.updateLotStatus(productId, 'reservado', partnerName);
+                console.log(`✅ Lot status updated to 'reservado' with Client '${partnerName}' (Variant: ${productId})`);
             }
 
             // 5. Check for competing quotations and simulate notifications

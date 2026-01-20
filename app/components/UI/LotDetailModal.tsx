@@ -19,19 +19,26 @@ interface LotDetailModalProps {
 }
 
 const STATUS_CONFIG: Record<string, StatusConfigItem> = {
-    libre: { color: "#10B981", label: "Disponible", bg: "bg-emerald-100", text: "text-emerald-800" },
-    cotizacion: { color: "#FBBF24", label: "En Cotización", bg: "bg-yellow-100", text: "text-yellow-800" },
-    separado: { color: "#F59E0B", label: "Reservado", bg: "bg-amber-100", text: "text-amber-800" },
-    vendido: { color: "#EF4444", label: "Vendido", bg: "bg-red-100", text: "text-red-800" },
-    reservado: { color: "#F59E0B", label: "Reservado", bg: "bg-amber-100", text: "text-amber-800" }, // Añadido para compatibilidad
-    no_vender: { color: "#9CA3AF", label: "No Vender", bg: "bg-gray-200", text: "text-gray-800" }
+    libre: { color: "#34D399", label: "Disponible", bg: "bg-emerald-100", text: "text-emerald-800" },
+    disponible: { color: "#34D399", label: "Disponible", bg: "bg-emerald-100", text: "text-emerald-800" },
+    cotizacion: { color: "#FDE047", label: "En Cotización", bg: "bg-yellow-100", text: "text-yellow-800" },
+
+    // Purple for Reservado
+    separado: { color: "#C084FC", label: "Reservado", bg: "bg-purple-100", text: "text-purple-800" },
+    reservado: { color: "#C084FC", label: "Reservado", bg: "bg-purple-100", text: "text-purple-800" },
+
+    vendido: { color: "#F87171", label: "Vendido", bg: "bg-red-100", text: "text-red-800" },
+
+    // Gray for No Vender
+    'no vender': { color: "#94A3B8", label: "No Vender", bg: "bg-slate-100", text: "text-slate-800" },
+    no_vender: { color: "#94A3B8", label: "No Vender", bg: "bg-slate-100", text: "text-slate-800" }
 };
 
 export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotation, activeQuotes }: LotDetailModalProps) {
     const [showReservationModal, setShowReservationModal] = useState(false);
 
     if (!lot) return null;
-    const config = STATUS_CONFIG[lot.x_statu] || STATUS_CONFIG.libre;
+    const config = STATUS_CONFIG[lot.x_statu?.toLowerCase()] || STATUS_CONFIG.libre;
 
     // MOCK: Simulation of a locked lot (e.g. if lot name ends in '5')
     // This is just to demonstrate the UI to the user
@@ -184,26 +191,44 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                             </button>
                         </>
                     )}
+
+                    {/* ESTADO: SEPARADO (Muestra VENDER y LIBERAR - Liberar Habilitado) */}
                     {lot.x_statu === 'separado' && onUpdateStatus && (
-                        <button
-                            onClick={() => onUpdateStatus(lot.id, 'vendido')}
-                            className="bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-medium text-sm transition-colors"
-                        >
-                            Vender
+                        <>
+                            <button
+                                onClick={() => onUpdateStatus(lot.id, 'vendido')}
+                                className="bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-medium text-sm transition-colors shadow-sm"
+                            >
+                                Vender
+                            </button>
+                            <button
+                                onClick={() => onUpdateStatus(lot.id, 'libre')}
+                                className="border border-slate-300 hover:bg-slate-50 text-slate-600 py-2 rounded-lg font-medium text-sm transition-colors"
+                            >
+                                Liberar
+                            </button>
+                        </>
+                    )}
+
+                    {/* ESTADO: VENDIDO (SOLO LECTURA / ODOO - Liberar Bloqueado) */}
+                    {lot.x_statu === 'vendido' && (
+                        <div className="col-span-2 flex flex-col items-center justify-center p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                            <div className="flex items-center gap-2 text-slate-500 mb-1">
+                                <Lock size={14} />
+                                <span className="text-xs font-bold uppercase">Venta Finalizada</span>
+                            </div>
+                            <p className="text-[10px] text-slate-400 text-center leading-tight">
+                                La liberación de este lote solo puede realizarse desde Odoo.
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Otros Estados (Fallback, o para 'no vender') */}
+                    {(lot.x_statu === 'no vender' || lot.x_statu === 'no_vender') && (
+                        <button className="col-span-2 border border-slate-300 hover:bg-slate-50 text-slate-600 py-2 rounded-lg font-medium text-sm transition-colors">
+                            Ver en Odoo
                         </button>
                     )}
-                    {(lot.x_statu === 'separado' || lot.x_statu === 'vendido') && onUpdateStatus && (
-                        <button
-                            onClick={() => onUpdateStatus(lot.id, 'libre')}
-                            className="border border-slate-300 hover:bg-slate-50 text-slate-600 py-2 rounded-lg font-medium text-sm transition-colors"
-                        >
-                            Liberar
-                        </button>
-                    )}
-                    {/* Otros Estados */}
-                    <button className="border border-slate-300 hover:bg-slate-50 text-slate-600 py-2 rounded-lg font-medium text-sm transition-colors">
-                        Ver en Odoo
-                    </button>
                 </div>
             </div>
 
