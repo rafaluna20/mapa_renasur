@@ -472,6 +472,7 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
                     preferCanvas={true} // IMPORTANTE: Renderizado optimizado
                     showMeasurements={showMeasurements}
                     onToggleMeasurements={() => setShowMeasurements(!showMeasurements)}
+                    currentUser={user}
                 />
 
                 {/* 

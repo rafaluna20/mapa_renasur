@@ -413,6 +413,29 @@ export const odooService = {
         }
     },
 
+
+
+    // Get the owner of a reserved lot (Salesperson who confirmed the order)
+    async getReservationOwner(defaultCode: string): Promise<{ ownerId: number; ownerName: string; clientName: string } | null> {
+        try {
+            const response = await fetch('/api/odoo/get_reservation_owner', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ defaultCode })
+            });
+            const result = await response.json();
+            if (!result.success || !result.ownerId) return null;
+            return {
+                ownerId: result.ownerId,
+                ownerName: result.ownerName,
+                clientName: result.clientName
+            };
+        } catch (error) {
+            console.error("Error fetching reservation owner:", error);
+            return null;
+        }
+    },
+
     // --- MOCK: Reservation Logic with Evidence (Legacy/Simple) ---
     async reserveLotWithEvidence(productId: number, userId: number, file: File, notes: string): Promise<any> {
         // Deprecated in favor of processReservationLevel2 for the new flow,

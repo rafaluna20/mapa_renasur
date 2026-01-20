@@ -1,7 +1,8 @@
 import { Lot } from '@/app/data/lotsData';
 import { X, User, Ruler, FileText, Lock, Users, Clock } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ReservationModal from './ReservationModal';
+import { odooService, OdooUser } from '@/app/services/odooService';
 
 interface StatusConfigItem {
     color: string;
@@ -16,42 +17,51 @@ interface LotDetailModalProps {
     onUpdateStatus?: (id: string, status: string) => void;
     onQuotation?: (lot: Lot) => void;
     activeQuotes?: { count: number; quotes: any[] };
+    currentUser?: OdooUser | null;
 }
 
 const STATUS_CONFIG: Record<string, StatusConfigItem> = {
     libre: { color: "#34D399", label: "Disponible", bg: "bg-emerald-100", text: "text-emerald-800" },
     disponible: { color: "#34D399", label: "Disponible", bg: "bg-emerald-100", text: "text-emerald-800" },
     cotizacion: { color: "#FDE047", label: "En Cotización", bg: "bg-yellow-100", text: "text-yellow-800" },
-
-    // Purple for Reservado
     separado: { color: "#C084FC", label: "Reservado", bg: "bg-purple-100", text: "text-purple-800" },
     reservado: { color: "#C084FC", label: "Reservado", bg: "bg-purple-100", text: "text-purple-800" },
-
     vendido: { color: "#F87171", label: "Vendido", bg: "bg-red-100", text: "text-red-800" },
-
-    // Gray for No Vender
     'no vender': { color: "#94A3B8", label: "No Vender", bg: "bg-slate-100", text: "text-slate-800" },
     no_vender: { color: "#94A3B8", label: "No Vender", bg: "bg-slate-100", text: "text-slate-800" }
 };
 
-export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotation, activeQuotes }: LotDetailModalProps) {
+export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotation, activeQuotes, currentUser }: LotDetailModalProps) {
     const [showReservationModal, setShowReservationModal] = useState(false);
+    const [reservationOwner, setReservationOwner] = useState<{ id: number; name: string } | null>(null);
+
+    // Fetch reservation owner if status is Separado/Reservado
+    useEffect(() => {
+        if (lot && (lot.x_statu === 'separado' || lot.x_statu === 'reservado') && lot.default_code) {
+            odooService.getReservationOwner(lot.default_code).then(res => {
+                if (res) setReservationOwner({ id: res.ownerId, name: res.ownerName });
+            });
+        } else {
+            setReservationOwner(null);
+        }
+    }, [lot]);
 
     if (!lot) return null;
     const config = STATUS_CONFIG[lot.x_statu?.toLowerCase()] || STATUS_CONFIG.libre;
 
+    // Check if current user is the owner of the reservation
+    const isReservationOwner = currentUser && reservationOwner && currentUser.uid === reservationOwner.id;
+
     // MOCK: Simulation of a locked lot (e.g. if lot name ends in '5')
-    // This is just to demonstrate the UI to the user
     const isLocked = lot.name.endsWith('5');
     const lockedBy = "Carlos V.";
 
     // Determinar mensaje de cliente
     let assignedClient = lot.x_cliente || "Sin asignar";
 
-    // MOCK: Fallback visual si no hay cliente real pero está en estado especial (solo para demo si falla datos)
+    // MOCK: Fallback visual si no hay cliente real pero está en estado especial
     if (assignedClient === "Sin asignar" && (lot.x_statu === 'vendido' || lot.x_statu === 'separado')) {
         // Mantener "Sin asignar" o mostrar algo genérico si se prefiere. 
-        // Por ahora confiamos en la data de Odoo.
     }
 
     return (
@@ -88,7 +98,6 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                     </div>
                 </div>
 
-                {/* Sección de Cliente Asignado (Estático) - Reemplaza Dimensiones */}
                 <div className="bg-slate-50 rounded-lg border border-slate-200 overflow-hidden">
                     <div className="bg-slate-100 px-3 py-2 border-b border-slate-200 flex justify-between items-center">
                         <div className="flex items-center gap-2">
@@ -103,13 +112,21 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                     </div>
                 </div>
 
+                {/* Reservation Owner Info (If not me) */}
+                {reservationOwner && currentUser && reservationOwner.id !== currentUser.uid && (
+                    <div className="bg-purple-50 rounded-lg border border-purple-100 p-2 text-center animate-in fade-in">
+                        <p className="text-[10px] text-purple-600 uppercase font-bold">Reservado por</p>
+                        <p className="text-xs font-medium text-purple-800">{reservationOwner.name}</p>
+                    </div>
+                )}
+
                 {lot.points && lot.points.length > 0 && (
                     <div className="hidden md:block text-xs text-slate-400 text-center font-mono">
                         UTM: {lot.points[0][0].toFixed(2)}, {lot.points[0][1].toFixed(2)}
                     </div>
                 )}
 
-                {/* Cotizaciones Activas Section */}
+                {/* Cotizaciones Activas */}
                 {activeQuotes && activeQuotes.count > 0 && (
                     <div className="mt-4 bg-gradient-to-br from-orange-50 to-red-50 rounded-lg border-2 border-orange-200 overflow-hidden">
                         <div className="bg-orange-100 px-3 py-2 border-b border-orange-200 flex items-center gap-2">
@@ -119,8 +136,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                             </span>
                         </div>
                         <div className="p-3 space-y-2 max-h-40 overflow-y-auto">
-                            {activeQuotes.quotes.map((quote: any, index: number) => {
-                                // Calculate time elapsed
+                            {activeQuotes.quotes.map((quote: any) => {
                                 const createdDate = new Date(quote.createdAt);
                                 const now = new Date();
                                 const hoursElapsed = Math.floor((now.getTime() - createdDate.getTime()) / (1000 * 60 * 60));
@@ -157,9 +173,8 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
             <div className="p-4 border-t border-slate-100 bg-white shrink-0">
                 <p className="text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-wider text-center">Acciones Rápidas</p>
                 <div className="grid grid-cols-2 gap-2">
-                    {/* FLUJO: Disponible -> Cotizar -> Reservar */}
 
-                    {/* ESTADO: DISPONIBLE o EN COTIZACIÓN (Muestra COTIZAR) */}
+                    {/* ESTADO: DISPONIBLE (Cotizar) */}
                     {(lot.x_statu === 'libre' || lot.x_statu === 'disponible' || lot.x_statu === 'cotizacion') && onUpdateStatus && (
                         <>
                             <button
@@ -175,7 +190,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                         </>
                     )}
 
-                    {/* ESTADO: COTIZACIÓN (Muestra RESERVAR) */}
+                    {/* ESTADO: COTIZACIÓN (Reservar) */}
                     {lot.x_statu === 'cotizacion' && onUpdateStatus && (
                         <>
                             <button
@@ -192,21 +207,37 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                         </>
                     )}
 
-                    {/* ESTADO: SEPARADO (Muestra VENDER y LIBERAR - Liberar Habilitado) */}
+                    {/* ESTADO: RESERVADO/SEPARADO (Vender - Solo Owner) */}
                     {lot.x_statu === 'separado' && onUpdateStatus && (
                         <>
-                            <button
-                                onClick={() => onUpdateStatus(lot.id, 'vendido')}
-                                className="bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-medium text-sm transition-colors shadow-sm"
-                            >
-                                Vender
-                            </button>
-                            <button
-                                onClick={() => onUpdateStatus(lot.id, 'libre')}
-                                className="border border-slate-300 hover:bg-slate-50 text-slate-600 py-2 rounded-lg font-medium text-sm transition-colors"
-                            >
-                                Liberar
-                            </button>
+                            {isReservationOwner ? (
+                                <button
+                                    onClick={() => onUpdateStatus(lot.id, 'vendido')}
+                                    className="bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg font-medium text-sm transition-colors shadow-sm"
+                                >
+                                    Vender
+                                </button>
+                            ) : (
+                                <button
+                                    disabled
+                                    className="bg-slate-200 text-slate-400 py-2 rounded-lg font-medium text-sm cursor-not-allowed opacity-50"
+                                >
+                                    Vender
+                                </button>
+                            )}
+
+                            {isReservationOwner ? (
+                                <button
+                                    onClick={() => onUpdateStatus(lot.id, 'libre')}
+                                    className="border border-slate-300 hover:bg-slate-50 text-slate-600 py-2 rounded-lg font-medium text-sm transition-colors"
+                                >
+                                    Liberar
+                                </button>
+                            ) : (
+                                <div className="flex items-center justify-center border border-slate-200 text-slate-400 py-2 rounded-lg font-medium text-xs bg-slate-50">
+                                    <Lock size={12} className="mr-1" /> Reservado
+                                </div>
+                            )}
                         </>
                     )}
 
@@ -239,8 +270,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                         lot={lot}
                         onClose={() => setShowReservationModal(false)}
                         onSuccess={() => {
-                            // After successful reservation flow, trigger the status update locally to reflect changes immediately
-                            // The actual API call happened inside the modal
+                            // After successful reservation flow, trigger the status update locally
                             if (onUpdateStatus) onUpdateStatus(lot.id, 'separado');
                         }}
                     />

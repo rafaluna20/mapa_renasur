@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import MapContainerWrapper from './MapContainer';
 import LotDetailModal from '../UI/LotDetailModal';
 import { Lot } from '@/app/data/lotsData';
-import { odooService } from '@/app/services/odooService';
+import { odooService, OdooUser } from '@/app/services/odooService';
 
 interface MapAreaProps {
     lots: Lot[];
@@ -20,6 +20,7 @@ interface MapAreaProps {
     preferCanvas?: boolean;
     showMeasurements: boolean;
     onToggleMeasurements: () => void;
+    currentUser?: OdooUser | null;
 }
 
 export default function MapArea({
@@ -29,7 +30,8 @@ export default function MapArea({
     selectedLot, onUpdateStatus,
     onQuotation,
     preferCanvas,
-    showMeasurements, onToggleMeasurements
+    showMeasurements, onToggleMeasurements,
+    currentUser
 }: MapAreaProps) {
     const [activeQuotes, setActiveQuotes] = useState<{ count: number; quotes: any[] } | null>(null);
 
@@ -150,7 +152,9 @@ export default function MapArea({
                 onUpdateStatus={onUpdateStatus}
                 onQuotation={onQuotation}
                 activeQuotes={activeQuotes || undefined}
+                currentUser={currentUser}
             />
+
         </div>
     );
 }
