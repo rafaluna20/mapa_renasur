@@ -41,7 +41,7 @@ export async function POST(request: Request) {
                 ['order_line.product_id', '=', effectiveProductId]
             ]],
             {
-                fields: ['user_id', 'partner_id', 'date_order'],
+                fields: ['user_id', 'partner_id', 'date_order', 'x_plazo_meses'],
                 limit: 1,
                 order: 'date_order desc' // Latest one
             }
@@ -55,13 +55,18 @@ export async function POST(request: Request) {
         // user_id is [id, name]
         const ownerId = order.user_id ? order.user_id[0] : null;
         const ownerName = order.user_id ? order.user_id[1] : 'Unknown';
+        const partnerId = order.partner_id ? order.partner_id[0] : null;
         const clientName = order.partner_id ? order.partner_id[1] : 'Unknown';
+        // Parse custom field, default to 72 if missing or 0
+        const totalInstallments = order.x_plazo_meses ? parseInt(order.x_plazo_meses) : 72;
 
         return NextResponse.json({
             success: true,
             ownerId,
             ownerName,
+            partnerId,
             clientName,
+            totalInstallments,
             orderDate: order.date_order
         });
 

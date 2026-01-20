@@ -416,7 +416,7 @@ export const odooService = {
 
 
     // Get the owner of a reserved lot (Salesperson who confirmed the order)
-    async getReservationOwner(defaultCode: string): Promise<{ ownerId: number; ownerName: string; clientName: string } | null> {
+    async getReservationOwner(defaultCode: string): Promise<{ ownerId: number; ownerName: string; partnerId: number; clientName: string; totalInstallments: number } | null> {
         try {
             const response = await fetch('/api/odoo/get_reservation_owner', {
                 method: 'POST',
@@ -428,11 +428,30 @@ export const odooService = {
             return {
                 ownerId: result.ownerId,
                 ownerName: result.ownerName,
-                clientName: result.clientName
+                partnerId: result.partnerId,
+                clientName: result.clientName,
+                totalInstallments: result.totalInstallments || 72
             };
         } catch (error) {
             console.error("Error fetching reservation owner:", error);
             return null;
+        }
+    },
+
+    // Get invoices for a specific client (partner_id)
+    async getClientInvoices(partnerId: number): Promise<any[]> {
+        try {
+            const response = await fetch('/api/odoo/get_client_invoices', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ partnerId })
+            });
+            const result = await response.json();
+            if (!result.success) return [];
+            return result.invoices || [];
+        } catch (error) {
+            console.error("Error fetching client invoices:", error);
+            return [];
         }
     },
 
