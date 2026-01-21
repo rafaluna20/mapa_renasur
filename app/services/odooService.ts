@@ -291,10 +291,35 @@ export const odooService = {
             await this.addAttachmentToOrder(orderId, file);
             console.log("✅ Payment proof attached");
 
-            // Step C: Update Lot Status to 'Reservado'
-            // Note: We can't use productId here since we don't have it. 
-            // This would need to be done via a separate lookup or workflow
-            console.log("⚠️ Lot status update skipped - requires product lookup");
+            // Step C: Confirm Order (Draft -> Sale)
+            const confirmRes = await fetch('/api/odoo/confirm_order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderId })
+            });
+            const confirmResult = await confirmRes.json();
+            if (!confirmResult.success) {
+                // If confirmation fails (e.g. Odoo automation error), we still have the draft order
+                // We throw so the UI shows the error
+                throw new Error(confirmResult.error || 'Failed to confirm order');
+            }
+            console.log("✅ Order confirmed (State: Sale)");
+
+            // Step D: Create Recurring Contract (BACKUP/MANUAL MODE)
+            // We call this explicitly from Next.js to ensure it happens
+            // even if the Odoo Automated Action was disabled or failed silently.
+            try {
+                const contract = await this.createRecurringContract(orderId);
+                console.log("✅ Contract created successfully by Orchestrator:", contract.contractId);
+            } catch (contractError) {
+                console.warn("⚠️ Contract creation warning (might be duplicate or Odoo Auto-Action ran first):", contractError);
+                // We don't fail the whole process if just the contract step glitches, 
+                // because the sale is already confirmed and money is safe.
+            }
+
+            // Step E: Update Lot Status to 'reservado'
+            // We can try to look up the product ID if we don't have it, or rely on Odoo
+            console.log("ℹ️ Pending: Lot status update to 'reservado' (should be handled by Odoo or separate call)");
 
             return { success: true, orderId };
         } catch (error) {
@@ -411,6 +436,15 @@ export const odooService = {
             }
             console.log("🏆 Order confirmed! This reservation WINS the lot.");
 
+            // 3.5 ORCHESTRATION (Plan B): Create Recurring Contract Manually
+            try {
+                const contract = await this.createRecurringContract(orderId);
+                console.log("✅ Contract created successfully via Plan B:", contract.contractId);
+            } catch (contractError) {
+                console.warn("⚠️ Contract creation warning (User should check Odoo):", contractError);
+                // Non-blocking: The sale is already confirmed, so we proceed.
+            }
+
             // 4. Update Lot Status to 'reservado' AND Force Client Name Update
             // Use Template ID if available (because update_status uses product.template), else fallback to Variant ID
             if (productTmplId) {
@@ -425,7 +459,7 @@ export const odooService = {
             // 5. Check for competing quotations and simulate notifications
             const activeQuotes = await this.getActiveQuotesByLot(defaultCode);
             if (activeQuotes.count > 1) {
-                console.warn(`⚠️ NOTIFICATION: ${activeQuotes.count - 1} competing quotation(s) are now obsolete for lot ${defaultCode}`);
+                console.log(`ℹ️ NOTIFICACIÓN: ${activeQuotes.count - 1} cotización(es) competitiva(s) ahora son obsoletas para el lote ${defaultCode}`);
                 activeQuotes.quotes.forEach((quote: any) => {
                     if (quote.orderId !== orderId) {
                         console.log(`📧 [MOCK] Notifying vendor ${quote.vendorName}: Client ${quote.clientName}'s quote is no longer valid.`);

@@ -253,13 +253,17 @@ export default function QuotePage({ params }: QuotePageProps) {
                 {
                     id: selectedClient.id,
                     name: selectedClient.name,
-                    // If this was a newly created client in this session, we might have their VAT in a temporary state if we saved it
-                    // But usually, Search results only have ID/Name.
                 },
-                calculations.discountedPrice,
+                lot.list_price, // Use full list price
                 `Cotización para ${lot.name}. Inicial: ${initialPayment}. Plazo: ${numInstallments} meses.`,
+                {
+                    installments: numInstallments,
+                    downPayment: initialPayment,
+                    discount: discountAmount,
+                    firstInstallmentDate: startDate
+                },
                 pdfFile, // Pass the generated PDF file
-                user?.uid // Pass the logged-in user's ID to assign as salesperson
+                user?.uid // Pass the logged-in user's ID
             );
 
             // If success

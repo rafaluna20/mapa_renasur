@@ -54,37 +54,42 @@ export async function POST(request: Request) {
             throw new Error('Sale Order has no products');
         }
 
-        // 2. Verificar que no exista ya un contrato
+        // 2. Verificar que no exista ya un contrato (Por Partner + Producto, ya que no existe sale_order_id)
+        // Necesitamos obtener el product_id primero para verificar duplicados
+        const productLineIdCheck = order.order_line[0];
+        const orderLinesCheck = await fetchOdoo(
+            'sale.order.line',
+            'search_read',
+            [[['id', '=', productLineIdCheck]]],
+            { fields: ['product_id', 'name', 'price_unit'], limit: 1 }
+        );
+
+        if (!orderLinesCheck || orderLinesCheck.length === 0) {
+            throw new Error('Product line not found');
+        }
+
+        const productId = orderLinesCheck[0].product_id[0];
+        const listPrice = orderLinesCheck[0].price_unit; // Ya lo tenemos aquí, optimizamos
+
         const existingContracts = await fetchOdoo(
             'simple.contract',
             'search_read',
-            [[['sale_order_id', '=', parseInt(saleOrderId)]]],
+            [[
+                ['partner_id', '=', order.partner_id[0]],
+                ['product_id', '=', productId]
+            ]],
             { fields: ['id'], limit: 1 }
         );
 
         if (existingContracts && existingContracts.length > 0) {
             return NextResponse.json({
                 success: false,
-                error: 'Contract already exists for this order',
+                error: 'Contract already exists for this partner and product',
                 existingContractId: existingContracts[0].id
             }, { status: 409 });
         }
 
-        // 3. Obtener detalles del producto
-        const productLineId = order.order_line[0];
-        const orderLines = await fetchOdoo(
-            'sale.order.line',
-            'search_read',
-            [[['id', '=', productLineId]]],
-            { fields: ['product_id', 'price_unit'], limit: 1 }
-        );
-
-        if (!orderLines || orderLines.length === 0) {
-            throw new Error('Product line not found');
-        }
-
-        const productId = orderLines[0].product_id[0];
-        const listPrice = orderLines[0].price_unit;
+        // 3. (Optimizado: ya obtuvimos product_id y listPrice arriba)
 
         // 4. Calcular mensualidad
         const discount = order.x_discount_amount || 0;
@@ -95,19 +100,21 @@ export async function POST(request: Request) {
 
         // 5. Preparar datos del contrato
         const contractData = {
+            name: `Contrato Manual - ${orderLinesCheck[0].name}`, // Referencia manual
             partner_id: order.partner_id[0],
             product_id: productId,
-            sale_order_id: parseInt(saleOrderId),
+            // sale_order_id: parseInt(saleOrderId), // REMOVED: Field does not exist
             list_price: listPrice,
             discount_amount: discount,
             down_payment: downPayment,
             total_quotas: order.x_plazo_meses,
             amount: monthlyAmount,
             date_first_installment: order.x_date_first_installment || new Date().toISOString().split('T')[0],
-            interval_type: 'months'  // Cambiar a 'minutes' para testing
+            date_next_billing: order.x_date_first_installment || new Date().toISOString().split('T')[0], // ✅ Campo obligatorio del Robot
+            interval_type: 'months'
         };
 
-        console.log('📋 Creating contract with data:', contractData);
+        console.log('📋 Payload Enviado a Odoo (Contract):', JSON.stringify(contractData, null, 2));
 
         // 6. Crear el contrato
         const contractId = await fetchOdoo(
