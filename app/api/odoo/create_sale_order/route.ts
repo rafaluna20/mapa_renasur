@@ -3,7 +3,7 @@ import { fetchOdoo } from '@/app/services/odooService';
 
 export async function POST(request: Request) {
     try {
-        const { partnerId, defaultCode, price, notes, userId } = await request.json();
+        const { partnerId, defaultCode, price, notes, userId, quoteDetails } = await request.json();
 
         if (!partnerId || !defaultCode || !price) {
             const missing = [];
@@ -48,11 +48,40 @@ export async function POST(request: Request) {
             ]
         };
 
+        // Add Custom Fields if provided (Advanced Quotation)
+        if (quoteDetails) {
+            if (quoteDetails.installments) orderData.x_plazo_meses = parseInt(quoteDetails.installments);
+            if (quoteDetails.downPayment) orderData.x_down_payment = parseFloat(quoteDetails.downPayment);
+            if (quoteDetails.discount) orderData.x_discount_amount = parseFloat(quoteDetails.discount);
+            if (quoteDetails.firstInstallmentDate) orderData.x_date_first_installment = quoteDetails.firstInstallmentDate;
+        }
+
         // Assign the logged-in user as the salesperson
         if (userId) {
             orderData.user_id = parseInt(userId);
             console.log(`👤 Assigning salesperson: User ID ${userId}`);
         }
+
+        // 🐛 DEBUG: Log complete data being sent to Odoo
+        console.log('📤 ===== SALE ORDER DATA TO ODOO =====');
+        console.log('Partner ID:', orderData.partner_id);
+        console.log('Product:', {
+            id: orderData.order_line[0][2].product_id,
+            price_unit: orderData.order_line[0][2].price_unit,
+            quantity: orderData.order_line[0][2].product_uom_qty
+        });
+        console.log('Financial Details:', {
+            x_plazo_meses: orderData.x_plazo_meses || 'NOT SET',
+            x_down_payment: orderData.x_down_payment || 'NOT SET',
+            x_discount_amount: orderData.x_discount_amount || 'NOT SET',
+            x_date_first_installment: orderData.x_date_first_installment || 'NOT SET'
+        });
+        console.log('Metadata:', {
+            state: orderData.state,
+            user_id: orderData.user_id,
+            note: orderData.note?.substring(0, 50) + '...'
+        });
+        console.log('======================================');
 
         console.log('📤 Creating Sale Order with data:', JSON.stringify(orderData, null, 2));
 

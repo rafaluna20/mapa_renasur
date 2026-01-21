@@ -209,12 +209,24 @@ export const odooService = {
         }
     },
 
-    async createSaleOrder(partnerId: number, defaultCode: string, price: number, notes?: string, userId?: number): Promise<number> {
+    async createSaleOrder(
+        partnerId: number,
+        defaultCode: string,
+        price: number,
+        notes?: string,
+        userId?: number,
+        quoteDetails?: {
+            installments?: number;
+            downPayment?: number;
+            discount?: number;
+            firstInstallmentDate?: string;
+        }
+    ): Promise<number> {
         try {
             const response = await fetch('/api/odoo/create_sale_order', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ partnerId, defaultCode, price, notes, userId }),
+                body: JSON.stringify({ partnerId, defaultCode, price, notes, userId, quoteDetails }),
             });
             const result = await response.json();
             if (!result.success) throw new Error(result.error);
@@ -297,6 +309,12 @@ export const odooService = {
         clientData: { id?: number; name: string; vat?: string; phone?: string; email?: string },
         price: number,
         notes: string,
+        quoteDetails: {
+            installments: number;
+            downPayment: number;
+            discount: number;
+            firstInstallmentDate: string;
+        },
         pdfFile?: File, // Archivo de cotización PDF opcional
         userId?: number // ID del usuario logueado para asignar como vendedor
     ): Promise<{ orderId: number; partnerId: number }> {
@@ -320,8 +338,15 @@ export const odooService = {
                 console.log("✅ Using Existing Partner:", partnerId);
             }
 
-            // Step 2: Create sale order in draft state
-            const orderId = await this.createSaleOrder(partnerId, lotDefaultCode, price, notes, userId);
+            // Step 2: Create sale order in draft state with extended details
+            const orderId = await this.createSaleOrder(
+                partnerId,
+                lotDefaultCode,
+                price,
+                notes,
+                userId,
+                quoteDetails
+            );
             console.log("✅ Sale Order Created:", orderId);
 
             // Step 3: Update lot status to 'cotizacion'
@@ -338,10 +363,12 @@ export const odooService = {
                 console.log("✅ Lot status updated to 'cotizacion' with client: " + clientData.name);
             }
 
-            // Step 4: Attach PDF Quote if provided
-            if (pdfFile) {
+            // Step 4: Attach PDF Quote if provided (and valid)
+            if (pdfFile && pdfFile instanceof File) {
                 await this.addAttachmentToOrder(orderId, pdfFile);
                 console.log("✅ Quote PDF attached to order");
+            } else if (pdfFile) {
+                console.warn("⚠️ PDF passed is not a File object, skipping attachment:", pdfFile);
             }
 
             return { orderId, partnerId };
@@ -509,5 +536,30 @@ export const odooService = {
         console.log(`[MOCK] Review rejected for reservation ${reservationId}. Reason: ${reason}`);
         // In real app, this would free the lot (updateLotStatus -> libre)
         return true;
+    },
+
+    // Create recurring contract from sale order
+    async createRecurringContract(saleOrderId: number): Promise<{ contractId: number; details: any }> {
+        try {
+            const response = await fetch('/api/odoo/create_contract', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ saleOrderId })
+            });
+            const result = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.error || 'Failed to create contract');
+            }
+
+            console.log(`✅ Recurring Contract Created: ${result.contractId}`);
+            return {
+                contractId: result.contractId,
+                details: result.details
+            };
+        } catch (error) {
+            console.error("Error creating recurring contract:", error);
+            throw error;
+        }
     }
 };

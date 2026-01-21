@@ -14,6 +14,15 @@ export async function POST(request: Request) {
             );
         }
 
+        // Validate that file is actually a File object
+        if (typeof file === 'string' || !('arrayBuffer' in file)) {
+            console.error("❌ Invalid file format received:", file);
+            return NextResponse.json(
+                { success: false, error: 'Invalid file format. Expected binary file.' },
+                { status: 400 }
+            );
+        }
+
         // Convert file to base64
         const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
