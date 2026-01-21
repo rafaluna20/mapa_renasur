@@ -139,6 +139,20 @@ export async function POST(request: Request) {
             }]
         );
 
+        /*// 8. Auto-confirmar el contrato (Petición del Usuario)
+        try {
+            console.log(`🔄 Auto-confirming Contract #${contractId}...`);
+            await fetchOdoo(
+                'simple.contract',
+                'action_confirm', // Método estándar de Odoo para botones de confirmación
+                [[contractId]]
+            );
+            console.log(`✅ Contract #${contractId} auto-confirmed successfully.`);
+        } catch (confirmError) {
+            console.warn(`⚠️ Could not auto-confirm contract #${contractId}. User must confirm manually. Error:`, confirmError);
+            // No bloqueamos: El contrato ya existe, solo falta el click final.
+        }*/
+
         return NextResponse.json({
             success: true,
             contractId: contractId,
