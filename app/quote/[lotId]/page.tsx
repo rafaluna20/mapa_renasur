@@ -2,7 +2,7 @@
 
 import { use, useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, Download, Calculator, Calendar, Tag, DollarSign, Table, Loader2, Percent, User, Search, Check, Plus, X, Save, Send, CheckCircle } from 'lucide-react';
+import { ChevronLeft, Download, Calculator, Calendar, Tag, DollarSign, Table, Loader2, Percent, User, Search, Check, Plus, X, Save, Send, CheckCircle, Map } from 'lucide-react';
 import { lotsData, Lot } from '@/app/data/lotsData';
 import { financeService, QuoteCalculations } from '@/app/services/financeService';
 import Header from '@/app/components/UI/Header';
@@ -342,14 +342,18 @@ export default function QuotePage({ params }: QuotePageProps) {
                         <div className="flex items-center gap-4">
                             <button
                                 onClick={() => router.push('/')}
-                                className="group flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-600 px-4 py-2 rounded-xl border border-slate-200 shadow-sm transition-all active:scale-95 whitespace-nowrap"
+                                className="group flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-600 px-3 py-2 md:px-4 md:py-2 rounded-xl border border-slate-200 shadow-sm transition-all active:scale-95 whitespace-nowrap"
                             >
-                                <ChevronLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
-                                <span className="text-xs font-bold uppercase tracking-wider">Volver al Mapa</span>
+                                {/* Mobile: Map Icon */}
+                                <Map size={20} className="md:hidden" />
+
+                                {/* Desktop: Chevron + Text */}
+                                <ChevronLeft size={20} className="hidden md:block group-hover:-translate-x-1 transition-transform" />
+                                <span className="hidden md:block text-xs font-bold uppercase tracking-wider">Volver al Mapa</span>
                             </button>
                             <div className="h-10 w-[1px] bg-slate-200 hidden md:block mx-1"></div>
                             <div>
-                                <h1 className="text-2xl font-bold text-slate-800">Cotización Preliminar</h1>
+                                <h1 className="text-xl md:text-2xl font-bold text-slate-800">Cotización TERRA-LIMA</h1>
                                 <p className="text-slate-500 font-medium">{lot.name} • {lot.x_mz} {lot.x_lote}</p>
                             </div>
                         </div>
@@ -389,10 +393,50 @@ export default function QuotePage({ params }: QuotePageProps) {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
 
-                        {/* Panel de Configuración */}
-                        <div className="lg:col-span-1 space-y-6">
+                        {/* LEFT COLUMN: RESUMEN FINANCIERO (Sticky) */}
+                        <div className="lg:col-span-1 lg:sticky lg:top-8 space-y-6">
+
+                            {/* Resumen de Valores (Moved here as the main item of the left column) */}
+                            <div className="bg-slate-900 p-6 rounded-2xl shadow-xl text-white space-y-4">
+                                <div className="flex justify-between items-center opacity-60 text-xs font-bold uppercase tracking-widest">
+                                    <span>Resumen Financiero (S/)</span>
+                                    <Tag size={14} />
+                                </div>
+                                <div className="space-y-3 pt-2">
+                                    <div className="flex justify-between text-sm">
+                                        <span className="opacity-70">Precio Lista</span>
+                                        <span className="font-mono">{financeService.formatCurrency(lot.list_price)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm text-emerald-400">
+                                        <span>Descuento ({discountPercent}%)</span>
+                                        <span className="font-mono">-{financeService.formatCurrency(calculations.discountAmount)}</span>
+                                    </div>
+                                    <div className="h-[1px] bg-white/10 my-2" />
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-base font-bold">Precio Final</span>
+                                        <span className="text-xl font-bold font-mono">{financeService.formatCurrency(calculations.discountedPrice)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-sm pt-4">
+                                        <span className="opacity-70">Saldo a Financiar</span>
+                                        <span className="font-mono">{financeService.formatCurrency(calculations.remainingBalance)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center bg-white/10 p-3 rounded-xl border border-white/5">
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] font-bold uppercase opacity-60">Cuota Mensual</span>
+                                            <span className="text-lg font-bold font-mono text-indigo-400">{financeService.formatCurrency(calculations.monthlyInstallment)}</span>
+                                        </div>
+                                        <span className="text-xs font-bold opacity-60">{numInstallments} meses</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* RIGHT COLUMN: AJUSTES + CRONOGRAMA */}
+                        <div className="lg:col-span-2 space-y-6">
+
+                            {/* Panel de Configuración (Moved to Top of Right Column) */}
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                                 <h2 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-6 flex items-center gap-2">
                                     <Calculator size={16} /> Ajustes de Venta
@@ -613,107 +657,73 @@ export default function QuotePage({ params }: QuotePageProps) {
                                 </div>
                             </div>
 
-                            {/* Resumen de Valores */}
-                            <div className="bg-slate-900 p-6 rounded-2xl shadow-xl text-white space-y-4">
-                                <div className="flex justify-between items-center opacity-60 text-xs font-bold uppercase tracking-widest">
-                                    <span>Resumen Financiero (S/)</span>
-                                    <Tag size={14} />
+                            {/* Tabla de Amortización (Kept in Right Column) */}
+                            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                                <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                                    <h2 className="font-bold text-slate-700 flex items-center gap-2">
+                                        <Table size={18} className="text-indigo-600" /> Cronograma de Pagos (Soles)
+                                    </h2>
+                                    <span className="text-[10px] font-bold px-2 py-1 bg-white border border-slate-200 rounded text-slate-500 uppercase tracking-tighter">
+                                        PROYECCIÓN A {numInstallments} MESES
+                                    </span>
                                 </div>
-                                <div className="space-y-3 pt-2">
-                                    <div className="flex justify-between text-sm">
-                                        <span className="opacity-70">Precio Lista</span>
-                                        <span className="font-mono">{financeService.formatCurrency(lot.list_price)}</span>
-                                    </div>
-                                    <div className="flex justify-between text-sm text-emerald-400">
-                                        <span>Descuento ({discountPercent}%)</span>
-                                        <span className="font-mono">-{financeService.formatCurrency(calculations.discountAmount)}</span>
-                                    </div>
-                                    <div className="h-[1px] bg-white/10 my-2" />
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-base font-bold">Precio Final</span>
-                                        <span className="text-xl font-bold font-mono">{financeService.formatCurrency(calculations.discountedPrice)}</span>
-                                    </div>
-                                    <div className="flex justify-between text-sm pt-4">
-                                        <span className="opacity-70">Saldo a Financiar</span>
-                                        <span className="font-mono">{financeService.formatCurrency(calculations.remainingBalance)}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center bg-white/10 p-3 rounded-xl border border-white/5">
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] font-bold uppercase opacity-60">Cuota Mensual</span>
-                                            <span className="text-lg font-bold font-mono text-indigo-400">{financeService.formatCurrency(calculations.monthlyInstallment)}</span>
-                                        </div>
-                                        <span className="text-xs font-bold opacity-60">{numInstallments} meses</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
 
-                        {/* Tabla de Amortización */}
-                        <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-                            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                                <h2 className="font-bold text-slate-700 flex items-center gap-2">
-                                    <Table size={18} className="text-indigo-600" /> Cronograma de Pagos (Soles)
-                                </h2>
-                                <span className="text-[10px] font-bold px-2 py-1 bg-white border border-slate-200 rounded text-slate-500 uppercase tracking-tighter">
-                                    PROYECCIÓN A {numInstallments} MESES
-                                </span>
-                            </div>
-
-                            <div className="flex-1 overflow-auto max-h-[600px]">
-                                <table className="w-full text-left border-collapse">
-                                    <thead className="sticky top-0 bg-white shadow-sm z-10">
-                                        <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                                            <th className="px-6 py-4 border-b border-slate-100">#</th>
-                                            <th className="px-6 py-4 border-b border-slate-100">Fecha de Pago</th>
-                                            <th className="px-6 py-4 border-b border-slate-100 text-right">Monto Cuota</th>
-                                            <th className="px-6 py-4 border-b border-slate-100 text-right">Saldo Restante</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-50">
-                                        {/* Fila de Cuota Inicial */}
-                                        <tr className="bg-emerald-50/30 group">
-                                            <td className="px-6 py-4 text-xs font-bold text-slate-400">0</td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex flex-col">
-                                                    <span className="text-sm font-bold text-emerald-700">Cuota Inicial</span>
-                                                    <span className="text-[10px] text-emerald-600 opacity-70 font-medium">Pago Inmediato</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 text-right">
-                                                <span className="text-sm font-mono font-bold text-emerald-700">{financeService.formatCurrency(calculations.initialPayment)}</span>
-                                            </td>
-                                            <td className="px-6 py-4 text-right">
-                                                <span className="text-sm font-mono font-medium text-slate-400">{financeService.formatCurrency(calculations.remainingBalance)}</span>
-                                            </td>
-                                        </tr>
-
-                                        {/* Cuotas Mensuales */}
-                                        {calculations.installments.map((inst) => (
-                                            <tr key={inst.number} className="hover:bg-slate-50 transition-colors group">
-                                                <td className="px-6 py-4 text-xs font-bold text-slate-400">{inst.number}</td>
+                                <div className="flex-1 overflow-auto max-h-[600px]">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead className="sticky top-0 bg-white shadow-sm z-10">
+                                            <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                                <th className="px-6 py-4 border-b border-slate-100">#</th>
+                                                <th className="px-6 py-4 border-b border-slate-100">Fecha de Pago</th>
+                                                <th className="px-6 py-4 border-b border-slate-100 text-right">Monto Cuota</th>
+                                                <th className="px-6 py-4 border-b border-slate-100 text-right">Saldo Restante</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-50">
+                                            {/* Fila de Cuota Inicial */}
+                                            <tr className="bg-emerald-50/30 group">
+                                                <td className="px-6 py-4 text-xs font-bold text-slate-400">0</td>
                                                 <td className="px-6 py-4">
-                                                    <span className="text-sm font-medium text-slate-700">{financeService.formatDate(inst.date)}</span>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-sm font-bold text-emerald-700">Cuota Inicial</span>
+                                                        <span className="text-[10px] text-emerald-600 opacity-70 font-medium">Pago Inmediato</span>
+                                                    </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <span className="text-sm font-mono font-bold text-slate-900 italic opacity-80 group-hover:opacity-100">
-                                                        {financeService.formatCurrency(inst.amount)}
-                                                    </span>
+                                                    <span className="text-sm font-mono font-bold text-emerald-700">{financeService.formatCurrency(calculations.initialPayment)}</span>
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <span className="text-sm font-mono text-slate-500">
-                                                        {financeService.formatCurrency(inst.balance)}
-                                                    </span>
+                                                    <span className="text-sm font-mono font-medium text-slate-400">{financeService.formatCurrency(calculations.remainingBalance)}</span>
                                                 </td>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
 
-                            <div className="p-4 bg-slate-50 border-t border-slate-100 text-center">
-                                <p className="text-[10px] text-slate-400 font-medium italic">
-                                    * Esta es una simulación preliminar en Soles y no constituye un compromiso legal hasta ser validada por administración.
-                                </p>
+                                            {/* Cuotas Mensuales */}
+                                            {calculations.installments.map((inst) => (
+                                                <tr key={inst.number} className="hover:bg-slate-50 transition-colors group">
+                                                    <td className="px-6 py-4 text-xs font-bold text-slate-400">{inst.number}</td>
+                                                    <td className="px-6 py-4">
+                                                        <span className="text-sm font-medium text-slate-700">{financeService.formatDate(inst.date)}</span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        <span className="text-sm font-mono font-bold text-slate-900 italic opacity-80 group-hover:opacity-100">
+                                                            {financeService.formatCurrency(inst.amount)}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        <span className="text-sm font-mono text-slate-500">
+                                                            {financeService.formatCurrency(inst.balance)}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div className="p-4 bg-slate-50 border-t border-slate-100 text-center">
+                                    <p className="text-[10px] text-slate-400 font-medium italic">
+                                        * Esta es una simulación COTIZACION en Soles y no constituye un compromiso legal hasta ser validada por administración.
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     </div>
