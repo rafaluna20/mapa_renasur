@@ -1,4 +1,4 @@
-import { Map as MapIcon, Layers, Square, Navigation, Ruler } from 'lucide-react';
+import { Map as MapIcon, Layers, Square, Navigation, Ruler, FileDown } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import MapContainerWrapper from './MapContainer';
 import LotDetailModal from '../UI/LotDetailModal';
@@ -21,6 +21,8 @@ interface MapAreaProps {
     showMeasurements: boolean;
     onToggleMeasurements: () => void;
     currentUser?: OdooUser | null;
+    onExport: () => void;
+    onExportPdf: () => void;
 }
 
 export default function MapArea({
@@ -31,7 +33,8 @@ export default function MapArea({
     onQuotation,
     preferCanvas,
     showMeasurements, onToggleMeasurements,
-    currentUser
+    currentUser,
+    onExport, onExportPdf
 }: MapAreaProps) {
     const [activeQuotes, setActiveQuotes] = useState<{ count: number; quotes: any[] } | null>(null);
 
@@ -46,19 +49,43 @@ export default function MapArea({
 
     return (
         <div id="map-export-area" className="flex-1 bg-slate-200 relative overflow-hidden flex flex-col">
+
+            {/* Floating Export Tools (Top Center) - Premium Pill Style */}
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[400] flex gap-2">
+                <div className="bg-white/90 backdrop-blur-md rounded-full shadow-lg border border-stone-200 p-1.5 flex gap-1">
+                    <button
+                        onClick={onExport}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full hover:bg-[#A145F5]/10 text-stone-600 hover:text-[#A145F5] transition-colors text-xs font-bold"
+                        title="Exportar como Imagen SVG"
+                    >
+                        <MapIcon size={14} />
+                        <span>SVG</span>
+                    </button>
+                    <div className="w-px bg-stone-200 my-1"></div>
+                    <button
+                        onClick={onExportPdf}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#A145F5] text-white hover:bg-[#8D32DF] shadow-sm hover:shadow-md transition-all text-xs font-bold"
+                        title="Descargar Reporte PDF"
+                    >
+                        <FileDown size={14} />
+                        <span>PDF</span>
+                    </button>
+                </div>
+            </div>
+
             {/* Map Controls (Floating) */}
             <div className="absolute top-4 right-4 z-[400] flex flex-col gap-2">
                 <div className="bg-white rounded-lg shadow-md p-1 border border-slate-200 flex flex-col gap-1">
                     <button
                         onClick={() => onMapTypeChange('street')}
-                        className={`p-2 rounded hover:bg-slate-100 transition-colors ${mapType === 'street' ? 'bg-blue-50 text-blue-600' : 'text-slate-600'}`}
+                        className={`p-2 rounded hover:bg-slate-100 transition-colors ${mapType === 'street' ? 'bg-[#A145F5]/10 text-[#A145F5]' : 'text-slate-600'}`}
                         title="Mapa Calles"
                     >
                         <MapIcon size={20} />
                     </button>
                     <button
                         onClick={() => onMapTypeChange('satellite')}
-                        className={`p-2 rounded hover:bg-slate-100 transition-colors ${mapType === 'satellite' ? 'bg-blue-50 text-blue-600' : 'text-slate-600'}`}
+                        className={`p-2 rounded hover:bg-slate-100 transition-colors ${mapType === 'satellite' ? 'bg-[#A145F5]/10 text-[#A145F5]' : 'text-slate-600'}`}
                         title="Mapa Satélite"
                     >
                         <Layers size={20} />
@@ -104,7 +131,7 @@ export default function MapArea({
                 >
                     <Navigation size={20} />
                 </button>
-            </div>                                                                                               
+            </div>
 
             {/* Legend Overlay */}
             <div className="absolute bottom-25 right-4 z-[400] bg-white/90 backdrop-blur-sm p-3 rounded-lg shadow-lg border border-slate-200 pointer-events-none">

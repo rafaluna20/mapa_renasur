@@ -40,7 +40,7 @@ export default function LotCard({ lot, onClick, isSelected, quoteCount }: LotCar
             className={`p-4 border-b border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors ${isSelected ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''}`}
         >
             <div className="flex justify-between items-start mb-1">
-                <h3 className="font-bold text-slate-800 capitalize">{lot.name}</h3>
+                <h3 className="font-bold text-slate-800 capitalize text-[13px]">{lot.name}</h3>
                 <span className={`text-xs px-2 py-0.5 rounded-full flex items-center gap-1 ${config.bg} ${config.text}`}>
                     <Icon size={12} />
                     {config.label}

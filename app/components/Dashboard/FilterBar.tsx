@@ -11,8 +11,6 @@ interface FilterBarProps {
     onEtapaChange: (val: string) => void;
     filteredCount: number;
     onClearFilters: () => void;
-    onExport: () => void;
-    onExportPdf: () => void;
 }
 
 export default function FilterBar({
@@ -20,109 +18,121 @@ export default function FilterBar({
     statusFilter, onStatusChange,
     manzanaFilter, onManzanaChange,
     etapaFilter, onEtapaChange,
-    filteredCount, onClearFilters,
-    onExport, onExportPdf
+    filteredCount, onClearFilters
 }: FilterBarProps) {
     return (
-        <div className="p-4 border-b border-slate-200 bg-gradient-to-b from-white to-slate-50 space-y-4">
-            {/* Search */}
+        <div className="p-3 border-b border-stone-200 bg-white/80 backdrop-blur-md shadow-sm space-y-3">
+            {/* Header / Title - Violet Brand Alignment */}
+            <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#A145F5] shadow-[0_0_8px_rgba(161,69,245,0.4)]"></span>
+                    <span className="opacity-80">Filtros</span>
+                </h3>
+                <span className="px-2 py-0.5 bg-stone-100 text-stone-600 text-[9px] font-bold rounded border border-stone-200">
+                    {filteredCount} Lotes
+                </span>
+            </div>
+
+            {/* Search - Modern Violet Focus */}
             <div className="relative group">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18} />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 group-focus-within:text-[#A145F5] transition-colors" size={16} />
                 <input
                     type="text"
                     placeholder="Buscar lote..."
-                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 rounded-xl text-sm transition-all outline-none shadow-sm hover:shadow-md"
+                    className="w-full pl-9 pr-3 py-2 bg-stone-50 border border-transparent text-stone-800 text-xs font-medium placeholder:text-stone-400 rounded-xl focus:bg-white focus:border-[#A145F5]/30 focus:ring-4 focus:ring-[#A145F5]/10 transition-all outline-none shadow-sm hover:shadow-md hover:bg-white"
                     value={searchQuery}
                     onChange={(e) => onSearchChange(e.target.value)}
                 />
             </div>
 
-            {/* Status Filter */}
-            <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-                {[
-                    { value: 'all', label: 'Todos' },
-                    { value: 'libre', label: 'Disponible' },
-                    { value: 'separado', label: 'Reservado' },
-                    { value: 'vendido', label: 'Vendido' }
-                ].map((filter) => (
-                    <button
-                        key={filter.value}
-                        onClick={() => onStatusChange(filter.value)}
-                        className={`
-                    px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors
-                    ${statusFilter === filter.value
-                                ? 'bg-slate-800 text-white'
-                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}
-                  `}
-                    >
-                        {filter.label}
-                    </button>
-                ))}
+            {/* Status Filter - Violet Chips */}
+            <div className="space-y-1.5">
+                <label className="text-[9px] font-bold text-stone-400 uppercase tracking-wider ml-1">Estado</label>
+                <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar px-1">
+                    {[
+                        { value: 'all', label: 'Todos' },
+                        { value: 'libre', label: 'Disponible' },
+                        { value: 'separado', label: 'Reservado' },
+                        { value: 'vendido', label: 'Vendido' },
+                        { value: 'no vender', label: 'No Vender' }
+                    ].map((filter) => (
+                        <button
+                            key={filter.value}
+                            onClick={() => onStatusChange(filter.value)}
+                            className={`
+                                px-3 py-1.5 rounded-lg text-[10px] font-bold whitespace-nowrap transition-all active:scale-95 border
+                                ${statusFilter === filter.value
+                                    ? 'bg-[#A145F5] border-[#A145F5] text-white shadow-md shadow-[#A145F5]/20'
+                                    : 'bg-white border-stone-200 text-stone-500 hover:border-[#A145F5]/30 hover:text-[#A145F5] hover:shadow-sm'}
+                            `}
+                        >
+                            {filter.label}
+                        </button>
+                    ))}
+                </div>
             </div>
 
-            {/* Filters Grid */}
+            {/* Filters Grid - Violet Accents */}
             <div className="grid grid-cols-2 gap-3">
                 {/* Manzana Filter */}
-                <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-blue-700 uppercase tracking-wider flex items-center gap-1.5">
-                        <Layers size={12} className="text-blue-600" />
-                        Manzana
+                <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1 ml-1">
+                        <Layers size={10} className="text-[#A145F5]" /> Manzana
                     </label>
-                    <select
-                        value={manzanaFilter}
-                        onChange={(e) => onManzanaChange(e.target.value)}
-                        className="w-full px-3 py-2 bg-blue-50 border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 rounded-lg text-sm font-medium text-blue-900 transition-all outline-none shadow-sm hover:shadow-md hover:bg-blue-100 cursor-pointer"
-                    >
-                        <option value="all">Todas</option>
-
-                        <option value="D">MZ D</option>
-                        <option value="Q">MZ Q</option>
-                        <option value="P">MZ P</option>
-                        <option value="R">MZ R</option>
-                        <option value="S">MZ S</option>
-                        <option value="T">MZ T</option>
-                        <option value="W">MZ W</option>
-                        <option value="X">MZ X</option>
-                    </select>
+                    <div className="relative">
+                        <select
+                            value={manzanaFilter}
+                            onChange={(e) => onManzanaChange(e.target.value)}
+                            className="w-full pl-2.5 pr-6 py-1.5 bg-stone-50/50 border border-stone-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:border-[#A145F5] focus:ring-2 focus:ring-[#A145F5]/10 appearance-none cursor-pointer transition-all hover:bg-white hover:border-[#A145F5]/50"
+                        >
+                            <option value="all">Todas</option>
+                            <option value="D">MZ D</option>
+                            <option value="Q">MZ Q</option>
+                            <option value="P">MZ P</option>
+                            <option value="R">MZ R</option>
+                            <option value="S">MZ S</option>
+                            <option value="T">MZ T</option>
+                            <option value="W">MZ W</option>
+                            <option value="X">MZ X</option>
+                        </select>
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-[#A145F5]">
+                            <Layers size={12} />
+                        </div>
+                    </div>
                 </div>
 
                 {/* Etapa Filter */}
-                <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-blue-700 uppercase tracking-wider flex items-center gap-1.5">
-                        <MapIcon size={12} className="text-blue-600" />
-                        Etapa
+                <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1 ml-1">
+                        <MapIcon size={10} className="text-[#A145F5]" /> Etapa
                     </label>
-                    <select
-                        value={etapaFilter}
-                        onChange={(e) => onEtapaChange(e.target.value)}
-                        className="w-full px-3 py-2 bg-blue-50 border border-blue-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 rounded-lg text-sm font-medium text-blue-900 transition-all outline-none shadow-sm hover:shadow-md hover:bg-blue-100 cursor-pointer"
-                    >
-                        <option value="all">Todas</option>
-                        <option value="01">Etapa 01</option>
-                        <option value="02">Etapa 02</option>
-                        <option value="03">Etapa 03</option>
-                        <option value="04">Etapa 04</option>
-                    </select>
+                    <div className="relative">
+                        <select
+                            value={etapaFilter}
+                            onChange={(e) => onEtapaChange(e.target.value)}
+                            className="w-full pl-2.5 pr-6 py-1.5 bg-stone-50/50 border border-stone-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:border-[#A145F5] focus:ring-2 focus:ring-[#A145F5]/10 appearance-none cursor-pointer transition-all hover:bg-white hover:border-[#A145F5]/50"
+                        >
+                            <option value="all">Todas</option>
+                            <option value="1">Etapa 1</option>
+                            <option value="2">Etapa 2</option>
+                            <option value="3">Etapa 3</option>
+                            <option value="4">Etapa 4</option>
+                        </select>
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-[#A145F5]">
+                            <MapIcon size={12} />
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            {/* Export Buttons */}
-            <div className="pt-2 flex gap-2">
+            {/* Clear Filters Button */}
+            <div className="pt-2">
                 <button
-                    onClick={onExport}
-                    className="flex-1 py-2 bg-white border border-slate-300 text-slate-700 font-medium rounded-lg text-sm hover:bg-slate-50 transition-colors flex items-center justify-center gap-2 shadow-sm"
-                    title="Exportar SVG"
+                    onClick={onClearFilters}
+                    className="w-full py-2 bg-stone-50 border border-stone-200 text-stone-500 font-bold rounded-lg text-[10px] hover:bg-stone-100 hover:text-[#A145F5] transition-all"
+                    title="Limpiar Filtros"
                 >
-                    <MapIcon size={16} />
-                    <span className="hidden sm:inline">SVG</span>
-                </button>
-                <button
-                    onClick={onExportPdf}
-                    className="flex-1 py-2 bg-white border border-slate-300 text-slate-700 font-medium rounded-lg text-sm hover:bg-slate-50 transition-colors flex items-center justify-center gap-2 shadow-sm"
-                    title="Descargar PDF"
-                >
-                    <FileDown size={16} />
-                    <span className="hidden sm:inline">PDF</span>
+                    Limpiar Filtros
                 </button>
             </div>
         </div>

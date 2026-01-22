@@ -409,8 +409,6 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
                             setEtapaFilter('all');
                             setSearchQuery('');
                         }}
-                        onExport={() => exportToSvg(filteredLots)}
-                        onExportPdf={() => exportToPdf('map-export-area', 'Mapa-Renasur.pdf')}
                     />
 
                     {/* Lista Renderizada de Tarjetas de Lote */}
@@ -473,6 +471,8 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
                     showMeasurements={showMeasurements}
                     onToggleMeasurements={() => setShowMeasurements(!showMeasurements)}
                     currentUser={user}
+                    onExport={() => exportToSvg(filteredLots)}
+                    onExportPdf={() => exportToPdf('map-export-area', 'Mapa-Renasur.pdf')}
                 />
 
                 {/* 
