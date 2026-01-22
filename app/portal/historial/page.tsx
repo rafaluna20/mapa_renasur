@@ -14,7 +14,7 @@ export default function PaymentHistoryPage() {
 
     useEffect(() => {
         if (status === 'unauthenticated') {
-            redirect('/login?callbackUrl=/portal/historial');
+            redirect('/portal/login?callbackUrl=/portal/historial');
         }
 
         if (status === 'authenticated') {

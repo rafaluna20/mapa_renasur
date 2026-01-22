@@ -1,4 +1,4 @@
-import { odooService } from './odooService';
+import { odooService, fetchOdoo } from './odooService';
 
 /**
  * Estructura de una factura pendiente
@@ -61,7 +61,7 @@ export const paymentService = {
             'partner_id'
         ];
 
-        const invoices = await odooService.searchRead('account.move', domain, fields);
+        const invoices = await fetchOdoo('account.move', 'search_read', [domain], { fields });
 
         // Parsear información del lote desde la referencia
         return invoices.map((inv: any) => ({
@@ -90,7 +90,7 @@ export const paymentService = {
             'journal_id'
         ];
 
-        return await odooService.searchRead('account.payment', domain, fields);
+        return await fetchOdoo('account.payment', 'search_read', [domain], { fields });
     },
 
     /**
@@ -128,7 +128,8 @@ export const paymentService = {
             'partner_id'
         ];
 
-        const invoice = await odooService.read('account.move', invoiceId, fields);
+        const invoices = await fetchOdoo('account.move', 'read', [[invoiceId]], { fields });
+        const invoice = invoices?.[0] || null;
 
         if (!invoice) return null;
 

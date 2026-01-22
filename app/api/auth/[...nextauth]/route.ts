@@ -1,59 +1,13 @@
 import NextAuth, { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import { odooService } from '@/app/services/odooService';
+import { fetchOdoo } from '@/app/services/odooService';
 import { twilioService } from '@/app/services/twilioService';
 
 export const authOptions: NextAuthOptions = {
     providers: [
-        // Paso 1: Solicitar código SMS
+        // Paso único de NextAuth: Verificar código y autenticar sesión
         CredentialsProvider({
-            id: 'request-code',
-            name: 'Solicitar Código',
-            credentials: {
-                dni: { label: "DNI", type: "text", placeholder: "12345678" }
-            },
-            async authorize(credentials) {
-                if (!credentials?.dni) {
-                    throw new Error('DNI requerido');
-                }
-
-                // Validar formato DNI (8 dígitos)
-                if (!/^\d{8}$/.test(credentials.dni)) {
-                    throw new Error('DNI debe tener 8 dígitos');
-                }
-
-                // Buscar partner en Odoo por DNI (campo vat)
-                const partners = await odooService.searchRead('res.partner', [
-                    ['vat', '=', credentials.dni]
-                ], ['id', 'name', 'phone', 'email']);
-
-                if (partners.length === 0) {
-                    throw new Error('DNI no registrado en el sistema');
-                }
-
-                const partner = partners[0];
-
-                if (!partner.phone) {
-                    throw new Error('No hay teléfono registrado para este DNI');
-                }
-
-                // Enviar código SMS
-                const code = await twilioService.sendVerificationCode(
-                    partner.phone,
-                    credentials.dni
-                );
-
-                // DEMO: Retornar código en el error para testing
-                console.log(`[AUTH] Código generado para ${credentials.dni}: ${code}`);
-
-                // No autenticar aún, cliente debe verificar código
-                return null;
-            }
-        }),
-
-        // Paso 2: Verificar código y autenticar
-        CredentialsProvider({
-            id: 'verify-code',
+            id: 'verify-code', // Mantenemos el ID para no romper clientes
             name: 'Verificar Código',
             credentials: {
                 dni: { label: "DNI", type: "text" },
@@ -74,10 +28,12 @@ export const authOptions: NextAuthOptions = {
                     throw new Error('Código inválido o expirado');
                 }
 
-                // Obtener datos completos del partner
-                const partners = await odooService.searchRead('res.partner', [
-                    ['vat', '=', credentials.dni]
-                ], ['id', 'name', 'email', 'phone', 'vat']);
+                // Obtener datos completos del partner de Odoo
+                const partners = await fetchOdoo('res.partner', 'search_read', [
+                    [['vat', '=', credentials.dni]]
+                ], {
+                    fields: ['id', 'name', 'email', 'phone', 'vat']
+                });
 
                 if (partners.length === 0) {
                     throw new Error('Partner no encontrado');
@@ -114,8 +70,8 @@ export const authOptions: NextAuthOptions = {
     },
 
     pages: {
-        signIn: '/login',
-        error: '/login'
+        signIn: '/portal/login',
+        error: '/portal/login'
     },
 
     session: {

@@ -1,11 +1,19 @@
 import { niubizService } from '@/app/services/niubizService';
-import { odooService } from '@/app/services/odooService';
+import { fetchOdoo } from '@/app/services/odooService';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 /**
  * POST /api/payments/niubiz/authorize
  * Autorizar transacción después de que el cliente ingresó tarjeta
  */
 export async function POST(request: Request) {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user) {
+        return new Response('No autenticado', { status: 401 });
+    }
+
     try {
         const {
             transactionToken,
@@ -41,9 +49,11 @@ export async function POST(request: Request) {
 
         // Registrar pago en Odoo
         try {
-            const payment = await odooService.call('account.payment', 'create', [{
+            const odooPartnerId = (session.user as any).odooPartnerId;
+
+            const paymentId = await fetchOdoo('account.payment', 'create', [{
                 payment_type: 'inbound',
-                partner_id: authorization.order.partnerId || 1, // TODO: Obtener del invoice
+                partner_id: odooPartnerId,
                 amount: parseFloat(authorization.order.amount) / 100,
                 date: new Date().toISOString().split('T')[0],
                 ref: paymentReference,
@@ -54,24 +64,21 @@ export async function POST(request: Request) {
             }]);
 
             // Post payment
-            await odooService.call('account.payment', 'action_post', [payment]);
+            await fetchOdoo('account.payment', 'action_post', [paymentId]);
 
-            // Obtener invoice para conciliar
-            const invoices = await odooService.searchRead('account.move', [
-                ['id', '=', invoiceId]
-            ], ['id', 'line_ids']);
-
-            if (invoices.length > 0) {
-                // Intentar conciliación automática
+            // Intentar conciliación automática si existe invoiceId
+            if (invoiceId) {
                 try {
-                    await odooService.call(
+                    // Nota: Odoo usualmente requiere que el pago esté vinculado a las facturas
+                    // o usar js_assign_outstanding_line en la factura si el pago ya está posteado.
+                    await fetchOdoo(
                         'account.move',
                         'js_assign_outstanding_line',
                         [invoiceId]
                     );
                 } catch (reconcileError) {
                     console.error('Auto-reconciliation failed:', reconcileError);
-                    // No fallar si la conciliación falla, se puede hacer manual
+                    // No fallar si la conciliación falla, se puede hacer manual en Odoo
                 }
             }
 
@@ -79,3 +86,20 @@ export async function POST(request: Request) {
                 success: true,
                 transactionId: authorization.order.transactionId,
                 paymentId
+            });
+        } catch (odooError: any) {
+            console.error('Error registering payment in Odoo:', odooError);
+            return Response.json({
+                success: true, // El pago en Niubiz fue exitoso, pero falló el registro en Odoo
+                warning: 'Pago procesado pero error al registrar en el sistema contable.',
+                transactionId: authorization.order.transactionId
+            });
+        }
+    } catch (error: any) {
+        console.error('Error authorizing Niubiz transaction:', error);
+        return Response.json({
+            success: false,
+            error: error.message || 'Error al procesar la autorización'
+        }, { status: 500 });
+    }
+}

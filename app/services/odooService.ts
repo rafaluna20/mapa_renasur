@@ -110,6 +110,73 @@ export const odooService = {
         return result.user;
     },
 
+    // Generic search_read for querying Odoo models
+    async searchRead<T = any>(
+        model: string,
+        domain: any[],
+        fields: string[] = []
+    ): Promise<T[]> {
+        const response = await fetch('/api/odoo/search-read', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model, domain, fields })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Search failed');
+        }
+
+        const data = await response.json();
+        return data.records || [];
+    },
+
+    // Generic read for fetching specific records
+    async read<T = any>(
+        model: string,
+        id: number | number[],
+        fields: string[] = []
+    ): Promise<T | T[]> {
+        const ids = Array.isArray(id) ? id : [id];
+
+        const response = await fetch('/api/odoo/read', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model, ids, fields })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Read failed');
+        }
+
+        const data = await response.json();
+        const records = data.records || [];
+        return Array.isArray(id) ? records : records[0];
+    },
+
+    // Generic call for executing Odoo model methods
+    async call(
+        model: string,
+        method: string,
+        args: any[] = [],
+        kwargs: Record<string, any> = {}
+    ): Promise<any> {
+        const response = await fetch('/api/odoo/call', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model, method, args, kwargs })
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Call failed');
+        }
+
+        const data = await response.json();
+        return data.result;
+    },
+
     async getSalesCount(_partnerId: number): Promise<number> {
         // Placeholder for future implementation
         return 0;

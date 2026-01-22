@@ -1,5 +1,5 @@
 import { getServerSession } from 'next-auth';
-<parameter name="authOptions" > from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { niubizService } from '@/app/services/niubizService';
 import { paymentService } from '@/app/services/paymentService';
 

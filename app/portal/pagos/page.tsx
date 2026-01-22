@@ -3,8 +3,10 @@
 import { useSession } from 'next-auth/react';
 import { useEffect, useState } from 'react';
 import { redirect } from 'next/navigation';
-import { CreditCard, Building2, Calendar, DollarSign, Loader2, AlertCirc, CheckCircle2, Clock, FileText, Upload } from 'lucide-react';
+import { CreditCard, Building2, Calendar, DollarSign, Loader2, AlertCircle, CheckCircle2, Clock, FileText, Upload } from 'lucide-react';
 import type { PendingInvoice } from '@/app/services/paymentService';
+import NiubizPaymentModal from '@/app/components/Payments/NiubizPaymentModal';
+import VoucherUploadModal from '@/app/components/Payments/VoucherUploadModal';
 
 export default function PaymentsPortal() {
     const { data: session, status } = useSession();
@@ -14,7 +16,7 @@ export default function PaymentsPortal() {
 
     useEffect(() => {
         if (status === 'unauthenticated') {
-            redirect('/login?callbackUrl=/portal/pagos');
+            redirect('/portal/login?callbackUrl=/portal/pagos');
         }
 
         if (status === 'authenticated') {
@@ -248,35 +250,25 @@ function InvoiceCard({ invoice, onPaymentComplete }: {
                 </div>
             </div>
 
-            {/* Modales pendientes de implementación */}
+            {/* Modales funcionales */}
             {showPaymentModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl p-6 max-w-md w-full">
-                        <h3 className="text-xl font-bold mb-4">Pago con Tarjeta</h3>
-                        <p className="text-slate-600 mb-4">Funcionalidad Niubiz en desarrollo...</p>
-                        <button
-                            onClick={() => setShowPaymentModal(false)}
-                            className="w-full bg-slate-200 text-slate-800 py-2 rounded-lg font-bold"
-                        >
-                            Cerrar
-                        </button>
-                    </div>
-                </div>
+                <NiubizPaymentModal
+                    invoiceId={invoice.id}
+                    amount={invoice.amount_residual}
+                    paymentReference={invoice.payment_reference}
+                    onClose={() => setShowPaymentModal(false)}
+                    onSuccess={onPaymentComplete}
+                />
             )}
 
             {showVoucherModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl p-6 max-w-md w-full">
-                        <h3 className="text-xl font-bold mb-4">Subir Comprobante</h3>
-                        <p className="text-slate-600 mb-4">Funcionalidad de upload en desarrollo...</p>
-                        <button
-                            onClick={() => setShowVoucherModal(false)}
-                            className="w-full bg-slate-200 text-slate-800 py-2 rounded-lg font-bold"
-                        >
-                            Cerrar
-                        </button>
-                    </div>
-                </div>
+                <VoucherUploadModal
+                    invoiceId={invoice.id}
+                    paymentReference={invoice.payment_reference}
+                    amount={invoice.amount_residual}
+                    onClose={() => setShowVoucherModal(false)}
+                    onSuccess={onPaymentComplete}
+                />
             )}
         </>
     );
