@@ -30,10 +30,10 @@ export default function FloatingControls({
                             className="w-full px-1 py-1 bg-blue-50 border border-blue-100 rounded-lg text-[10px] font-semibold text-blue-900 outline-none appearance-none text-center"
                         >
                             <option value="all">Todas</option>
-                            <option value="01">1</option>
-                            <option value="02">2</option>
-                            <option value="03">3</option>
-                            <option value="04">4</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
                         </select>
                     </div>
 
