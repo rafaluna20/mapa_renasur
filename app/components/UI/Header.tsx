@@ -44,10 +44,6 @@ export default function Header({ onSync }: HeaderProps) {
                                 <span className="bg-blue-500 text-white px-1.5 py-0.5 rounded font-bold">12</span>
                             </div>
                             <div>
-                                <span className="text-slate-400 mr-1">Separadas:</span>
-                                <span className="bg-amber-500 text-white px-1.5 py-0.5 rounded font-bold">3</span>
-                            </div>
-                            <div>
                                 <span className="text-slate-400 mr-1">Ventas:</span>
                                 <span className="bg-emerald-500 text-white px-1.5 py-0.5 rounded font-bold">{salesCount}</span>
                             </div>
