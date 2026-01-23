@@ -73,12 +73,12 @@ export default function PaymentHistoryPage() {
                             >
                                 ← Volver a Pagos
                             </button>
-                            <button
-                                onClick={() => window.location.href = '/'}
-                                className="px-4 py-2 bg-slate-200 text-slate-800 rounded-lg font-bold hover:bg-slate-300 transition-colors"
-                            >
-                                Ir al Mapa
-                            </button>
+
+
+                
+
+
+                            
                         </div>
                     </div>
                 </div>
