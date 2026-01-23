@@ -28,16 +28,7 @@ export default function Header({ onSync }: HeaderProps) {
 
 
 
-            {/* Portal Button (Central) */}
-            <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 md:static md:transform-none md:flex md:justify-center">
-                <Link
-                    href="/portal/login"
-                    className="flex items-center gap-2 bg-[#A145F5] hover:bg-[#8D32DF] text-white px-4 py-2 rounded-full font-medium shadow-md transition-all hover:scale-105"
-                >
-                    <Building2 size={12} />
-                    <span>Portal</span>
-                </Link>
-            </div>
+
 
 
 
