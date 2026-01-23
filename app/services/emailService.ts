@@ -109,5 +109,85 @@ export const emailService = {
         codes.delete(dni);
         console.log(`[EMAIL] Code verified successfully for DNI: ${dni}`);
         return true;
+    },
+
+    /**
+     * Enviar correo de confirmación de pago validado
+     */
+    async sendPaymentValidationEmail({
+        email,
+        userName,
+        amount,
+        invoiceName,
+        paymentReference,
+        nextDueDate
+    }: {
+        email: string;
+        userName: string;
+        amount: number;
+        invoiceName: string;
+        paymentReference: string;
+        nextDueDate?: string;
+    }) {
+        try {
+            await resend.emails.send({
+                from: process.env.EMAIL_FROM || 'Terra Lima <onboarding@resend.dev>',
+                to: email,
+                subject: '✅ Tu pago ha sido validado exitosamente - Terra Lima',
+                html: `
+                    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+                        <h2 style="color: #059669; margin-top: 0;">¡Hola ${userName}!</h2>
+                        <p style="font-size: 16px; color: #475569;">
+                            Te informamos que tu comprobante de pago ha sido validado exitosamente por nuestro equipo.
+                        </p>
+                        
+                        <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 24px 0;">
+                            <h3 style="margin-top: 0; font-size: 14px; text-transform: uppercase; color: #64748b;">Detalles del Pago</h3>
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <tr>
+                                    <td style="padding: 8px 0; color: #64748b;">Monto Validado:</td>
+                                    <td style="padding: 8px 0; text-align: right; font-weight: bold; color: #0f172a;">S/ ${amount.toFixed(2)}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px 0; color: #64748b;">Referencia:</td>
+                                    <td style="padding: 8px 0; text-align: right; font-weight: bold; color: #0f172a;">${paymentReference}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px 0; color: #64748b;">Documento:</td>
+                                    <td style="padding: 8px 0; text-align: right; font-weight: bold; color: #0f172a;">${invoiceName}</td>
+                                </tr>
+                                ${nextDueDate ? `
+                                <tr>
+                                    <td style="padding: 8px 0; color: #64748b;">Próximo Vencimiento:</td>
+                                    <td style="padding: 8px 0; text-align: right; font-weight: bold; color: #059669;">${nextDueDate}</td>
+                                </tr>
+                                ` : ''}
+                            </table>
+                        </div>
+
+                        <p style="font-size: 14px; color: #64748b; margin-bottom: 24px;">
+                            Ya puedes ver el estado actualizado de tus cuotas en el portal del cliente.
+                        </p>
+
+                        <div style="text-align: center;">
+                            <a href="${process.env.NEXTAUTH_URL}/portal/pagos" 
+                               style="display: inline-block; background-color: #A145F5; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold;">
+                               Ir al Portal de Pagos
+                            </a>
+                        </div>
+
+                        <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 32px 0;" />
+                        <p style="font-size: 12px; color: #94a3b8; text-align: center;">
+                            Este es un correo automático, por favor no respondas a este mensaje.<br/>
+                            © ${new Date().getFullYear()} Terra Lima
+                        </p>
+                    </div>
+                `,
+            });
+            console.log(`[EMAIL] Payment validation email sent to ${email}`);
+        } catch (error) {
+            console.error('[EMAIL] Error sending payment validation email:', error);
+            // Non-blocking error
+        }
     }
 };

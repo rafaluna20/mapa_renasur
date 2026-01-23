@@ -19,6 +19,11 @@ export interface PendingInvoice {
         lote: string;
         quota: string;
     };
+    voucher_status?: {
+        status: 'pending' | 'approved' | 'rejected' | string;
+        submitted_at: string;
+        amount: number;
+    } | null;
 }
 
 /**
@@ -62,10 +67,66 @@ export const paymentService = {
 
         const invoices = await fetchOdoo('account.move', 'search_read', [domain], { fields });
 
-        // Parsear información del lote desde la referencia
+        if (invoices.length === 0) return [];
+
+        // Obtener comprobantes para estas facturas de forma resiliente
+        let vouchers: any[] = [];
+        try {
+            const invoiceIds = invoices.map((inv: any) => inv.id);
+            const voucherDomain = [
+                ['res_model', '=', 'account.move'],
+                ['res_id', 'in', invoiceIds],
+                ['x_voucher_status', '!=', false]
+            ];
+            const voucherFields = ['res_id', 'x_voucher_status', 'x_voucher_submitted_at', 'x_voucher_amount'];
+
+            vouchers = await fetchOdoo('ir.attachment', 'search_read', [voucherDomain], { fields: voucherFields });
+        } catch (e: any) {
+            console.warn('[PAYMENT] ⚠️ Los campos personalizados x_voucher_* no existen en Odoo. Usando fallback por descripción.');
+
+            const invoiceIds = invoices.map((inv: any) => inv.id);
+            const fallbackDomain = [
+                ['res_model', '=', 'account.move'],
+                ['res_id', 'in', invoiceIds],
+                ['description', 'ilike', 'Comprobante de transferencia%']
+            ];
+
+            const fallbackVouchers = await fetchOdoo('ir.attachment', 'search_read', [fallbackDomain], {
+                fields: ['res_id', 'description', 'create_date'],
+                order: 'create_date desc'
+            });
+
+            vouchers = fallbackVouchers.map((v: any) => ({
+                res_id: v.res_id[0],
+                x_voucher_status: 'pending',
+                x_voucher_submitted_at: v.create_date,
+                x_voucher_amount: 0
+            }));
+        }
+
+        // Mapear vouchers a un objeto para búsqueda rápida
+        const voucherMap = vouchers.reduce((acc: any, v: any) => {
+            const resId = Array.isArray(v.res_id) ? v.res_id[0] : v.res_id;
+
+            // ✅ CORREGIDO: Siempre guardar el más reciente
+            const currentDate = new Date(v.x_voucher_submitted_at || 0);
+            const existingDate = acc[resId] ? new Date(acc[resId].submitted_at || 0) : new Date(0);
+
+            if (!acc[resId] || currentDate > existingDate) {
+                acc[resId] = {
+                    status: v.x_voucher_status || 'pending',
+                    submitted_at: v.x_voucher_submitted_at,
+                    amount: v.x_voucher_amount || 0
+                };
+            }
+            return acc;
+        }, {});
+
+        // Parsear información del lote y adjuntar voucher status
         return invoices.map((inv: any) => ({
             ...inv,
-            lot_info: this.parsePaymentReference(inv.payment_reference)
+            lot_info: this.parsePaymentReference(inv.payment_reference),
+            voucher_status: voucherMap[inv.id] || null
         }));
     },
 
@@ -147,5 +208,56 @@ export const paymentService = {
             ...invoice,
             lot_info: this.parsePaymentReference(invoice.payment_reference)
         };
+    },
+
+    /**
+     * Obtener el estado del comprobante subido para una factura
+     */
+    async getVoucherStatus(invoiceId: number): Promise<any | null> {
+        try {
+            const domain = [
+                ['res_model', '=', 'account.move'],
+                ['res_id', '=', invoiceId],
+                ['x_voucher_status', '!=', false]
+            ];
+
+            const fields = [
+                'name',
+                'x_voucher_status',
+                'x_voucher_submitted_at',
+                'x_voucher_bank',
+                'x_voucher_operation',
+                'x_voucher_amount',
+                'x_voucher_transfer_date'
+            ];
+
+            const attachments = await fetchOdoo('ir.attachment', 'search_read', [domain], {
+                fields,
+                order: 'create_date desc',
+                limit: 1
+            });
+
+            return attachments?.[0] || null;
+        } catch (e: any) {
+            console.warn('[PAYMENT] ⚠️ getVoucherStatus fallback por campos inexistentes');
+            const fallbackDomain = [
+                ['res_model', '=', 'account.move'],
+                ['res_id', '=', invoiceId],
+                ['description', 'ilike', 'Comprobante de transferencia%']
+            ];
+            const attachments = await fetchOdoo('ir.attachment', 'search_read', [fallbackDomain], {
+                fields: ['name', 'description', 'create_date'],
+                order: 'create_date desc',
+                limit: 1
+            });
+
+            if (!attachments?.[0]) return null;
+
+            return {
+                ...attachments[0],
+                x_voucher_status: 'pending',
+                x_voucher_submitted_at: attachments[0].create_date
+            };
+        }
     }
 };

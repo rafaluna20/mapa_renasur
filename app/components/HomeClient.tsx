@@ -409,6 +409,8 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
                             setEtapaFilter('all');
                             setSearchQuery('');
                         }}
+                        onExportSvg={() => exportToSvg(filteredLots)}
+                        onExportPdf={() => exportToPdf('map-export-area', 'Mapa-Renasur.pdf')}
                     />
 
                     {/* Lista Renderizada de Tarjetas de Lote */}

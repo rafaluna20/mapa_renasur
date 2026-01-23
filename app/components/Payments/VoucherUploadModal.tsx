@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { X, Upload, FileText, Loader2, AlertCircle, CheckCircle2, Calendar, Building2, Hash } from 'lucide-react';
+import { X, Upload, FileText, Loader2, AlertCircle, CheckCircle2, Calendar, Building2, Hash, Clock } from 'lucide-react';
 
 interface VoucherUploadModalProps {
     invoiceId: number;
@@ -309,11 +309,16 @@ export default function VoucherUploadModal({
                         </form>
                     ) : (
                         <div className="text-center py-12">
-                            <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <CheckCircle2 size={40} className="text-emerald-600" />
+                            <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
+                                <Clock size={40} className="text-amber-600" />
                             </div>
-                            <h4 className="text-2xl font-bold text-emerald-600 mb-2">¡Comprobante Enviado!</h4>
-                            <p className="text-slate-600">Te notificaremos cuando sea validado</p>
+                            <h4 className="text-2xl font-bold text-amber-600 mb-2">¡Comprobante en Revisión! ⏳</h4>
+                            <p className="text-slate-600 max-w-sm mx-auto">
+                                Hemos recibido tu comprobante. Nuestro equipo lo validará en las próximas 24 horas hábiles.
+                            </p>
+                            <div className="mt-6 p-4 bg-slate-50 rounded-xl text-xs text-slate-500 italic">
+                                Recibirás una notificación por correo una vez que tu pago sea confirmado.
+                            </div>
                         </div>
                     )}
                 </div>

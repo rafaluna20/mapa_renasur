@@ -11,6 +11,8 @@ interface FilterBarProps {
     onEtapaChange: (val: string) => void;
     filteredCount: number;
     onClearFilters: () => void;
+    onExportSvg?: () => void;
+    onExportPdf?: () => void;
 }
 
 export default function FilterBar({
@@ -18,7 +20,8 @@ export default function FilterBar({
     statusFilter, onStatusChange,
     manzanaFilter, onManzanaChange,
     etapaFilter, onEtapaChange,
-    filteredCount, onClearFilters
+    filteredCount, onClearFilters,
+    onExportSvg, onExportPdf
 }: FilterBarProps) {
     return (
         <div className="p-3 border-b border-stone-200 bg-white/80 backdrop-blur-md shadow-sm space-y-3">
@@ -130,13 +133,34 @@ export default function FilterBar({
                 <button
                     onClick={onClearFilters}
                     className="w-full py-2 bg-stone-50 border border-stone-200 text-stone-500 font-bold rounded-lg text-[10px] hover:bg-stone-100 hover:text-[#A145F5] transition-all"
-                    title="Limpiar Filtros"
                 >
                     Limpiar Filtros
                 </button>
             </div>
+
+            {/* Export Options */}
+            {(onExportSvg || onExportPdf) && (
+                <div className="pt-1 flex gap-2">
+                    {onExportSvg && (
+                        <button
+                            onClick={onExportSvg}
+                            className="flex-1 py-1.5 bg-white border border-stone-200 text-stone-500 font-bold rounded-lg text-[10px] hover:border-[#A145F5]/30 hover:text-[#A145F5] hover:shadow-sm transition-all flex items-center justify-center gap-1.5"
+                        >
+                            <FileDown size={12} /> SVG
+                        </button>
+                    )}
+                    {onExportPdf && (
+                        <button
+                            onClick={onExportPdf}
+                            className="flex-1 py-1.5 bg-white border border-stone-200 text-stone-500 font-bold rounded-lg text-[10px] hover:border-[#A145F5]/30 hover:text-[#A145F5] hover:shadow-sm transition-all flex items-center justify-center gap-1.5"
+                        >
+                            <FileDown size={12} /> PDF
+                        </button>
+                    )}
+                </div>
+            )}
         </div>
-    )
+    );
 }
 
 

@@ -662,5 +662,72 @@ export const odooService = {
             console.error("Error creating recurring contract:", error);
             throw error;
         }
+    },
+
+    // --- LEVEL 3: Payment Registration (In Payment Status) ---
+    async createPayment(
+        invoiceId: number,
+        amount: number,
+        paymentDate: string,
+        paymentRef: string,
+        journalId?: number
+    ): Promise<any> {
+        try {
+            // 1. If no journalId provided, find the first 'bank' journal
+            if (!journalId) {
+                const journals = await this.searchRead('account.journal', [['type', '=', 'bank']], ['id', 'name']);
+                if (journals.length > 0) {
+                    journalId = journals[0].id;
+                } else {
+                    // Fallback to cash if no bank
+                    const cashJournals = await this.searchRead('account.journal', [['type', '=', 'cash']], ['id', 'name']);
+                    if (cashJournals.length > 0) {
+                        journalId = cashJournals[0].id;
+                    } else {
+                        throw new Error('No se encontró un diario de pago (Banco/Efectivo) configurado en Odoo.');
+                    }
+                }
+            }
+
+            console.log(`Using Journal ID: ${journalId} for payment`);
+
+            // 2. Use 'account.payment.register' wizard to ensure proper reconciliation ("In Payment" status)
+            // This replicates clicking the "Register Payment" button on the invoice.
+
+            // Context needed for the wizard to know which invoice to pay
+            const context = {
+                active_model: 'account.move',
+                active_ids: [invoiceId],
+            };
+
+            // Create the wizard instance
+            const wizardId = await this.call('account.payment.register', 'create', [{
+                journal_id: journalId,
+                amount: amount,
+                payment_date: paymentDate, // YYYY-MM-DD
+                communication: paymentRef,
+                payment_method_line_id: null // Let Odoo pick default
+            }], { context }); // Pass context in kwargs? No, context is usually separate in XML-RPC, but for jsonrpc usually passed in legacy 'kwargs.context' or implicit. 
+            // In typical 'execute_kw', context is the last argument or in kwargs.
+            // Our 'call' helper puts args and kwargs. Let's adjust 'call' usage or rely on how 'execute_kw' handles context.
+            // Usually: model, method, [args], {context: {...}}
+
+            // Wait, our odooService.call signature is (model, method, args, kwargs).
+            // So passing { context } as kwargs is correct for many Odoo APIs.
+
+            if (!wizardId) {
+                throw new Error('Failed to create payment wizard');
+            }
+
+            console.log(`Payment Wizard Created: ${wizardId}`);
+
+            // 3. Confirm payment (Process the wizard)
+            const result = await this.call('account.payment.register', 'action_create_payments', [wizardId]);
+
+            return result;
+        } catch (error) {
+            console.error("Error creating payment:", error);
+            throw error;
+        }
     }
 };

@@ -7,6 +7,9 @@ import { CreditCard, Building2, Calendar, DollarSign, Loader2, AlertCircle, Chec
 import type { PendingInvoice } from '@/app/services/paymentService';
 import NiubizPaymentModal from '@/app/components/Payments/NiubizPaymentModal';
 import VoucherUploadModal from '@/app/components/Payments/VoucherUploadModal';
+import VoucherStatusBadge from '@/app/components/Payments/VoucherStatusBadge';
+import VoucherStatusAlert from '@/app/components/Payments/VoucherStatusAlert';
+import VoucherTimeline from '@/app/components/Payments/VoucherTimeline';
 
 export default function PaymentsPortal() {
     const { data: session, status } = useSession();
@@ -202,6 +205,9 @@ function InvoiceCard({ invoice, onPaymentComplete }: {
                                     </p>
                                 )}
                             </div>
+                            {invoice.voucher_status && (
+                                <VoucherStatusBadge status={invoice.voucher_status.status} />
+                            )}
                         </div>
 
                         <div className="flex flex-wrap gap-4 text-xs">
@@ -248,6 +254,20 @@ function InvoiceCard({ invoice, onPaymentComplete }: {
                         </div>
                     </div>
                 </div>
+
+                {/* Voucher Status Details */}
+                {invoice.voucher_status && (
+                    <div className="mt-4 pt-4 border-t border-slate-100 space-y-4">
+                        <VoucherTimeline
+                            status={invoice.voucher_status.status}
+                            submittedAt={invoice.voucher_status.submitted_at}
+                        />
+                        <VoucherStatusAlert
+                            status={invoice.voucher_status.status}
+                            submittedAt={invoice.voucher_status.submitted_at}
+                        />
+                    </div>
+                )}
             </div>
 
             {/* Modales funcionales */}
