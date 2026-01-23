@@ -204,11 +204,6 @@ function PaymentCard({ payment }: { payment: PaymentHistory }) {
                             <h3 className="text-lg font-bold text-slate-800 mb-1">
                                 {payment.name}
                             </h3>
-                            {payment.ref && (
-                                <p className="text-sm font-mono text-slate-500">
-                                    Ref: {payment.ref}
-                                </p>
-                            )}
                         </div>
                     </div>
 

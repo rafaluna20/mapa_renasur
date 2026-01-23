@@ -29,7 +29,6 @@ export interface PaymentHistory {
     name: string;
     amount: number;
     date: string;
-    ref: string;
     state: string;
     payment_method_id: [number, string];
     journal_id: [number, string];
@@ -84,7 +83,6 @@ export const paymentService = {
             'name',
             'amount',
             'date',
-            'ref',
             'state',
             'payment_method_id',
             'journal_id'
