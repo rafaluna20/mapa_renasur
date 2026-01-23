@@ -63,68 +63,68 @@ export default function PaymentsPortal() {
                 <div className="max-w-6xl mx-auto px-6 py-6">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h1 className="text-3xl font-bold text-slate-800 flex items-center gap-3">
-                                <div className="w-12 h-12 bg-[#A145F5] rounded-xl flex items-center justify-center">
-                                    <Building2 size={24} className="text-white" />
+                            <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
+                                <div className="w-10 h-10 bg-[#A145F5] rounded-xl flex items-center justify-center">
+                                    <Building2 size={20} className="text-white" />
                                 </div>
                                 Portal de Pagos
                             </h1>
-                            <p className="text-slate-500 mt-1">
+                            <p className="text-sm text-slate-500 mt-1">
                                 Bienvenido, <span className="font-semibold">{session?.user?.name}</span>
                             </p>
                         </div>
                         <button
-                            onClick={() => window.location.href = '/'}
-                            className="px-4 py-2 text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                            onClick={() => window.location.href = '/portal/historial'}
+                            className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200"
                         >
-                            ← Volver al Mapa
+                            Ver Historial →
                         </button>
                     </div>
                 </div>
             </div>
 
             {/* Main Content */}
-            <div className="max-w-6xl mx-auto px-6 py-8">
+            <div className="max-w-6xl mx-auto px-6 py-6">
                 {/* Summary Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                    <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm text-slate-500 font-medium">Total Pendiente</p>
-                                <p className="text-2xl font-bold text-slate-800 mt-1">
+                                <p className="text-xs text-slate-500 font-medium">Total Pendiente</p>
+                                <p className="text-xl font-bold text-slate-800 mt-1">
                                     S/ {invoices.reduce((sum, inv) => sum + inv.amount_residual, 0).toFixed(2)}
                                 </p>
                             </div>
-                            <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
-                                <DollarSign size={24} className="text-amber-600" />
+                            <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
+                                <DollarSign size={20} className="text-amber-600" />
                             </div>
                         </div>
                     </div>
 
-                    <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
+                    <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm text-slate-500 font-medium">Vencidas</p>
-                                <p className="text-2xl font-bold text-red-600 mt-1">
+                                <p className="text-xs text-slate-500 font-medium">Vencidas</p>
+                                <p className="text-xl font-bold text-red-600 mt-1">
                                     {overdueInvoices.length}
                                 </p>
                             </div>
-                            <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
-                                <AlertCircle size={24} className="text-red-600" />
+                            <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+                                <AlertCircle size={20} className="text-red-600" />
                             </div>
                         </div>
                     </div>
 
-                    <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
+                    <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
                         <div className="flex items-center justify-between">
                             <div>
-                                <p className="text-sm text-slate-500 font-medium">Por Vencer</p>
-                                <p className="text-2xl font-bold text-emerald-600 mt-1">
+                                <p className="text-xs text-slate-500 font-medium">Por Vencer</p>
+                                <p className="text-xl font-bold text-emerald-600 mt-1">
                                     {upcomingInvoices.length}
                                 </p>
                             </div>
-                            <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
-                                <Clock size={24} className="text-emerald-600" />
+                            <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
+                                <Clock size={20} className="text-emerald-600" />
                             </div>
                         </div>
                     </div>
@@ -154,7 +154,7 @@ export default function PaymentsPortal() {
                     </div>
                 ) : (
                     <div className="space-y-4">
-                        <h2 className="text-lg font-bold text-slate-800">
+                        <h2 className="text-base font-bold text-slate-800">
                             Cuotas Pendientes ({invoices.length})
                         </h2>
 
@@ -182,21 +182,21 @@ function InvoiceCard({ invoice, onPaymentComplete }: {
 
     return (
         <>
-            <div className={`bg-white rounded-xl shadow-md p-6 border-2 transition-all hover:shadow-lg ${isOverdue ? 'border-red-300 bg-red-50/30' : 'border-slate-200'
+            <div className={`bg-white rounded-xl shadow-md p-4 border-2 transition-all hover:shadow-lg ${isOverdue ? 'border-red-300 bg-red-50/30' : 'border-slate-200'
                 }`}>
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                     <div className="flex-1">
-                        <div className="flex items-start gap-3 mb-3">
-                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isOverdue ? 'bg-red-100' : 'bg-[#A145F5]/10'
+                        <div className="flex items-start gap-3 mb-2">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isOverdue ? 'bg-red-100' : 'bg-[#A145F5]/10'
                                 }`}>
-                                <FileText size={20} className={isOverdue ? 'text-red-600' : 'text-[#A145F5]'} />
+                                <FileText size={16} className={isOverdue ? 'text-red-600' : 'text-[#A145F5]'} />
                             </div>
                             <div>
-                                <h3 className="text-lg font-bold text-slate-800">
+                                <h3 className="text-base font-bold text-slate-800">
                                     {invoice.payment_reference}
                                 </h3>
                                 {invoice.lot_info && (
-                                    <p className="text-sm text-slate-500">
+                                    <p className="text-xs text-slate-500">
                                         Etapa {invoice.lot_info.etapa} · {invoice.lot_info.manzana} · Lote {invoice.lot_info.lote}
                                         · Cuota {parseInt(invoice.lot_info.quota)}
                                     </p>
@@ -204,9 +204,9 @@ function InvoiceCard({ invoice, onPaymentComplete }: {
                             </div>
                         </div>
 
-                        <div className="flex flex-wrap gap-4 text-sm">
+                        <div className="flex flex-wrap gap-4 text-xs">
                             <div className="flex items-center gap-2">
-                                <Calendar size={16} className="text-slate-400" />
+                                <Calendar size={14} className="text-slate-400" />
                                 <span className={isOverdue ? 'text-red-600 font-bold' : 'text-slate-600'}>
                                     Vence: {new Date(invoice.invoice_date_due).toLocaleDateString('es-PE', {
                                         day: '2-digit',
@@ -223,9 +223,9 @@ function InvoiceCard({ invoice, onPaymentComplete }: {
                         </div>
                     </div>
 
-                    <div className="flex flex-col md:items-end gap-3">
+                    <div className="flex flex-col md:items-end gap-2">
                         <div className="text-right">
-                            <span className="text-3xl font-bold text-[#A145F5]">
+                            <span className="text-2xl font-bold text-[#A145F5]">
                                 S/ {invoice.amount_residual.toFixed(2)}
                             </span>
                         </div>
@@ -233,16 +233,16 @@ function InvoiceCard({ invoice, onPaymentComplete }: {
                         <div className="flex gap-2">
                             <button
                                 onClick={() => setShowPaymentModal(true)}
-                                className="flex-1 md:flex-none bg-[#A145F5] text-white px-6 py-3 rounded-xl font-bold hover:bg-[#8D32DF] transition-colors flex items-center justify-center gap-2 shadow-md"
+                                className="flex-1 md:flex-none bg-[#A145F5] text-white px-5 py-2.5 rounded-lg font-bold hover:bg-[#8D32DF] transition-colors flex items-center justify-center gap-2 shadow-md text-sm"
                             >
-                                <CreditCard size={18} />
+                                <CreditCard size={16} />
                                 <span>Pagar con Tarjeta</span>
                             </button>
                             <button
                                 onClick={() => setShowVoucherModal(true)}
-                                className="flex-1 md:flex-none bg-white border-2 border-[#A145F5] text-[#A145F5] px-6 py-3 rounded-xl font-bold hover:bg-[#A145F5]/10 transition-colors flex items-center justify-center gap-2"
+                                className="flex-1 md:flex-none bg-white border-2 border-[#A145F5] text-[#A145F5] px-5 py-2.5 rounded-lg font-bold hover:bg-[#A145F5]/10 transition-colors flex items-center justify-center gap-2 text-sm"
                             >
-                                <Upload size={18} />
+                                <Upload size={16} />
                                 <span>Subir Comprobante</span>
                             </button>
                         </div>
