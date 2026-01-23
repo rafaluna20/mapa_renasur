@@ -62,7 +62,7 @@ export default function NiubizPaymentModal({
 
         // TODO: Implementar script real
         // const script = document.createElement('script');
-        // script.src = 'https://static-content.vnforapps.com/v2/js/checkout.js';
+        // script.src = 'https://static-content-qas.vnforapps.com/v2/js/checkout.js?qa=true'; // Sandbox URL
         // script.async = true;
         // document.body.appendChild(script);
     };

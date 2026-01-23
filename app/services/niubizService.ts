@@ -5,7 +5,7 @@
 
 const NIUBIZ_BASE_URL = process.env.NIUBIZ_ENV === 'production'
     ? 'https://apiprod.vnforapps.com'
-    : 'https://apisandbox.vnforapps.com';
+    : 'https://apisandbox.vnforappstest.com';
 
 export interface NiubizSessionResponse {
     sessionKey: string;
