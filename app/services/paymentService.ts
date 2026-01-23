@@ -73,22 +73,34 @@ export const paymentService = {
      * Obtener historial de pagos de un cliente
      */
     async getPaymentHistory(partnerId: number): Promise<PaymentHistory[]> {
+        // Buscamos facturas que ya estén pagadas (o en proceso de pago)
         const domain = [
             ['partner_id', '=', partnerId],
+            ['move_type', '=', 'out_invoice'],
             ['state', '=', 'posted'],
-            ['payment_type', '=', 'inbound']
+            ['payment_state', 'in', ['paid', 'in_payment']]
         ];
 
         const fields = [
             'name',
-            'amount',
-            'date',
+            'amount_total',
+            'invoice_date',
             'state',
-            'payment_method_id',
-            'journal_id'
+            'payment_state'
         ];
 
-        return await fetchOdoo('account.payment', 'search_read', [domain], { fields });
+        const paidInvoices = await fetchOdoo('account.move', 'search_read', [domain], { fields });
+
+        // Mapeamos facturas pagadas a la estructura de historial
+        return paidInvoices.map((inv: any) => ({
+            id: inv.id,
+            name: inv.name,
+            amount: inv.amount_total,
+            date: inv.invoice_date,
+            state: inv.payment_state,
+            payment_method_id: [0, 'Vía Factura'],
+            journal_id: [0, 'Odoo']
+        }));
     },
 
     /**

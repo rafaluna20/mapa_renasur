@@ -16,7 +16,9 @@ export async function GET(request: Request) {
     const odooPartnerId = (session.user as any).odooPartnerId;
 
     try {
+        console.log(`[HISTORY_API] Fetching history for partner: ${odooPartnerId}`);
         const history = await paymentService.getPaymentHistory(odooPartnerId);
+        console.log(`[HISTORY_API] Found ${history.length} payments`);
 
         // Ordenar por fecha (más recientes primero)
         const sorted = history.sort((a, b) => {
@@ -24,6 +26,8 @@ export async function GET(request: Request) {
             const dateB = new Date(b.date);
             return dateB.getTime() - dateA.getTime();
         });
+
+        console.log(`[HISTORY_API] Data sample:`, sorted.length > 0 ? JSON.stringify(sorted[0], null, 2) : 'No data');
 
         return Response.json({
             success: true,
