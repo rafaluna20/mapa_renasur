@@ -2,25 +2,30 @@
 
 import { useSession } from 'next-auth/react';
 import { useEffect, useState } from 'react';
-import { redirect } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { History, Loader2, AlertCircle, CheckCircle2, XCircle, Clock, FileText, CreditCard } from 'lucide-react';
 import type { PaymentHistory } from '@/app/services/paymentService';
 
+// Force dynamic rendering since this page depends on user data
+export const dynamic = 'force-dynamic';
+
 export default function PaymentHistoryPage() {
     const { data: session, status } = useSession();
+    const router = useRouter();
     const [payments, setPayments] = useState<PaymentHistory[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
     useEffect(() => {
         if (status === 'unauthenticated') {
-            redirect('/portal/login?callbackUrl=/portal/historial');
+            router.push('/portal/login?callbackUrl=/portal/historial');
+            return;
         }
 
         if (status === 'authenticated') {
             loadPayments();
         }
-    }, [status]);
+    }, [status, router]);
 
     const loadPayments = async () => {
         try {
@@ -56,29 +61,23 @@ export default function PaymentHistoryPage() {
                 <div className="max-w-6xl mx-auto px-6 py-6">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h1 className="text-3xl font-bold text-slate-800 flex items-center gap-3">
-                                <div className="w-12 h-12 bg-emerald-600 rounded-xl flex items-center justify-center">
-                                    <History size={24} className="text-white" />
+                            <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
+                                <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center">
+                                    <History size={20} className="text-white" />
                                 </div>
                                 Historial de Pagos
                             </h1>
-                            <p className="text-slate-500 mt-1">
+                            <p className="text-sm text-slate-500 mt-1">
                                 Todos tus pagos realizados
                             </p>
                         </div>
                         <div className="flex gap-3">
                             <button
-                                onClick={() => window.location.href = '/portal/pagos'}
-                                className="px-4 py-2 text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                                onClick={() => router.push('/portal/pagos')}
+                                className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200"
                             >
                                 ← Volver a Pagos
                             </button>
-
-
-                
-
-
-                            
                         </div>
                     </div>
                 </div>
