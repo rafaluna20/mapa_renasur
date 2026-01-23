@@ -144,7 +144,7 @@ export default function MapArea({
             </div>
 
             {/* Legend Overlay */}
-            <div className="absolute bottom-25 right-4 z-[400] bg-white/90 backdrop-blur-sm p-3 rounded-lg shadow-lg border border-slate-200 pointer-events-none">
+            <div className="absolute bottom-34 right-4 z-[400] bg-white/90 backdrop-blur-sm p-3 rounded-lg shadow-lg border border-slate-200 pointer-events-none">
                 <h4 className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Leyenda</h4>
                 <div className="space-y-1">
                     <div className="flex items-center gap-2 text-xs">
