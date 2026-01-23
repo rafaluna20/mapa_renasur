@@ -204,9 +204,9 @@ function LoginForm() {
 
                 {/* Demo Info */}
                 <div className="mt-6 bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
-                    <p className="font-bold mb-1">⚠️ Modo Demo</p>
+                    <p className="font-bold mb-1"> Modo Seguro</p>
                     <p className="text-xs">
-                        Los códigos se envían por email y también se muestran en la consola del servidor en modo desarrollo.
+                        Los códigos se envíaran al email (solo para clientes registrados en el sistema).
                     </p>
                 </div>
 
