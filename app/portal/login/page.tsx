@@ -1,11 +1,14 @@
 'use client';
 
+// Disable static generation for this page
+export const dynamic = 'force-dynamic';
+
 import { signIn } from 'next-auth/react';
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AlertCircle, Loader2, Building2 } from 'lucide-react';
 
-export default function ClientLoginPage() {
+function LoginForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [step, setStep] = useState<'dni' | 'code'>('dni');
@@ -218,5 +221,17 @@ export default function ClientLoginPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function ClientLoginPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-gradient-to-br from-[#A145F5]/10 via-slate-50 to-stone-50 flex items-center justify-center">
+                <Loader2 size={40} className="animate-spin text-[#A145F5]" />
+            </div>
+        }>
+            <LoginForm />
+        </Suspense>
     );
 }
