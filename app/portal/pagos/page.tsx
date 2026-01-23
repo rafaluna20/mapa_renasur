@@ -15,6 +15,7 @@ export default function PaymentsPortal() {
     const { data: session, status } = useSession();
     const [invoices, setInvoices] = useState<PendingInvoice[]>([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState('');
 
     useEffect(() => {
@@ -24,23 +25,37 @@ export default function PaymentsPortal() {
 
         if (status === 'authenticated') {
             loadInvoices();
+
+            // ✅ Auto-refresh cada 30 segundos para detectar cambios de estado
+            const interval = setInterval(() => {
+                loadInvoices(true); // true = silent refresh
+            }, 30000);
+
+            return () => clearInterval(interval);
         }
     }, [status]);
 
-    const loadInvoices = async () => {
+    const loadInvoices = async (silent = false) => {
+        if (!silent) setLoading(true);
+        setRefreshing(true);
+
         try {
             const response = await fetch('/api/invoices/pending');
             const data = await response.json();
 
             if (data.success) {
                 setInvoices(data.invoices);
+                setError('');
             } else {
                 setError(data.error || 'Error al cargar facturas');
             }
         } catch (err) {
-            setError('Error de conexión');
+            if (!silent) {
+                setError('Error de conexión');
+            }
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
     };
 
@@ -189,24 +204,30 @@ function InvoiceCard({ invoice, onPaymentComplete }: {
                 }`}>
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                     <div className="flex-1">
-                        <div className="flex items-start gap-3 mb-2">
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isOverdue ? 'bg-red-100' : 'bg-[#A145F5]/10'
-                                }`}>
-                                <FileText size={16} className={isOverdue ? 'text-red-600' : 'text-[#A145F5]'} />
-                            </div>
-                            <div>
-                                <h3 className="text-base font-bold text-slate-800">
-                                    {invoice.payment_reference}
-                                </h3>
-                                {invoice.lot_info && (
-                                    <p className="text-xs text-slate-500">
-                                        Etapa {invoice.lot_info.etapa} · {invoice.lot_info.manzana} · Lote {invoice.lot_info.lote}
-                                        · Cuota {parseInt(invoice.lot_info.quota)}
-                                    </p>
-                                )}
+                        <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
+                            <div className="flex items-start gap-3 flex-1 min-w-0">
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${isOverdue ? 'bg-red-100' : 'bg-[#A145F5]/10'
+                                    }`}>
+                                    <FileText size={16} className={isOverdue ? 'text-red-600' : 'text-[#A145F5]'} />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="text-base font-bold text-slate-800">
+                                        {invoice.payment_reference}
+                                    </h3>
+                                    {invoice.lot_info && (
+                                        <p className="text-xs text-slate-500">
+                                            Etapa {invoice.lot_info.etapa} · {invoice.lot_info.manzana} · Lote {invoice.lot_info.lote}
+                                            · Cuota {parseInt(invoice.lot_info.quota)}
+                                        </p>
+                                    )}
+                                </div>
                             </div>
                             {invoice.voucher_status && (
-                                <VoucherStatusBadge status={invoice.voucher_status.status} />
+                                <VoucherStatusBadge
+                                    status={invoice.voucher_status.status}
+                                    className="flex-shrink-0"
+                                    aria-label={`Estado del comprobante: ${invoice.voucher_status.status === 'pending' ? 'En revisión' : invoice.voucher_status.status === 'approved' ? 'Validado' : 'Rechazado'}`}
+                                />
                             )}
                         </div>
 
