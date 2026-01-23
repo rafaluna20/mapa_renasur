@@ -1,4 +1,5 @@
-import { Map as MapIcon, Layers, Square, Navigation, Ruler, FileDown } from 'lucide-react';
+import { Map as MapIcon, Layers, Square, Navigation, Ruler, FileDown, Building2 } from 'lucide-react';
+import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import MapContainerWrapper from './MapContainer';
 import LotDetailModal from '../UI/LotDetailModal';
@@ -53,6 +54,15 @@ export default function MapArea({
             {/* Floating Export Tools (Top Center) - Premium Pill Style */}
             <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[400] flex gap-2">
                 <div className="bg-white/90 backdrop-blur-md rounded-full shadow-lg border border-stone-200 p-1.5 flex gap-1">
+                    <Link
+                        href="/portal/login"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#A145F5] text-white hover:bg-[#8D32DF] shadow-sm hover:shadow-md transition-all text-xs font-bold"
+                        title="Ir al Portal de Pagos"
+                    >
+                        <Building2 size={14} />
+                        <span>Portal</span>
+                    </Link>
+                    <div className="w-px bg-stone-200 my-1"></div>
                     <button
                         onClick={onExport}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-full hover:bg-[#A145F5]/10 text-stone-600 hover:text-[#A145F5] transition-colors text-xs font-bold"
