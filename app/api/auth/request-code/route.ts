@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { fetchOdoo } from '@/app/services/odooService';
-import { twilioService } from '@/app/services/twilioService';
+import { emailService } from '@/app/services/emailService';
 
 /**
  * POST /api/auth/request-code
@@ -32,24 +32,24 @@ export async function POST(request: Request) {
 
         const partner = partners[0];
 
-        if (!partner.phone) {
-            return NextResponse.json({ error: 'No hay teléfono registrado para este DNI' }, { status: 400 });
+        if (!partner.email) {
+            return NextResponse.json({ error: 'No hay email registrado para este DNI' }, { status: 400 });
         }
 
-        // Enviar código SMS
-        const code = await twilioService.sendVerificationCode(
-            partner.phone,
+        // Enviar código por email
+        const code = await emailService.sendVerificationCode(
+            partner.email,
             dni
         );
 
-        // Mask phone number for display (e.g., +51 9*** **321)
-        const maskedPhone = partner.phone.replace(/(\d{4})\s*(\d+)(\d{3})/, '$1 *** **$3');
+        // Mask email for display (e.g., ab***@gmail.com)
+        const maskedEmail = partner.email.replace(/(.{2}).*(@.*)/, '$1***$2');
 
-        console.log(`[AUTH] SMS sent to ${maskedPhone} for DNI ${dni}. Debug Code: ${code}`);
+        console.log(`[AUTH] Email sent to ${maskedEmail} for DNI ${dni}. Debug Code: ${code}`);
 
         return NextResponse.json({
             success: true,
-            maskedPhone
+            maskedEmail
         });
 
     } catch (error: any) {

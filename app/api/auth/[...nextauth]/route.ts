@@ -1,7 +1,7 @@
 import NextAuth, { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { fetchOdoo } from '@/app/services/odooService';
-import { twilioService } from '@/app/services/twilioService';
+import { emailService } from '@/app/services/emailService';
 
 export const authOptions: NextAuthOptions = {
     providers: [
@@ -19,7 +19,7 @@ export const authOptions: NextAuthOptions = {
                 }
 
                 // Verificar código
-                const isValid = await twilioService.verifyCode(
+                const isValid = await emailService.verifyCode(
                     credentials.dni,
                     credentials.code
                 );

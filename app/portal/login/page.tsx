@@ -89,7 +89,7 @@ export default function ClientLoginPage() {
                                     Iniciar Sesión
                                 </h2>
                                 <p className="text-sm text-slate-500">
-                                    Ingresa tu DNI para recibir un código de verificación
+                                    Ingresa tu DNI para recibir un código por email
                                 </p>
                             </div>
 
@@ -128,7 +128,7 @@ export default function ClientLoginPage() {
                                         Enviando...
                                     </>
                                 ) : (
-                                    'Enviar Código SMS'
+                                    'Enviar Código al Email'
                                 )}
                             </button>
                         </form>
@@ -139,7 +139,7 @@ export default function ClientLoginPage() {
                                     Verificar Código
                                 </h2>
                                 <p className="text-sm text-slate-500">
-                                    Ingresa el código de 6 dígitos que enviamos a tu celular
+                                    Ingresa el código de 6 dígitos que enviamos a tu email
                                 </p>
                             </div>
 
@@ -152,7 +152,7 @@ export default function ClientLoginPage() {
 
                             <div>
                                 <label className="block text-sm font-bold text-slate-700 mb-2">
-                                    Código SMS
+                                    Código de Verificación
                                 </label>
                                 <input
                                     type="text"
@@ -203,8 +203,7 @@ export default function ClientLoginPage() {
                 <div className="mt-6 bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">
                     <p className="font-bold mb-1">⚠️ Modo Demo</p>
                     <p className="text-xs">
-                        Los códigos SMS se muestran en la consola del servidor.
-                        Revisa los logs para obtener tu código.
+                        Los códigos se envían por email y también se muestran en la consola del servidor en modo desarrollo.
                     </p>
                 </div>
 
