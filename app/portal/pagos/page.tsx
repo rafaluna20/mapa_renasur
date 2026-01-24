@@ -3,13 +3,15 @@
 import { useSession } from 'next-auth/react';
 import { useEffect, useState } from 'react';
 import { redirect } from 'next/navigation';
-import { CreditCard, Building2, Calendar, DollarSign, Loader2, AlertCircle, CheckCircle2, Clock, FileText, Upload } from 'lucide-react';
+import { CreditCard, Building2, Calendar, DollarSign, Loader2, AlertCircle, CheckCircle2, Clock, FileText, Upload, RefreshCw } from 'lucide-react';
 import type { PendingInvoice } from '@/app/services/paymentService';
 import NiubizPaymentModal from '@/app/components/Payments/NiubizPaymentModal';
 import VoucherUploadModal from '@/app/components/Payments/VoucherUploadModal';
 import VoucherStatusBadge from '@/app/components/Payments/VoucherStatusBadge';
 import VoucherStatusAlert from '@/app/components/Payments/VoucherStatusAlert';
 import VoucherTimeline from '@/app/components/Payments/VoucherTimeline';
+import { formatDistanceToNow } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 export default function PaymentsPortal() {
     const { data: session, status } = useSession();
@@ -17,6 +19,8 @@ export default function PaymentsPortal() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState('');
+    const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+    const [retryCount, setRetryCount] = useState(0);
 
     useEffect(() => {
         if (status === 'unauthenticated') {
@@ -25,44 +29,78 @@ export default function PaymentsPortal() {
 
         if (status === 'authenticated') {
             loadInvoices();
-
-            // ✅ Auto-refresh cada 30 segundos para detectar cambios de estado
-            const interval = setInterval(() => {
-                loadInvoices(true); // true = silent refresh
-            }, 30000);
-
-            return () => clearInterval(interval);
+            // ✅ Auto-refresh REMOVIDO para reducir consumo de datos
+            // Usuario puede actualizar manualmente con el botón de refresh
         }
     }, [status]);
 
-    const loadInvoices = async (silent = false) => {
+    // ✅ Función mejorada con retry automático y exponential backoff
+    const loadInvoices = async (silent = false, attempt = 0) => {
         if (!silent) setLoading(true);
         setRefreshing(true);
 
+        const maxRetries = 3;
+        const backoffDelay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+
         try {
             const response = await fetch('/api/invoices/pending');
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
             const data = await response.json();
 
             if (data.success) {
                 setInvoices(data.invoices);
                 setError('');
+                setLastRefresh(new Date());
+                setRetryCount(0);
+                console.log(`[PAYMENTS] ✅ Loaded ${data.invoices.length} invoices`);
             } else {
-                setError(data.error || 'Error al cargar facturas');
+                throw new Error(data.error || 'Error al cargar facturas');
             }
-        } catch (err) {
-            if (!silent) {
-                setError('Error de conexión');
+        } catch (err: any) {
+            console.error(`[PAYMENTS] ❌ Error loading invoices (attempt ${attempt + 1}):`, err);
+            
+            if (attempt < maxRetries) {
+                // Retry con backoff
+                console.log(`[PAYMENTS] 🔄 Retrying in ${backoffDelay}ms...`);
+                setRetryCount(attempt + 1);
+                
+                setTimeout(() => {
+                    loadInvoices(silent, attempt + 1);
+                }, backoffDelay);
+            } else {
+                // Falló después de todos los reintentos
+                if (!silent) {
+                    setError(
+                        'No pudimos cargar tus facturas. Por favor, verifica tu conexión a internet e intenta nuevamente.'
+                    );
+                }
+                setRetryCount(0);
             }
         } finally {
-            setLoading(false);
-            setRefreshing(false);
+            if (attempt === 0 || attempt >= maxRetries) {
+                setLoading(false);
+                setRefreshing(false);
+            }
         }
+    };
+
+    const handleManualRefresh = () => {
+        loadInvoices(false);
     };
 
     if (status === 'loading' || loading) {
         return (
             <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-                <Loader2 size={40} className="animate-spin text-[#A145F5]" />
+                <div className="text-center">
+                    <Loader2 size={40} className="animate-spin text-[#A145F5] mx-auto mb-4" />
+                    <p className="text-slate-600" role="status" aria-live="polite">
+                        {retryCount > 0 ? `Reintentando... (${retryCount}/3)` : 'Cargando...'}
+                    </p>
+                </div>
             </div>
         );
     }
@@ -91,13 +129,35 @@ export default function PaymentsPortal() {
                                 Bienvenido, <span className="font-semibold">{session?.user?.name}</span>
                             </p>
                         </div>
-                        <button
-                            onClick={() => window.location.href = '/portal/historial'}
-                            className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200"
-                        >
-                            Ver Historial →
-                        </button>
+                        <div className="flex items-center gap-3">
+                            {/* ✅ Refresh button */}
+                            <button
+                                onClick={handleManualRefresh}
+                                disabled={refreshing}
+                                className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200 flex items-center gap-2 disabled:opacity-50"
+                                title="Actualizar facturas"
+                                aria-label="Actualizar facturas"
+                            >
+                                <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+                                Actualizar
+                            </button>
+                            
+                            <button
+                                onClick={() => window.location.href = '/portal/historial'}
+                                className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors border border-slate-200"
+                            >
+                                Ver Historial →
+                            </button>
+                        </div>
                     </div>
+
+                    {/* ✅ Last refresh indicator */}
+                    {lastRefresh && (
+                        <p className="text-xs text-slate-400 mt-3 flex items-center gap-1">
+                            <Clock size={12} />
+                            Última actualización: {formatDistanceToNow(lastRefresh, { addSuffix: true, locale: es })}
+                        </p>
+                    )}
                 </div>
             </div>
 
@@ -150,11 +210,21 @@ export default function PaymentsPortal() {
 
                 {/* Error State */}
                 {error && (
-                    <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-start gap-3">
-                        <AlertCircle size={20} className="text-red-600 mt-0.5" />
-                        <div>
-                            <p className="font-bold text-red-900">Error</p>
-                            <p className="text-sm text-red-700">{error}</p>
+                    <div 
+                        className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-start gap-3"
+                        role="alert"
+                        aria-live="assertive"
+                    >
+                        <AlertCircle size={20} className="text-red-600 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1">
+                            <p className="font-bold text-red-900">Error al cargar facturas</p>
+                            <p className="text-sm text-red-700 mt-1">{error}</p>
+                            <button
+                                onClick={handleManualRefresh}
+                                className="mt-3 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-800 rounded-lg text-sm font-medium transition-colors"
+                            >
+                                Reintentar ahora
+                            </button>
                         </div>
                     </div>
                 )}
@@ -261,6 +331,7 @@ function InvoiceCard({ invoice, onPaymentComplete }: {
                             <button
                                 onClick={() => setShowPaymentModal(true)}
                                 className="flex-1 md:flex-none bg-[#A145F5] text-white px-5 py-2.5 rounded-lg font-bold hover:bg-[#8D32DF] transition-colors flex items-center justify-center gap-2 shadow-md text-sm"
+                                aria-label={`Pagar cuota ${invoice.payment_reference} con tarjeta`}
                             >
                                 <CreditCard size={16} />
                                 <span>Pagar con Tarjeta</span>
@@ -268,6 +339,7 @@ function InvoiceCard({ invoice, onPaymentComplete }: {
                             <button
                                 onClick={() => setShowVoucherModal(true)}
                                 className="flex-1 md:flex-none bg-white border-2 border-[#A145F5] text-[#A145F5] px-5 py-2.5 rounded-lg font-bold hover:bg-[#A145F5]/10 transition-colors flex items-center justify-center gap-2 text-sm"
+                                aria-label={`Subir comprobante de pago para cuota ${invoice.payment_reference}`}
                             >
                                 <Upload size={16} />
                                 <span>Subir Comprobante</span>

@@ -137,6 +137,21 @@ export default function NiubizPaymentModal({
 
                 {/* Content */}
                 <div className="p-6">
+                    {/* ⚠️ CRITICAL WARNING */}
+                    <div className="bg-amber-50 border-2 border-amber-400 rounded-xl p-4 mb-6">
+                        <div className="flex items-start gap-3">
+                            <AlertCircle size={24} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                            <div>
+                                <h4 className="font-bold text-amber-900 mb-1">⚠️ Función en Desarrollo</h4>
+                                <p className="text-sm text-amber-800">
+                                    El pago con tarjeta está temporalmente no disponible.
+                                    Por favor, utiliza la opción de <strong>Transferencia Bancaria</strong>
+                                    subiendo tu comprobante de pago.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Payment Info */}
                     <div className="bg-slate-50 rounded-xl p-4 mb-6">
                         <div className="flex justify-between items-center mb-2">

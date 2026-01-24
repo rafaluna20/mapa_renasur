@@ -40,8 +40,217 @@ body {
   letter-spacing: 0.4px !important;
   backdrop-filter: blur(4px) !important;
   z-index: 1000 !important;
+  /* Aparece suavemente cuando se crea (sin movimiento, solo opacidad) */
+  animation: fadeInSideLabels 0.6s ease-out !important;
 }
 
 .side-measurement-tooltip::before {
   display: none !important;
+}
+
+/* ============================================
+   ANIMACIONES Y TRANSICIONES PARA EL MAPA
+   ============================================ */
+
+/* Animación suave para polígonos del mapa */
+.leaflet-interactive {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: stroke-width, fill-opacity, filter;
+}
+
+.leaflet-interactive:hover {
+  filter: brightness(1.15) saturate(1.1);
+  stroke-width: 3 !important;
+  fill-opacity: 0.85 !important;
+}
+
+/* Animación para lote seleccionado */
+.lot-selected {
+  animation: pulse-border 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-border {
+  0%, 100% {
+    stroke-opacity: 1;
+  }
+  50% {
+    stroke-opacity: 0.7;
+  }
+}
+
+/* Transiciones suaves para controles del mapa */
+.map-control {
+  transition: all 0.2s ease-in-out;
+}
+
+.map-control:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.map-control:active {
+  transform: scale(0.98);
+}
+
+/* Animación de fade-in para elementos cargados */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Animación de fade-in con delay para tooltips de medición */
+@keyframes fadeInDelayed {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Animación de fade-in para etiquetas de lados - Solo opacidad, sin movimiento */
+@keyframes fadeInSideLabels {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+/* Animación de slide para sidebar */
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.slide-in-left {
+  animation: slideInLeft 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Transición suave para tooltips */
+.leaflet-tooltip {
+  transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+}
+
+/* Animación de loading spinner personalizado */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.custom-spinner {
+  animation: spin 1s linear infinite;
+}
+
+/* Focus visible mejorado para accesibilidad */
+*:focus-visible {
+  outline: 3px solid #A145F5;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Transiciones para botones */
+button {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* Animación para elementos que aparecen */
+.animate-appear {
+  animation: fadeIn 0.4s ease-out;
+}
+
+/* Skeleton loading para cargas asíncronas */
+@keyframes skeleton-loading {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s ease-in-out infinite;
+}
+
+/* Utilidad para ocultar visualmente pero mantener accesible */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Smooth scrolling para contenedores */
+.smooth-scroll {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Mejora de performance para animaciones */
+.gpu-accelerated {
+  transform: translateZ(0);
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+/* Transición para backdrop */
+.backdrop-blur-transition {
+  transition: backdrop-filter 0.3s ease-in-out, background-color 0.3s ease-in-out;
+}
+
+/* Animación de bounce sutil para notificaciones */
+@keyframes subtle-bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.notification-bounce {
+  animation: subtle-bounce 0.5s ease-in-out;
+}
+
+/* Hover para cards */
+.card-hover {
+  transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
 }

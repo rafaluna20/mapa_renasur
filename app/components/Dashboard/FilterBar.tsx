@@ -1,4 +1,5 @@
-import { Search, Layers, Map as MapIcon, FileDown } from 'lucide-react';
+import { Search, Layers, Map as MapIcon, DollarSign, Maximize2, ChevronDown, ChevronUp } from 'lucide-react';
+import { useState } from 'react';
 
 interface FilterBarProps {
     searchQuery: string;
@@ -10,9 +11,17 @@ interface FilterBarProps {
     etapaFilter: string;
     onEtapaChange: (val: string) => void;
     filteredCount: number;
+    searchMatchCount?: number;
     onClearFilters: () => void;
-    onExportSvg?: () => void;
-    onExportPdf?: () => void;
+    // Filtros de rango (avanzados)
+    priceMin: number | null;
+    priceMax: number | null;
+    onPriceMinChange: (val: number | null) => void;
+    onPriceMaxChange: (val: number | null) => void;
+    areaMin: number | null;
+    areaMax: number | null;
+    onAreaMinChange: (val: number | null) => void;
+    onAreaMaxChange: (val: number | null) => void;
 }
 
 export default function FilterBar({
@@ -20,9 +29,12 @@ export default function FilterBar({
     statusFilter, onStatusChange,
     manzanaFilter, onManzanaChange,
     etapaFilter, onEtapaChange,
-    filteredCount, onClearFilters,
-    onExportSvg, onExportPdf
+    filteredCount, searchMatchCount, onClearFilters,
+    priceMin, priceMax, onPriceMinChange, onPriceMaxChange,
+    areaMin, areaMax, onAreaMinChange, onAreaMaxChange
 }: FilterBarProps) {
+    // Estado para controlar la visibilidad de búsquedas avanzadas
+    const [showAdvanced, setShowAdvanced] = useState(false);
     return (
         <div className="p-3 border-b border-stone-200 bg-white/80 backdrop-blur-md shadow-sm space-y-3">
             {/* Header / Title - Violet Brand Alignment */}
@@ -31,22 +43,43 @@ export default function FilterBar({
                     <span className="w-1.5 h-1.5 rounded-full bg-[#A145F5] shadow-[0_0_8px_rgba(161,69,245,0.4)]"></span>
                     <span className="opacity-80">Filtros</span>
                 </h3>
-                <span className="px-2 py-0.5 bg-stone-100 text-stone-600 text-[9px] font-bold rounded border border-stone-200">
-                    {filteredCount} Lotes
-                </span>
+                <div className="flex gap-1">
+                    {searchQuery && searchMatchCount !== undefined && (
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-[9px] font-bold rounded border border-blue-200">
+                            🔍 {searchMatchCount}
+                        </span>
+                    )}
+                    <span className="px-2 py-0.5 bg-stone-100 text-stone-600 text-[9px] font-bold rounded border border-stone-200">
+                        {filteredCount} Total
+                    </span>
+                </div>
             </div>
 
-            {/* Search - Modern Violet Focus */}
+            {/* Search - Modern Violet Focus with Accessibility */}
             <div className="relative group">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 group-focus-within:text-[#A145F5] transition-colors" size={16} />
                 <input
                     type="text"
-                    placeholder="Buscar lote..."
+                    placeholder="Buscar por nombre, código, manzana, cliente..."
                     className="w-full pl-9 pr-3 py-2 bg-stone-50 border border-transparent text-stone-800 text-xs font-medium placeholder:text-stone-400 rounded-xl focus:bg-white focus:border-[#A145F5]/30 focus:ring-4 focus:ring-[#A145F5]/10 transition-all outline-none shadow-sm hover:shadow-md hover:bg-white"
                     value={searchQuery}
                     onChange={(e) => onSearchChange(e.target.value)}
+                    aria-label="Buscar lotes por nombre, código, manzana o cliente"
+                    aria-describedby="search-help"
                 />
+                {searchQuery && (
+                    <button
+                        onClick={() => onSearchChange('')}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-[#A145F5] transition-colors"
+                        aria-label="Limpiar búsqueda"
+                    >
+                        ✕
+                    </button>
+                )}
             </div>
+            <p id="search-help" className="sr-only">
+                Busca lotes por nombre, código (ej: E01MZD100), manzana, cliente o número de lote
+            </p>
 
             {/* Status Filter - Violet Chips */}
             <div className="space-y-1.5">
@@ -128,37 +161,94 @@ export default function FilterBar({
                 </div>
             </div>
 
-            {/* Clear Filters Button */}
+            {/* Botón para mostrar/ocultar búsquedas avanzadas */}
+            <button
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="w-full py-2 px-3 bg-gradient-to-r from-[#A145F5]/10 to-violet-100/50 border border-[#A145F5]/20 text-[#A145F5] font-bold rounded-lg text-[10px] hover:from-[#A145F5]/20 hover:to-violet-100 transition-all flex items-center justify-between group"
+                aria-expanded={showAdvanced}
+                aria-controls="advanced-filters"
+            >
+                <span className="flex items-center gap-1.5">
+                    🔍 Búsquedas Avanzadas
+                    {(priceMin || priceMax || areaMin || areaMax) && (
+                        <span className="inline-block w-2 h-2 bg-[#A145F5] rounded-full animate-pulse"></span>
+                    )}
+                </span>
+                {showAdvanced ? (
+                    <ChevronUp size={14} className="group-hover:transform group-hover:-translate-y-0.5 transition-transform" />
+                ) : (
+                    <ChevronDown size={14} className="group-hover:transform group-hover:translate-y-0.5 transition-transform" />
+                )}
+            </button>
+
+            {/* Panel de Búsquedas Avanzadas (Colapsable) */}
+            {showAdvanced && (
+                <div
+                    id="advanced-filters"
+                    className="space-y-3 pt-2 pb-1 animate-in slide-in-from-top-2 duration-200"
+                >
+                    {/* Rango de Precio */}
+                    <div className="space-y-1.5 p-2.5 bg-gradient-to-br from-green-50 to-emerald-50/30 rounded-lg border border-emerald-100">
+                        <label className="text-[9px] font-bold text-emerald-700 uppercase tracking-widest flex items-center gap-1 ml-1">
+                            <DollarSign size={10} className="text-emerald-600" /> Rango de Precio (S/)
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                            <input
+                                type="number"
+                                placeholder="Mínimo"
+                                value={priceMin ?? ''}
+                                onChange={(e) => onPriceMinChange(e.target.value ? Number(e.target.value) : null)}
+                                className="w-full px-2.5 py-1.5 bg-white border border-emerald-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all"
+                                aria-label="Precio mínimo"
+                            />
+                            <input
+                                type="number"
+                                placeholder="Máximo"
+                                value={priceMax ?? ''}
+                                onChange={(e) => onPriceMaxChange(e.target.value ? Number(e.target.value) : null)}
+                                className="w-full px-2.5 py-1.5 bg-white border border-emerald-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 transition-all"
+                                aria-label="Precio máximo"
+                            />
+                        </div>
+                    </div>
+
+                    {/* Rango de Área */}
+                    <div className="space-y-1.5 p-2.5 bg-gradient-to-br from-blue-50 to-sky-50/30 rounded-lg border border-blue-100">
+                        <label className="text-[9px] font-bold text-blue-700 uppercase tracking-widest flex items-center gap-1 ml-1">
+                            <Maximize2 size={10} className="text-blue-600" /> Rango de Área (m²)
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                            <input
+                                type="number"
+                                placeholder="Mínimo"
+                                value={areaMin ?? ''}
+                                onChange={(e) => onAreaMinChange(e.target.value ? Number(e.target.value) : null)}
+                                className="w-full px-2.5 py-1.5 bg-white border border-blue-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+                                aria-label="Área mínima"
+                            />
+                            <input
+                                type="number"
+                                placeholder="Máximo"
+                                value={areaMax ?? ''}
+                                onChange={(e) => onAreaMaxChange(e.target.value ? Number(e.target.value) : null)}
+                                className="w-full px-2.5 py-1.5 bg-white border border-blue-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+                                aria-label="Área máxima"
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Clear Filters Button with Accessibility */}
             <div className="pt-2">
                 <button
                     onClick={onClearFilters}
-                    className="w-full py-2 bg-stone-50 border border-stone-200 text-stone-500 font-bold rounded-lg text-[10px] hover:bg-stone-100 hover:text-[#A145F5] transition-all"
+                    className="w-full py-2 bg-stone-50 border border-stone-200 text-stone-500 font-bold rounded-lg text-[10px] hover:bg-stone-100 hover:text-[#A145F5] transition-all active:scale-95"
+                    aria-label="Limpiar todos los filtros de búsqueda"
                 >
-                    Limpiar Filtros
+                    🗑️ Limpiar Todos los Filtros
                 </button>
             </div>
-
-            {/* Export Options */}
-            {(onExportSvg || onExportPdf) && (
-                <div className="pt-1 flex gap-2">
-                    {onExportSvg && (
-                        <button
-                            onClick={onExportSvg}
-                            className="flex-1 py-1.5 bg-white border border-stone-200 text-stone-500 font-bold rounded-lg text-[10px] hover:border-[#A145F5]/30 hover:text-[#A145F5] hover:shadow-sm transition-all flex items-center justify-center gap-1.5"
-                        >
-                            <FileDown size={12} /> SVG
-                        </button>
-                    )}
-                    {onExportPdf && (
-                        <button
-                            onClick={onExportPdf}
-                            className="flex-1 py-1.5 bg-white border border-stone-200 text-stone-500 font-bold rounded-lg text-[10px] hover:border-[#A145F5]/30 hover:text-[#A145F5] hover:shadow-sm transition-all flex items-center justify-center gap-1.5"
-                        >
-                            <FileDown size={12} /> PDF
-                        </button>
-                    )}
-                </div>
-            )}
         </div>
     );
 }

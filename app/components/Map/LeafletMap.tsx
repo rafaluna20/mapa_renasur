@@ -54,15 +54,16 @@ function MapController({ lots, selectedLotId, onZoomChange }: { lots: Lot[], sel
                             map.fitBounds(bounds, {
                                 paddingBottomRight: [0, 300], // 300px de padding inferior para dejar espacio al modal
                                 animate: true,
-                                duration: 2,
-                                maxZoom: 20
+                                duration: 2.2,  // Duración óptima
+                                maxZoom: 20,
+                                easeLinearity: 0.15 // Balance perfecto - suave pero sin saltos
                             });
                         } else {
                             const targetZoom = map.getBoundsZoom(bounds, false, L.point(50, 50));
                             const finalZoom = Math.min(targetZoom, 21);
                             map.flyTo(bounds.getCenter(), finalZoom, {
-                                duration: 2,
-                                easeLinearity: 0.25
+                                duration: 2.2,  // Duración óptima
+                                easeLinearity: 0.15 // Balance perfecto entre suavidad y naturalidad
                             });
                         }
                     }
@@ -81,10 +82,12 @@ function MapController({ lots, selectedLotId, onZoomChange }: { lots: Lot[], sel
                 });
 
                 if (bounds.isValid()) {
-                    // map.fitBounds(bounds, { padding: [20, 20], maxZoom: 22 });
-                    // REQUERIMIENTO: Zoom inicial más cercano (30% más cerca que el ajuste automático)
-                    // En lugar de encajar todo, centramos en el medio y aplicamos zoom 17.5
-                    map.flyTo(bounds.getCenter(), 17.5, { animate: false });
+                    // Zoom inicial suave al cargar el mapa
+                    map.flyTo(bounds.getCenter(), 17.5, {
+                        animate: true,
+                        duration: 1.2,
+                        easeLinearity: 0.1
+                    });
                 }
             } catch (e) {
                 console.error("FitBounds error", e);
@@ -96,7 +99,11 @@ function MapController({ lots, selectedLotId, onZoomChange }: { lots: Lot[], sel
         const handleCenterMap = (event: Event) => {
             const customEvent = event as CustomEvent<{ lat: number, lng: number, zoom: number }>;
             const { lat, lng, zoom } = customEvent.detail;
-            map.flyTo([lat, lng], zoom, { animate: true, duration: 2 });
+            map.flyTo([lat, lng], zoom, {
+                animate: true,
+                duration: 1.5,
+                easeLinearity: 0.1  // Animación suave y gradual
+            });
         };
         window.addEventListener('centerMap', handleCenterMap);
         return () => window.removeEventListener('centerMap', handleCenterMap);
@@ -363,7 +370,7 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
                                 className="!bg-transparent !border-0 !shadow-none p-0"
                                 opacity={1}
                             >
-                                <div className="flex flex-col items-center justify-center bg-white/95 backdrop-blur-md rounded-md shadow-md border border-white/50 p-0.5 min-w-[32px] transform transition-all cursor-pointer">
+                                <div className="flex flex-col items-center justify-center bg-white/95 backdrop-blur-md rounded-md shadow-md border border-white/50 p-0.5 min-w-[32px] cursor-pointer animate-appear">
                                     <span className="text-slate-800 font-bold text-[6px] tracking-tight uppercase text-center leading-none">
                                         {lot.x_mz}{lot.x_lote}
                                     </span>

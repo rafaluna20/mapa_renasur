@@ -9,6 +9,7 @@ import Header from '@/app/components/UI/Header';
 import LotCard from '@/app/components/UI/LotCard';
 import { lotsData, Lot } from '@/app/data/lotsData';
 import geometriesEnrichedRaw from '@/app/data/geometries-enriched.json';
+import { useSmartSearch } from '@/app/hooks/useSmartSearch';
 
 // Type for enriched geometries with measurements
 interface EnrichedGeometry {
@@ -69,11 +70,32 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
     // ID del lote seleccionado actualmente (null si ninguno)
     const [selectedLotId, setSelectedLotId] = useState<string | null>(null);
 
-    // Filtros activos
-    const [statusFilter, setStatusFilter] = useState<string>('all'); // Estado: todos, disponible, reservado, vendido
-    const [searchQuery, setSearchQuery] = useState('');              // Texto del buscador
-    const [manzanaFilter, setManzanaFilter] = useState<string>('all'); // Filtro por Manzana (Q, R, S...)
-    const [etapaFilter, setEtapaFilter] = useState<string>('all');     // Filtro por Etapa (1, 2, 3...)
+    // ------------------------------------------------------------------
+    // Persistencia y carga de filtros desde localStorage
+    // ------------------------------------------------------------------
+    const loadFilters = () => {
+        if (typeof window === 'undefined') return null;
+        try {
+            const saved = localStorage.getItem('lotFilters');
+            return saved ? JSON.parse(saved) : null;
+        } catch {
+            return null;
+        }
+    };
+
+    const savedFilters = loadFilters();
+
+    // Filtros activos con persistencia
+    const [statusFilter, setStatusFilter] = useState<string>(savedFilters?.statusFilter || 'all');
+    const [searchQuery, setSearchQuery] = useState<string>(savedFilters?.searchQuery || '');
+    const [manzanaFilter, setManzanaFilter] = useState<string>(savedFilters?.manzanaFilter || 'all');
+    const [etapaFilter, setEtapaFilter] = useState<string>(savedFilters?.etapaFilter || 'all');
+    
+    // Nuevos filtros de rango
+    const [priceMin, setPriceMin] = useState<number | null>(savedFilters?.priceMin || null);
+    const [priceMax, setPriceMax] = useState<number | null>(savedFilters?.priceMax || null);
+    const [areaMin, setAreaMin] = useState<number | null>(savedFilters?.areaMin || null);
+    const [areaMax, setAreaMax] = useState<number | null>(savedFilters?.areaMax || null);
 
     // Estado de UI
     const [isSidebarOpen, setSidebarOpen] = useState(true); // Controla si la barra lateral está visible
@@ -264,9 +286,54 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
         }
     }, [user, loading, router]);
 
+    // Efecto: Guardar filtros en localStorage cuando cambien
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        
+        const filters = {
+            searchQuery,
+            statusFilter,
+            manzanaFilter,
+            etapaFilter,
+            priceMin,
+            priceMax,
+            areaMin,
+            areaMax
+        };
+        
+        try {
+            localStorage.setItem('lotFilters', JSON.stringify(filters));
+        } catch (error) {
+            console.warn('No se pudo guardar filtros en localStorage:', error);
+        }
+    }, [searchQuery, statusFilter, manzanaFilter, etapaFilter, priceMin, priceMax, areaMin, areaMax]);
 
     // ------------------------------------------------------------------
-    // Filtros y Estadísticas Derivadas
+    // Búsqueda Inteligente con Hook Personalizado
+    // ------------------------------------------------------------------
+
+    // Usar el hook de búsqueda inteligente
+    const {
+        results: filteredLots,
+        count: filteredCount,
+        hasActiveFilters,
+        searchMatchCount
+    } = useSmartSearch(
+        lots,
+        ['name', 'default_code', 'x_lote', 'x_mz', 'x_etapa', 'x_cliente'], // Campos buscables
+        {
+            query: searchQuery,
+            priceRange: [priceMin, priceMax],
+            areaRange: [areaMin, areaMax],
+            statusFilter,
+            manzanaFilter,
+            etapaFilter,
+            debounceMs: 300
+        }
+    );
+
+    // ------------------------------------------------------------------
+    // Estadísticas Derivadas
     // ------------------------------------------------------------------
 
     // Calcular contadores en tiempo real (para el dashboard)
@@ -277,17 +344,6 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
             sold: lots.filter(l => l.x_statu === 'vendido').length,
         };
     }, [lots]);
-
-    // Calcular la lista filtrada según los criterios seleccionados
-    const filteredLots = useMemo(() => {
-        return lots.filter(lot => {
-            const matchesStatus = statusFilter === 'all' || lot.x_statu === statusFilter;
-            const matchesSearch = lot.name.toLowerCase().includes(searchQuery.toLowerCase());
-            const matchesManzana = manzanaFilter === 'all' || lot.x_mz === manzanaFilter;
-            const matchesEtapa = etapaFilter === 'all' || lot.x_etapa === etapaFilter;
-            return matchesStatus && matchesSearch && matchesManzana && matchesEtapa;
-        });
-    }, [lots, statusFilter, searchQuery, manzanaFilter, etapaFilter]);
 
     // Lote seleccionado actualmente (objeto completo)
     const selectedLot = useMemo(() => lots.find(l => l.id === selectedLotId) || null, [lots, selectedLotId]);
@@ -392,7 +448,7 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
                   md:relative md:translate-x-0 md:z-10 md:shadow-xl     // Siempre visible en desktop
                 `}>
 
-                    {/* Componente: Barra de Filtros */}
+                    {/* Componente: Barra de Filtros con búsqueda mejorada */}
                     <FilterBar
                         searchQuery={searchQuery}
                         onSearchChange={setSearchQuery}
@@ -402,23 +458,65 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
                         onManzanaChange={setManzanaFilter}
                         etapaFilter={etapaFilter}
                         onEtapaChange={setEtapaFilter}
-                        filteredCount={filteredLots.length}
+                        filteredCount={filteredCount}
+                        searchMatchCount={searchMatchCount}
+                        priceMin={priceMin}
+                        priceMax={priceMax}
+                        onPriceMinChange={setPriceMin}
+                        onPriceMaxChange={setPriceMax}
+                        areaMin={areaMin}
+                        areaMax={areaMax}
+                        onAreaMinChange={setAreaMin}
+                        onAreaMaxChange={setAreaMax}
                         onClearFilters={() => {
                             setStatusFilter('all');
                             setManzanaFilter('all');
                             setEtapaFilter('all');
                             setSearchQuery('');
+                            setPriceMin(null);
+                            setPriceMax(null);
+                            setAreaMin(null);
+                            setAreaMax(null);
                         }}
-                        onExportSvg={() => exportToSvg(filteredLots)}
-                        onExportPdf={() => exportToPdf('map-export-area', 'Mapa-Renasur.pdf')}
                     />
+
+                    {/* Feedback visual de búsqueda */}
+                    {hasActiveFilters && (
+                        <div className="px-3 py-2 bg-gradient-to-r from-blue-50 to-violet-50 border-b border-blue-100 flex items-center justify-between text-xs">
+                            <span className="text-blue-700 font-medium">
+                                {searchQuery ? `🔍 "${searchQuery}"` : '🎯 Filtros activos'}
+                            </span>
+                            <span className="text-blue-600 font-bold">
+                                {filteredCount} resultado{filteredCount !== 1 ? 's' : ''}
+                            </span>
+                        </div>
+                    )}
 
                     {/* Lista Renderizada de Tarjetas de Lote */}
                     <div className="flex-1 overflow-y-auto">
                         {filteredLots.length === 0 ? (
                             <div className="p-8 text-center text-slate-400">
                                 <Filter size={32} className="mx-auto mb-2 opacity-50" />
-                                <p>Cargando polígonos...</p>
+                                <p className="text-sm font-medium">
+                                    {hasActiveFilters ? 'No se encontraron lotes con estos criterios' : 'Cargando lotes...'}
+                                </p>
+                                {hasActiveFilters && (
+                                    <button
+                                        onClick={() => {
+                                            setStatusFilter('all');
+                                            setManzanaFilter('all');
+                                            setEtapaFilter('all');
+                                            setSearchQuery('');
+                                            setPriceMin(null);
+                                            setPriceMax(null);
+                                            setAreaMin(null);
+                                            setAreaMax(null);
+                                        }}
+                                        className="mt-3 px-4 py-2 bg-[#A145F5] text-white text-xs font-bold rounded-lg hover:bg-[#8c3ad4] transition-colors"
+                                    >
+                                        Limpiar filtros
+                                    </button>
+                                )}
                             </div>
                         ) : (
                             filteredLots.map(lot => (
