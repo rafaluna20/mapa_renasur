@@ -146,11 +146,14 @@ export default function QuotePage({ params }: QuotePageProps) {
         }
     };
 
-    // Sincronizar entradas de descuento
+    // Sincronizar entradas de descuento - porcentaje con 6 decimales
     const handleDiscountPercentChange = (val: number) => {
-        setDiscountPercent(val);
+        // Redondear a 6 decimales para máxima precisión en el porcentaje
+        const roundedPercent = Math.round(val * 1000000) / 1000000;
+        setDiscountPercent(roundedPercent);
         if (lot) {
-            const amount = lot.list_price * (val / 100);
+            // Calcular monto con 4 decimales (suficiente para soles)
+            const amount = Math.round(lot.list_price * (roundedPercent / 100) * 10000) / 10000;
             setDiscountAmount(amount);
         }
     };
@@ -282,10 +285,13 @@ export default function QuotePage({ params }: QuotePageProps) {
     };
 
     const handleDiscountAmountChange = (val: number) => {
-        setDiscountAmount(val);
+        // Redondear a 4 decimales para montos (suficiente para soles)
+        const roundedAmount = Math.round(val * 10000) / 10000;
+        setDiscountAmount(roundedAmount);
         if (lot && lot.list_price > 0) {
-            const percent = (val / lot.list_price) * 100;
-            setDiscountPercent(parseFloat(percent.toFixed(2)));
+            // Calcular porcentaje con 6 decimales de precisión
+            const percent = (roundedAmount / lot.list_price) * 100;
+            setDiscountPercent(Math.round(percent * 1000000) / 1000000);
         }
     };
 
@@ -410,7 +416,7 @@ export default function QuotePage({ params }: QuotePageProps) {
                                         <span className="font-mono">{financeService.formatCurrency(lot.list_price)}</span>
                                     </div>
                                     <div className="flex justify-between text-sm text-emerald-400">
-                                        <span>Descuento ({discountPercent}%)</span>
+                                        <span>Descuento ({discountPercent.toFixed(2)}%)</span>
                                         <span className="font-mono">-{financeService.formatCurrency(calculations.discountAmount)}</span>
                                     </div>
                                     <div className="h-[1px] bg-white/10 my-2" />
@@ -572,6 +578,7 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">%</div>
                                                 <input
                                                     type="number"
+                                                    step="0.000001"
                                                     value={discountPercent}
                                                     onChange={(e) => handleDiscountPercentChange(parseFloat(e.target.value) || 0)}
                                                     className="w-full pl-3 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800 transition-all text-sm"
@@ -582,6 +589,7 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">S/</div>
                                                 <input
                                                     type="number"
+                                                    step="0.01"
                                                     value={discountAmount}
                                                     onChange={(e) => handleDiscountAmountChange(parseFloat(e.target.value) || 0)}
                                                     className="w-full pl-8 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800 transition-all text-sm"
@@ -615,7 +623,7 @@ export default function QuotePage({ params }: QuotePageProps) {
                                     {/* Cantidad de Cuotas Libres */}
                                     <div>
                                         <label className="block text-sm font-bold text-slate-700 mb-2">Plazo (Meses)</label>
-                                        <div className="relative mb-3">
+                                        <div className="relative">
                                             <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                                             <input
                                                 type="number"
@@ -624,20 +632,6 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                 onChange={(e) => setNumInstallments(parseInt(e.target.value) || 0)}
                                                 className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800 transition-all"
                                             />
-                                        </div>
-                                        <div className="grid grid-cols-4 gap-2">
-                                            {[12, 36, 60, 72].map(num => (
-                                                <button
-                                                    key={num}
-                                                    onClick={() => setNumInstallments(num)}
-                                                    className={`py-2 rounded-lg font-bold text-[10px] transition-all border ${numInstallments === num
-                                                        ? 'bg-indigo-600 border-indigo-600 text-white shadow-md'
-                                                        : 'bg-white border-slate-200 text-slate-600 hover:border-indigo-200'
-                                                        }`}
-                                                >
-                                                    {num} m
-                                                </button>
-                                            ))}
                                         </div>
                                     </div>
 
