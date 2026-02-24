@@ -146,21 +146,21 @@ export const exportQuoteToPdf = async (
         margin: { left: margin + 3, right: margin + 15 },
         theme: 'plain',
         body: [
-            ['Proyecto:', 'HABILITACIÓN TERRA-LIMA', 'Manzana:', lot.x_mz || '-'],
-            ['Lote:', lot.name, 'Etapa:', lot.x_etapa || '-'],
-            ['Área Total:', `${((lot.x_area || 0) >= 1000 ? (lot.x_area || 0) / 100 : (lot.x_area || 0)).toFixed(2)} m²`, 'Asesor:', vendorName],
-            ['Cliente:', clientName || 'No especificado', 'Estado:', lot.x_statu.toUpperCase()]
+            ['Proyecto:', 'HABILITACIÓN TERRA-LIMA', 'Asesor:', vendorName],
+            ['Lote:', lot.name, 'Estado:', lot.x_statu.toUpperCase()],
+            ['Área Total:', `${((lot.x_area || 0) >= 1000 ? (lot.x_area || 0) / 100 : (lot.x_area || 0)).toFixed(2)} m²`, 'Cliente:', clientName || 'No especificado']
         ],
         styles: {
             fontSize: 9,
             cellPadding: 1.5,
-            textColor: COLORS.gray.dark
+            textColor: COLORS.gray.dark,
+            overflow: 'linebreak' // Permite que texto largo se divida en múltiples líneas
         },
         columnStyles: {
-            0: { fontStyle: 'bold', textColor: COLORS.gray.medium, cellWidth: 28 },
-            1: { textColor: COLORS.gray.dark, cellWidth: 48 },
-            2: { fontStyle: 'bold', textColor: COLORS.gray.medium, cellWidth: 28 },
-            3: { textColor: COLORS.gray.dark }
+            0: { fontStyle: 'bold', textColor: COLORS.gray.medium, cellWidth: 25 },
+            1: { textColor: COLORS.gray.dark, cellWidth: 50, overflow: 'linebreak' },
+            2: { fontStyle: 'bold', textColor: COLORS.gray.medium, cellWidth: 22 },
+            3: { textColor: COLORS.gray.dark, cellWidth: 'auto', overflow: 'linebreak' } // Auto ajusta al espacio disponible
         }
     });
 

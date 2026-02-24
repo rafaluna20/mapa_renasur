@@ -30,6 +30,22 @@ export interface QuoteCalculations {
 
 export const financeService = {
     /**
+     * 🆕 Parsea un string de fecha en formato YYYY-MM-DD como fecha LOCAL (no UTC)
+     * Esto evita problemas de zona horaria donde "2025-12-23" se interpreta
+     * como UTC medianoche y se muestra como día anterior en zonas UTC-
+     *
+     * @param dateString Fecha en formato "YYYY-MM-DD"
+     * @returns Objeto Date en zona horaria local
+     */
+    parseLocalDate: (dateString: string): Date => {
+        const [year, month, day] = dateString.split('-').map(Number);
+        // Crear fecha en zona horaria local (month - 1 porque JS usa 0-11)
+        const date = new Date(year, month - 1, day);
+        date.setHours(0, 0, 0, 0);
+        return date;
+    },
+
+    /**
      * Redondea un número a 6 decimales para porcentajes de descuento.
      * Alta precisión para el valor crítico de entrada.
      */
@@ -61,9 +77,10 @@ export const financeService = {
      * - Febrero (bisiesto) → 29
      * - Abril → 30
      */
-    getLastDayOfMonth: (date: Date): Date => {
-        // Crear nueva fecha para no mutar la original
-        const result = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    getLastDayOfMonth: (year: number, month: number): Date => {
+        // Crear fecha del último día del mes especificado
+        // month + 1 porque new Date(year, month + 1, 0) da el último día del mes 'month'
+        const result = new Date(year, month + 1, 0);
         // Mantener la hora en 0:00:00
         result.setHours(0, 0, 0, 0);
         return result;
@@ -72,14 +89,29 @@ export const financeService = {
     /**
      * 🆕 Calcula la fecha de la siguiente cuota (último día del mes siguiente)
      *
+     * IMPORTANTE: Extrae año y mes de la fecha actual, suma meses, y calcula
+     * el último día del nuevo mes. Esto evita problemas con días 29-31 que no
+     * existen en todos los meses.
+     *
      * @param fromDate Fecha de referencia
-     * @param monthsToAdd Meses a agregar (default: 1)
-     * @returns Fecha del último día del mes correspondiente
+     * @returns Fecha del último día del mes siguiente
      */
-    getNextInstallmentDate: (fromDate: Date, monthsToAdd: number = 1): Date => {
-        const nextMonth = new Date(fromDate);
-        nextMonth.setMonth(nextMonth.getMonth() + monthsToAdd);
-        return financeService.getLastDayOfMonth(nextMonth);
+    getNextInstallmentDate: (fromDate: Date): Date => {
+        // Extraer año y mes actual
+        const currentYear = fromDate.getFullYear();
+        const currentMonth = fromDate.getMonth();
+        
+        // Calcular el siguiente mes y año (manejar diciembre → enero del siguiente año)
+        let nextMonth = currentMonth + 1;
+        let nextYear = currentYear;
+        
+        if (nextMonth > 11) {
+            nextMonth = 0;
+            nextYear++;
+        }
+        
+        // Retornar el último día del mes siguiente
+        return financeService.getLastDayOfMonth(nextYear, nextMonth);
     },
 
     /**
@@ -125,9 +157,11 @@ export const financeService = {
 
         // 🆕 Usar fecha manual o calcular primera cuota (último día del mes siguiente)
         const firstDate = firstInstallmentDate || financeService.getNextInstallmentDate(
-            initialPaymentDate || new Date(),
-            1
+            initialPaymentDate || new Date()
         );
+
+        // Variable para rastrear la fecha de la cuota anterior
+        let previousDate = firstDate;
 
         for (let i = 1; i <= numInstallments; i++) {
             // 🆕 Calcular fecha: último día del mes correspondiente
@@ -137,8 +171,10 @@ export const financeService = {
                 // Primera cuota: usar fecha manual o calculada
                 installmentDate = firstDate;
             } else {
-                // Cuotas siguientes: último día de cada mes subsecuente
-                installmentDate = financeService.getNextInstallmentDate(firstDate, i - 1);
+                // Cuotas siguientes: último día del mes siguiente a la cuota anterior
+                // Esto asegura que 31/01 → 28/02 → 31/03 → 30/04 (correcto)
+                // En lugar de 31/12 +2 meses → 03/03 → 31/03 (incorrecto)
+                installmentDate = financeService.getNextInstallmentDate(previousDate);
             }
 
             const balanceAfterPayment = financeService.roundTo4Decimals(currentBalance - monthlyInstallment);
@@ -151,6 +187,7 @@ export const financeService = {
             });
 
             currentBalance = balanceAfterPayment;
+            previousDate = installmentDate; // Actualizar fecha anterior
         }
 
         return {

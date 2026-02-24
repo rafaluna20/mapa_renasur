@@ -84,9 +84,11 @@ export default function QuotePage({ params }: QuotePageProps) {
     );
     const [firstInstallmentDate, setFirstInstallmentDate] = useState<string>(() => {
         // Calcular automáticamente 1 mes después (último día del mes)
-        const nextMonth = new Date();
-        nextMonth.setMonth(nextMonth.getMonth() + 1);
-        const lastDay = financeService.getLastDayOfMonth(nextMonth);
+        const today = new Date();
+        const lastDay = financeService.getLastDayOfMonth(
+            today.getFullYear(),
+            today.getMonth() + 1  // Siguiente mes
+        );
         return lastDay.toISOString().split('T')[0];
     });
     
@@ -107,6 +109,9 @@ export default function QuotePage({ params }: QuotePageProps) {
     const [isSavingQuote, setIsSavingQuote] = useState(false);
     const [isConfirmingQuote, setIsConfirmingQuote] = useState(false);
     const [quoteConfirmed, setQuoteConfirmed] = useState(false);
+    
+    // 🛡️ Estado para validación de fechas
+    const [dateValidationError, setDateValidationError] = useState<string | null>(null);
 
     // Debounced client search
     useEffect(() => {
@@ -309,17 +314,43 @@ export default function QuotePage({ params }: QuotePageProps) {
         }
     };
 
-    // 3. Cálculos en tiempo real - 🆕 ACTUALIZADO con nuevas fechas
+    // 3. Cálculos en tiempo real - 🆕 ACTUALIZADO con nuevas fechas y validación
     const calculations: QuoteCalculations | null = useMemo(() => {
         if (!lot) return null;
-        return financeService.calculateQuote(
-            lot.list_price,
-            discountPercent,
-            initialPayment,
-            numInstallments,
-            new Date(initialPaymentDate),    // 🆕 Fecha de cuota inicial
-            new Date(firstInstallmentDate)   // 🆕 Fecha de primera cuota
-        );
+        
+        // 🛡️ Parsear fechas como LOCALES (no UTC) para evitar problemas de zona horaria
+        const initialDate = financeService.parseLocalDate(initialPaymentDate);
+        const firstDate = financeService.parseLocalDate(firstInstallmentDate);
+        
+        // Si las fechas son inválidas, establecer error y retornar null
+        if (isNaN(initialDate.getTime()) || isNaN(firstDate.getTime())) {
+            setDateValidationError('⚠️ Las fechas ingresadas no son válidas. Por favor verifica el formato de las fechas.');
+            return null;
+        }
+        
+        // Si la primera cuota es antes de la inicial, error
+        if (firstDate < initialDate) {
+            setDateValidationError('⚠️ La fecha de la primera cuota no puede ser anterior a la fecha de cuota inicial.');
+            return null;
+        }
+        
+        // Limpiar error si todo está bien
+        setDateValidationError(null);
+        
+        try {
+            return financeService.calculateQuote(
+                lot.list_price,
+                discountPercent,
+                initialPayment,
+                numInstallments,
+                initialDate,    // 🆕 Fecha de cuota inicial (local, no UTC)
+                firstDate       // 🆕 Fecha de primera cuota (local, no UTC)
+            );
+        } catch (error) {
+            console.error('Error al calcular cotización:', error);
+            setDateValidationError('⚠️ Error al calcular la cotización. Por favor revisa los datos ingresados.');
+            return null;
+        }
     }, [lot, discountPercent, initialPayment, numInstallments, initialPaymentDate, firstInstallmentDate]);
 
     if (loading) {
@@ -688,6 +719,27 @@ export default function QuotePage({ params }: QuotePageProps) {
                                             📆 Puede ser 1 o 2 meses después. Las siguientes cuotas serán el último día de cada mes
                                         </p>
                                     </div>
+
+                                    {/* 🚨 Alerta de Validación de Fechas */}
+                                    {dateValidationError && (
+                                        <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-lg animate-in fade-in slide-in-from-top-2">
+                                            <div className="flex items-start gap-3">
+                                                <div className="flex-shrink-0">
+                                                    <svg className="h-5 w-5 text-amber-600" viewBox="0 0 20 20" fill="currentColor">
+                                                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                    </svg>
+                                                </div>
+                                                <div className="flex-1">
+                                                    <h3 className="text-sm font-bold text-amber-800">
+                                                        Error en las Fechas
+                                                    </h3>
+                                                    <p className="mt-1 text-sm text-amber-700">
+                                                        {dateValidationError}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
