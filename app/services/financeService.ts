@@ -2,6 +2,11 @@
  * Servicio de cálculos financieros para el sistema de cotización.
  * Maneja descuentos, fechas y prorrateo de cuotas.
  * IMPORTANTE: Todos los cálculos se realizan con 4 decimales de precisión.
+ *
+ * ACTUALIZADO: 2026-02-24
+ * - Cuota 0 (inicial) con fecha manual
+ * - Cuota 1 (primera) con fecha manual
+ * - Todas las cuotas mensuales caen en el último día del mes
  */
 
 export interface Installment {
@@ -16,8 +21,10 @@ export interface QuoteCalculations {
     discountAmount: number;
     discountedPrice: number;
     initialPayment: number;
+    initialPaymentDate?: Date; // 🆕 Fecha de la cuota inicial
     remainingBalance: number;
     monthlyInstallment: number;
+    firstInstallmentDate?: Date; // 🆕 Fecha de la primera cuota mensual
     installments: Installment[];
 }
 
@@ -47,21 +54,54 @@ export const financeService = {
     },
 
     /**
+     * 🆕 Obtiene el último día del mes para una fecha dada
+     * Ejemplos:
+     * - Enero → 31
+     * - Febrero (no bisiesto) → 28
+     * - Febrero (bisiesto) → 29
+     * - Abril → 30
+     */
+    getLastDayOfMonth: (date: Date): Date => {
+        // Crear nueva fecha para no mutar la original
+        const result = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+        // Mantener la hora en 0:00:00
+        result.setHours(0, 0, 0, 0);
+        return result;
+    },
+
+    /**
+     * 🆕 Calcula la fecha de la siguiente cuota (último día del mes siguiente)
+     *
+     * @param fromDate Fecha de referencia
+     * @param monthsToAdd Meses a agregar (default: 1)
+     * @returns Fecha del último día del mes correspondiente
+     */
+    getNextInstallmentDate: (fromDate: Date, monthsToAdd: number = 1): Date => {
+        const nextMonth = new Date(fromDate);
+        nextMonth.setMonth(nextMonth.getMonth() + monthsToAdd);
+        return financeService.getLastDayOfMonth(nextMonth);
+    },
+
+    /**
      * Calcula el desglose de una cotización.
      * NOTA: Porcentaje usa 6 decimales, montos usan 4 decimales.
+     *
+     * 🆕 ACTUALIZADO: Soporta fechas manuales y último día del mes
      *
      * @param price Precio base del lote.
      * @param discountPercent Porcentaje de descuento (0-100) con 6 decimales.
      * @param initialPayment Monto de la cuota inicial.
-     * @param numInstallments Cantidad de cuotas (por defecto 72).
-     * @param startDate Fecha programada para la primera cuota (inicial).
+     * @param numInstallments Cantidad de cuotas mensuales (por defecto 72).
+     * @param initialPaymentDate Fecha manual para la cuota inicial (cuota 0).
+     * @param firstInstallmentDate Fecha manual para la primera cuota mensual (cuota 1).
      */
     calculateQuote: (
         price: number,
         discountPercent: number,
         initialPayment: number,
         numInstallments: number = 72,
-        startDate: Date = new Date()
+        initialPaymentDate?: Date,
+        firstInstallmentDate?: Date
     ): QuoteCalculations => {
         // Porcentaje con 6 decimales (valor crítico de entrada)
         const percent = financeService.roundTo6Decimals(discountPercent);
@@ -83,10 +123,23 @@ export const financeService = {
         const installments: Installment[] = [];
         let currentBalance = remainingBalance;
 
+        // 🆕 Usar fecha manual o calcular primera cuota (último día del mes siguiente)
+        const firstDate = firstInstallmentDate || financeService.getNextInstallmentDate(
+            initialPaymentDate || new Date(),
+            1
+        );
+
         for (let i = 1; i <= numInstallments; i++) {
-            // Calcular fecha (un mes después de la anterior)
-            const installmentDate = new Date(startDate);
-            installmentDate.setMonth(startDate.getMonth() + i);
+            // 🆕 Calcular fecha: último día del mes correspondiente
+            let installmentDate: Date;
+            
+            if (i === 1) {
+                // Primera cuota: usar fecha manual o calculada
+                installmentDate = firstDate;
+            } else {
+                // Cuotas siguientes: último día de cada mes subsecuente
+                installmentDate = financeService.getNextInstallmentDate(firstDate, i - 1);
+            }
 
             const balanceAfterPayment = financeService.roundTo4Decimals(currentBalance - monthlyInstallment);
             
@@ -105,8 +158,10 @@ export const financeService = {
             discountAmount, // 4 decimales
             discountedPrice, // 4 decimales
             initialPayment,
+            initialPaymentDate, // 🆕 Fecha de cuota inicial
             remainingBalance, // 4 decimales
             monthlyInstallment, // 4 decimales
+            firstInstallmentDate: firstDate, // 🆕 Fecha de primera cuota
             installments
         };
     },

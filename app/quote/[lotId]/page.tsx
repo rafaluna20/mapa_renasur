@@ -77,6 +77,20 @@ export default function QuotePage({ params }: QuotePageProps) {
     const [discountAmount, setDiscountAmount] = useState<number>(0);
     const [initialPayment, setInitialPayment] = useState<number>(0);
     const [numInstallments, setNumInstallments] = useState<number>(72);
+    
+    // 🆕 Fechas separadas para cuota inicial y primera cuota
+    const [initialPaymentDate, setInitialPaymentDate] = useState<string>(
+        new Date().toISOString().split('T')[0]
+    );
+    const [firstInstallmentDate, setFirstInstallmentDate] = useState<string>(() => {
+        // Calcular automáticamente 1 mes después (último día del mes)
+        const nextMonth = new Date();
+        nextMonth.setMonth(nextMonth.getMonth() + 1);
+        const lastDay = financeService.getLastDayOfMonth(nextMonth);
+        return lastDay.toISOString().split('T')[0];
+    });
+    
+    // Mantener startDate para compatibilidad (usar initialPaymentDate)
     const [startDate, setStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
     // Cliente (Búsqueda de Odoo)
@@ -295,7 +309,7 @@ export default function QuotePage({ params }: QuotePageProps) {
         }
     };
 
-    // 3. Cálculos en tiempo real
+    // 3. Cálculos en tiempo real - 🆕 ACTUALIZADO con nuevas fechas
     const calculations: QuoteCalculations | null = useMemo(() => {
         if (!lot) return null;
         return financeService.calculateQuote(
@@ -303,9 +317,10 @@ export default function QuotePage({ params }: QuotePageProps) {
             discountPercent,
             initialPayment,
             numInstallments,
-            new Date(startDate)
+            new Date(initialPaymentDate),    // 🆕 Fecha de cuota inicial
+            new Date(firstInstallmentDate)   // 🆕 Fecha de primera cuota
         );
-    }, [lot, discountPercent, initialPayment, numInstallments, startDate]);
+    }, [lot, discountPercent, initialPayment, numInstallments, initialPaymentDate, firstInstallmentDate]);
 
     if (loading) {
         return (
@@ -635,18 +650,43 @@ export default function QuotePage({ params }: QuotePageProps) {
                                         </div>
                                     </div>
 
-                                    {/* Fecha Inicial */}
+                                    {/* Fecha Cuota Inicial (Cuota 0) */}
                                     <div>
-                                        <label className="block text-sm font-bold text-slate-700 mb-2">Fecha Cuota Inicial</label>
+                                        <label className="block text-sm font-bold text-slate-700 mb-2">
+                                            Fecha Cuota Inicial (Cuota 0)
+                                        </label>
                                         <div className="relative">
                                             <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                                             <input
                                                 type="date"
-                                                value={startDate}
-                                                onChange={(e) => setStartDate(e.target.value)}
+                                                value={initialPaymentDate}
+                                                onChange={(e) => setInitialPaymentDate(e.target.value)}
                                                 className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-slate-800"
                                             />
                                         </div>
+                                        <p className="text-xs text-slate-500 mt-1.5">
+                                            📅 Fecha en que el cliente pagará la cuota inicial
+                                        </p>
+                                    </div>
+
+                                    {/* 🆕 Fecha Primera Cuota (Cuota 1) */}
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 mb-2">
+                                            Fecha Primera Cuota (Cuota 1)
+                                        </label>
+                                        <div className="relative">
+                                            <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                            <input
+                                                type="date"
+                                                value={firstInstallmentDate}
+                                                min={initialPaymentDate}
+                                                onChange={(e) => setFirstInstallmentDate(e.target.value)}
+                                                className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-slate-800"
+                                            />
+                                        </div>
+                                        <p className="text-xs text-slate-500 mt-1.5">
+                                            📆 Puede ser 1 o 2 meses después. Las siguientes cuotas serán el último día de cada mes
+                                        </p>
                                     </div>
                                 </div>
                             </div>

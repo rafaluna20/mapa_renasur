@@ -134,12 +134,12 @@ export const exportQuoteToPdf = async (
     doc.setTextColor(...COLORS.primary.dark);
     doc.text('INFORMACIÓN DEL PROYECTO', margin, infoY);
 
-    // Caja con fondo suave
+    // Caja con fondo suave (🔧 altura aumentada de 28 a 32)
     const boxY = infoY + 3;
     doc.setFillColor(...COLORS.primary.veryLight);
     doc.setDrawColor(...COLORS.primary.main);
     doc.setLineWidth(0.5);
-    doc.rect(margin, boxY, pageWidth - (2 * margin) - 12, 28, 'FD');
+    doc.rect(margin, boxY, pageWidth - (2 * margin) - 12, 32, 'FD');
 
     autoTable(doc, {
         startY: boxY + 2,
@@ -148,7 +148,7 @@ export const exportQuoteToPdf = async (
         body: [
             ['Proyecto:', 'HABILITACIÓN TERRA-LIMA', 'Manzana:', lot.x_mz || '-'],
             ['Lote:', lot.name, 'Etapa:', lot.x_etapa || '-'],
-            ['Área Total:', `${lot.x_area} m²`, 'Asesor:', vendorName],
+            ['Área Total:', `${((lot.x_area || 0) >= 1000 ? (lot.x_area || 0) / 100 : (lot.x_area || 0)).toFixed(2)} m²`, 'Asesor:', vendorName],
             ['Cliente:', clientName || 'No especificado', 'Estado:', lot.x_statu.toUpperCase()]
         ],
         styles: {
