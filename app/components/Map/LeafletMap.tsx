@@ -370,12 +370,12 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
                                 className="!bg-transparent !border-0 !shadow-none p-0"
                                 opacity={1}
                             >
-                                <div className="flex flex-col items-center justify-center bg-white/95 backdrop-blur-md rounded-md shadow-md border border-white/50 p-1 min-w-[42px] cursor-pointer animate-appear">
-                                    <span className="text-slate-800 font-bold text-[8px] tracking-tight uppercase text-center leading-none">
+                                <div className="flex flex-col items-center justify-center bg-white/95 backdrop-blur-md rounded-md shadow-md border border-white/50 p-1.5 min-w-[50px] cursor-pointer animate-appear">
+                                    <span className="text-slate-800 font-bold text-[10px] tracking-tight uppercase text-center leading-none">
                                         {lot.x_mz}{lot.x_lote}
                                     </span>
                                     <div className="h-[0.5px] w-full bg-slate-100 my-1"></div>
-                                    <span className="text-blue-600 text-[6.5px] font-bold bg-blue-50 px-1 rounded-full tracking-wide shadow-sm">
+                                    <span className="text-blue-600 text-[8px] font-bold bg-blue-50 px-1.5 rounded-full tracking-wide shadow-sm">
                                         {Number(lot.x_area).toFixed(2)} m²
                                     </span>
                                 </div>

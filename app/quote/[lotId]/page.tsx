@@ -180,7 +180,7 @@ export default function QuotePage({ params }: QuotePageProps) {
 
 
     // Save Quote Locally & Export PDF
-    const handleSaveQuote = async () => {
+    const handleSaveQuote = async (includeSchedule: boolean = true) => {
         if (!lot || !calculations) return;
 
         setIsSavingQuote(true);
@@ -221,7 +221,9 @@ export default function QuotePage({ params }: QuotePageProps) {
                 lot,
                 calculations,
                 user?.name || 'No especificado',
-                selectedClient?.name
+                selectedClient?.name,
+                false,
+                includeSchedule
             );
 
             // Notify Success (could use a toast)
@@ -410,9 +412,25 @@ export default function QuotePage({ params }: QuotePageProps) {
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
+                            {/* Guardar Cotización Parcial */}
+                            <button
+                                onClick={() => handleSaveQuote(false)}
+                                disabled={isSavingQuote || quoteConfirmed}
+                                className={`
+                                    px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all active:scale-95 text-sm
+                                    ${quoteConfirmed
+                                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                        : 'bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 shadow-sm'
+                                    }
+                                `}
+                            >
+                                {isSavingQuote ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                                PARCIAL
+                            </button>
+
                             {/* Guardar / Exportar */}
                             <button
-                                onClick={handleSaveQuote}
+                                onClick={() => handleSaveQuote(true)}
                                 disabled={isSavingQuote || quoteConfirmed}
                                 className={`
                                     px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all active:scale-95 text-sm

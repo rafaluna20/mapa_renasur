@@ -49,7 +49,8 @@ export const exportQuoteToPdf = async (
     calcs: QuoteCalculations,
     vendorName: string = 'No especificado',
     clientName?: string,
-    returnBlob: boolean = false
+    returnBlob: boolean = false,
+    includeSchedule: boolean = true
 ): Promise<Blob | void> => {
     const doc = new jsPDF({
         orientation: 'p',
@@ -242,70 +243,72 @@ export const exportQuoteToPdf = async (
     doc.text(`Plazo: ${calcs.installments.length} meses (${(calcs.installments.length / 12).toFixed(1)} años)`, pageWidth - margin - 75, cuotaY + 11);
 
     // --- 5. CRONOGRAMA DE PAGOS ---
-    // Calcular posición correcta después de la caja de cuota mensual
-    const tableY = cuotaY + cuotaHeight + 12;
+    if (includeSchedule) {
+        // Calcular posición correcta después de la caja de cuota mensual
+        const tableY = cuotaY + cuotaHeight + 12;
 
-    // Título de cronograma
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...COLORS.primary.dark);
-    doc.text(`CRONOGRAMA DE PAGOS - ${calcs.installments.length} CUOTAS`, margin, tableY);
+        // Título de cronograma
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...COLORS.primary.dark);
+        doc.text(`CRONOGRAMA DE PAGOS - ${calcs.installments.length} CUOTAS`, margin, tableY);
 
-    // Preparar datos: fila inicial + cuotas
-    const tableBody: any[] = [
-        // Fila de pago inicial
-        [
-            { content: '0', styles: { fontStyle: 'bold' as const } },
-            { content: 'PAGO INICIAL', styles: { fontStyle: 'bold' as const, fillColor: COLORS.primary.veryLight } },
-            { content: financeService.formatCurrency(calcs.initialPayment), styles: { textColor: COLORS.primary.main, fontStyle: 'bold' as const } },
-            { content: financeService.formatCurrency(calcs.remainingBalance), styles: { textColor: COLORS.gray.medium } }
-        ],
-        // Cuotas mensuales
-        ...calcs.installments.map(inst => [
-            inst.number.toString(),
-            financeService.formatDate(inst.date),
-            financeService.formatCurrency(inst.amount),
-            financeService.formatCurrency(inst.balance)
-        ])
-    ];
+        // Preparar datos: fila inicial + cuotas
+        const tableBody: any[] = [
+            // Fila de pago inicial
+            [
+                { content: '0', styles: { fontStyle: 'bold' as const } },
+                { content: 'PAGO INICIAL', styles: { fontStyle: 'bold' as const, fillColor: COLORS.primary.veryLight } },
+                { content: financeService.formatCurrency(calcs.initialPayment), styles: { textColor: COLORS.primary.main, fontStyle: 'bold' as const } },
+                { content: financeService.formatCurrency(calcs.remainingBalance), styles: { textColor: COLORS.gray.medium } }
+            ],
+            // Cuotas mensuales
+            ...calcs.installments.map(inst => [
+                inst.number.toString(),
+                financeService.formatDate(inst.date),
+                financeService.formatCurrency(inst.amount),
+                financeService.formatCurrency(inst.balance)
+            ])
+        ];
 
-    autoTable(doc, {
-        startY: tableY + 3,
-        margin: { left: margin, right: margin + 15, bottom: 25 },
-        head: [[
-            { content: 'N°', styles: { fillColor: COLORS.primary.main, textColor: COLORS.white } },
-            { content: 'Fecha de Vencimiento', styles: { fillColor: COLORS.primary.main, textColor: COLORS.white } },
-            { content: 'Monto Cuota', styles: { fillColor: COLORS.primary.main, textColor: COLORS.white } },
-            { content: 'Saldo Pendiente', styles: { fillColor: COLORS.primary.main, textColor: COLORS.white } }
-        ]],
-        body: tableBody,
-        headStyles: {
-            fillColor: COLORS.primary.main,
-            textColor: COLORS.white,
-            fontStyle: 'bold',
-            halign: 'center',
-            fontSize: 9
-        },
-        columnStyles: {
-            0: { halign: 'center', cellWidth: 15, textColor: COLORS.gray.medium },
-            1: { halign: 'left', cellWidth: 45 },
-            2: { halign: 'right', fontStyle: 'bold', textColor: COLORS.primary.dark },
-            3: { halign: 'right', textColor: COLORS.gray.medium }
-        },
-        styles: {
-            fontSize: 8,
-            cellPadding: 2.5,
-            textColor: COLORS.gray.dark
-        },
-        alternateRowStyles: { fillColor: COLORS.gray.veryLight },
-        didParseCell: (data: any) => {
-            // Destacar última fila (saldo final = 0)
-            if (data.row.index === tableBody.length - 1 && data.column.index === 3) {
-                data.cell.styles.textColor = COLORS.primary.main;
-                data.cell.styles.fontStyle = 'bold';
+        autoTable(doc, {
+            startY: tableY + 3,
+            margin: { left: margin, right: margin + 15, bottom: 25 },
+            head: [[
+                { content: 'N°', styles: { fillColor: COLORS.primary.main, textColor: COLORS.white } },
+                { content: 'Fecha de Vencimiento', styles: { fillColor: COLORS.primary.main, textColor: COLORS.white } },
+                { content: 'Monto Cuota', styles: { fillColor: COLORS.primary.main, textColor: COLORS.white } },
+                { content: 'Saldo Pendiente', styles: { fillColor: COLORS.primary.main, textColor: COLORS.white } }
+            ]],
+            body: tableBody,
+            headStyles: {
+                fillColor: COLORS.primary.main,
+                textColor: COLORS.white,
+                fontStyle: 'bold',
+                halign: 'center',
+                fontSize: 9
+            },
+            columnStyles: {
+                0: { halign: 'center', cellWidth: 15, textColor: COLORS.gray.medium },
+                1: { halign: 'left', cellWidth: 45 },
+                2: { halign: 'right', fontStyle: 'bold', textColor: COLORS.primary.dark },
+                3: { halign: 'right', textColor: COLORS.gray.medium }
+            },
+            styles: {
+                fontSize: 8,
+                cellPadding: 2.5,
+                textColor: COLORS.gray.dark
+            },
+            alternateRowStyles: { fillColor: COLORS.gray.veryLight },
+            didParseCell: (data: any) => {
+                // Destacar última fila (saldo final = 0)
+                if (data.row.index === tableBody.length - 1 && data.column.index === 3) {
+                    data.cell.styles.textColor = COLORS.primary.main;
+                    data.cell.styles.fontStyle = 'bold';
+                }
             }
-        }
-    });
+        });
+    }
 
     // --- PIE DE PÁGINA ---
     const totalPages = (doc as any).internal.getNumberOfPages();
