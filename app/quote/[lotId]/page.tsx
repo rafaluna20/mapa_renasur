@@ -328,20 +328,31 @@ export default function QuotePage({ params }: QuotePageProps) {
         const initialDate = financeService.parseLocalDate(initialPaymentDate);
         const firstDate = financeService.parseLocalDate(firstInstallmentDate);
         
-        // Si las fechas son inválidas, establecer error y retornar null
-        if (isNaN(initialDate.getTime()) || isNaN(firstDate.getTime())) {
-            setDateValidationError('⚠️ Las fechas ingresadas no son válidas. Por favor verifica el formato de las fechas.');
-            return null;
+        // Cuando el usuario tipea una fecha en el input type="date", el valor
+        // puede ser temporalmente "" hasta que complete todo.
+        // Proveemos fechas válidas por defecto para no romper el cálculo ni la UI.
+        let validInitialDate = initialDate;
+        let validFirstDate = firstDate;
+
+        if (isNaN(initialDate.getTime())) {
+            validInitialDate = new Date(); // Fallback a hoy si está vacío/inválido
         }
         
-        // Si la primera cuota es antes de la inicial, error
-        if (firstDate < initialDate) {
+        if (isNaN(firstDate.getTime())) {
+            // Fallback a fin del mes siguiente si está vacío/inválido
+            validFirstDate = financeService.getLastDayOfMonth(
+                validInitialDate.getFullYear(),
+                validInitialDate.getMonth() + 1
+            );
+        }
+        
+        // Validación de orden de fechas
+        if (validFirstDate < validInitialDate) {
             setDateValidationError('⚠️ La fecha de la primera cuota no puede ser anterior a la fecha de cuota inicial.');
-            return null;
+            validFirstDate = validInitialDate; // Fallback para no romper
+        } else {
+            setDateValidationError(null);
         }
-        
-        // Limpiar error si todo está bien
-        setDateValidationError(null);
         
         try {
             return financeService.calculateQuote(
@@ -349,16 +360,16 @@ export default function QuotePage({ params }: QuotePageProps) {
                 discountPercent,
                 initialPayment,
                 numInstallments,
-                initialDate,    // 🆕 Fecha de cuota inicial (local, no UTC)
-                firstDate,      // 🆕 Fecha de primera cuota (local, no UTC)
-                scheduleType    // 🆕 Tipo de cronograma
+                validInitialDate,    // Usar fechas validadas
+                validFirstDate,      // Usar fechas validadas
+                scheduleType
             );
         } catch (error) {
             console.error('Error al calcular cotización:', error);
             setDateValidationError('⚠️ Error al calcular la cotización. Por favor revisa los datos ingresados.');
             return null;
         }
-    }, [lot, discountPercent, initialPayment, numInstallments, initialPaymentDate, firstInstallmentDate]);
+    }, [lot, discountPercent, initialPayment, numInstallments, initialPaymentDate, firstInstallmentDate, scheduleType]);
 
     if (loading) {
         return (
@@ -369,7 +380,7 @@ export default function QuotePage({ params }: QuotePageProps) {
         );
     }
 
-    if (!lot || !calculations) {
+    if (!lot) {
         return (
             <div className="flex flex-col h-screen items-center justify-center bg-slate-50 font-sans">
                 <div className="bg-white p-8 rounded-3xl shadow-xl shadow-slate-200 border border-slate-100 flex flex-col items-center max-w-sm text-center">
@@ -474,38 +485,40 @@ export default function QuotePage({ params }: QuotePageProps) {
                         <div className="lg:col-span-1 lg:sticky lg:top-8 space-y-6">
 
                             {/* Resumen de Valores (Moved here as the main item of the left column) */}
-                            <div className="bg-slate-900 p-6 rounded-2xl shadow-xl text-white space-y-4">
-                                <div className="flex justify-between items-center opacity-60 text-xs font-bold uppercase tracking-widest">
-                                    <span>Resumen Financiero (S/)</span>
-                                    <Tag size={14} />
-                                </div>
-                                <div className="space-y-3 pt-2">
-                                    <div className="flex justify-between text-sm">
-                                        <span className="opacity-70">Precio Lista</span>
-                                        <span className="font-mono">{financeService.formatCurrency(lot.list_price)}</span>
+                            {calculations && (
+                                <div className="bg-slate-900 p-6 rounded-2xl shadow-xl text-white space-y-4">
+                                    <div className="flex justify-between items-center opacity-60 text-xs font-bold uppercase tracking-widest">
+                                        <span>Resumen Financiero (S/)</span>
+                                        <Tag size={14} />
                                     </div>
-                                    <div className="flex justify-between text-sm text-emerald-400">
-                                        <span>Descuento ({discountPercent.toFixed(2)}%)</span>
-                                        <span className="font-mono">-{financeService.formatCurrency(calculations.discountAmount)}</span>
-                                    </div>
-                                    <div className="h-[1px] bg-white/10 my-2" />
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-base font-bold">Precio Final</span>
-                                        <span className="text-xl font-bold font-mono">{financeService.formatCurrency(calculations.discountedPrice)}</span>
-                                    </div>
-                                    <div className="flex justify-between text-sm pt-4">
-                                        <span className="opacity-70">Saldo a Financiar</span>
-                                        <span className="font-mono">{financeService.formatCurrency(calculations.remainingBalance)}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center bg-white/10 p-3 rounded-xl border border-white/5">
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] font-bold uppercase opacity-60">Cuota Mensual</span>
-                                            <span className="text-lg font-bold font-mono text-indigo-400">{financeService.formatCurrency(calculations.monthlyInstallment)}</span>
+                                    <div className="space-y-3 pt-2">
+                                        <div className="flex justify-between text-sm">
+                                            <span className="opacity-70">Precio Lista</span>
+                                            <span className="font-mono">{financeService.formatCurrency(lot.list_price)}</span>
                                         </div>
-                                        <span className="text-xs font-bold opacity-60">{numInstallments} meses</span>
+                                        <div className="flex justify-between text-sm text-emerald-400">
+                                            <span>Descuento ({discountPercent.toFixed(2)}%)</span>
+                                            <span className="font-mono">-{financeService.formatCurrency(calculations.discountAmount)}</span>
+                                        </div>
+                                        <div className="h-[1px] bg-white/10 my-2" />
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-base font-bold">Precio Final</span>
+                                            <span className="text-xl font-bold font-mono">{financeService.formatCurrency(calculations.discountedPrice)}</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm pt-4">
+                                            <span className="opacity-70">Saldo a Financiar</span>
+                                            <span className="font-mono">{financeService.formatCurrency(calculations.remainingBalance)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center bg-white/10 p-3 rounded-xl border border-white/5">
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] font-bold uppercase opacity-60">Cuota Mensual</span>
+                                                <span className="text-lg font-bold font-mono text-indigo-400">{financeService.formatCurrency(calculations.monthlyInstallment)}</span>
+                                            </div>
+                                            <span className="text-xs font-bold opacity-60">{numInstallments} meses</span>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
 
                         {/* RIGHT COLUMN: AJUSTES + CRONOGRAMA */}
@@ -823,24 +836,26 @@ export default function QuotePage({ params }: QuotePageProps) {
                                         </thead>
                                         <tbody className="divide-y divide-slate-50">
                                             {/* Fila de Cuota Inicial */}
-                                            <tr className="bg-emerald-50/30 group">
-                                                <td className="px-6 py-4 text-xs font-bold text-slate-400">0</td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex flex-col">
-                                                        <span className="text-sm font-bold text-emerald-700">Cuota Inicial</span>
-                                                        <span className="text-[10px] text-emerald-600 opacity-70 font-medium">Pago Inmediato</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <span className="text-sm font-mono font-bold text-emerald-700">{financeService.formatCurrency(calculations.initialPayment)}</span>
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <span className="text-sm font-mono font-medium text-slate-400">{financeService.formatCurrency(calculations.remainingBalance)}</span>
-                                                </td>
-                                            </tr>
+                                            {calculations && (
+                                                <tr className="bg-emerald-50/30 group">
+                                                    <td className="px-6 py-4 text-xs font-bold text-slate-400">0</td>
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-sm font-bold text-emerald-700">Cuota Inicial</span>
+                                                            <span className="text-[10px] text-emerald-600 opacity-70 font-medium">Pago Inmediato</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        <span className="text-sm font-mono font-bold text-emerald-700">{financeService.formatCurrency(calculations.initialPayment)}</span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        <span className="text-sm font-mono font-medium text-slate-400">{financeService.formatCurrency(calculations.remainingBalance)}</span>
+                                                    </td>
+                                                </tr>
+                                            )}
 
                                             {/* Cuotas Mensuales */}
-                                            {calculations.installments.map((inst) => (
+                                            {calculations?.installments.map((inst) => (
                                                 <tr key={inst.number} className="hover:bg-slate-50 transition-colors group">
                                                     <td className="px-6 py-4 text-xs font-bold text-slate-400">{inst.number}</td>
                                                     <td className="px-6 py-4">
