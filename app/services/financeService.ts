@@ -25,6 +25,7 @@ export interface QuoteCalculations {
     remainingBalance: number;
     monthlyInstallment: number;
     firstInstallmentDate?: Date; // 🆕 Fecha de la primera cuota mensual
+    scheduleType?: 'end_of_month' | 'fixed_day';
     installments: Installment[];
 }
 
@@ -115,6 +116,33 @@ export const financeService = {
     },
 
     /**
+     * 🆕 Calcula la fecha de la siguiente cuota manteniendo el mismo día del mes.
+     * Si el siguiente mes no tiene ese día (ej. 31 en Febrero), se ajusta al último día del mes.
+     */
+    getNextFixedDayInstallment: (previousDate: Date, targetDay: number): Date => {
+        const year = previousDate.getFullYear();
+        const month = previousDate.getMonth();
+        
+        let nextMonth = month + 1;
+        let nextYear = year;
+        
+        if (nextMonth > 11) {
+            nextMonth = 0;
+            nextYear++;
+        }
+        
+        // Obtener cuántos días tiene el siguiente mes
+        const lastDayOfNextMonth = new Date(nextYear, nextMonth + 1, 0).getDate();
+        
+        // Usar el targetDay o el último día del mes si targetDay es mayor
+        const actualDay = Math.min(targetDay, lastDayOfNextMonth);
+        
+        const date = new Date(nextYear, nextMonth, actualDay);
+        date.setHours(0, 0, 0, 0);
+        return date;
+    },
+
+    /**
      * Calcula el desglose de una cotización.
      * NOTA: Porcentaje usa 6 decimales, montos usan 4 decimales.
      *
@@ -126,6 +154,7 @@ export const financeService = {
      * @param numInstallments Cantidad de cuotas mensuales (por defecto 72).
      * @param initialPaymentDate Fecha manual para la cuota inicial (cuota 0).
      * @param firstInstallmentDate Fecha manual para la primera cuota mensual (cuota 1).
+     * @param scheduleType Tipo de cronograma: 'end_of_month' o 'fixed_day'.
      */
     calculateQuote: (
         price: number,
@@ -133,7 +162,8 @@ export const financeService = {
         initialPayment: number,
         numInstallments: number = 72,
         initialPaymentDate?: Date,
-        firstInstallmentDate?: Date
+        firstInstallmentDate?: Date,
+        scheduleType: 'end_of_month' | 'fixed_day' = 'end_of_month'
     ): QuoteCalculations => {
         // Porcentaje con 6 decimales (valor crítico de entrada)
         const percent = financeService.roundTo6Decimals(discountPercent);
@@ -162,19 +192,22 @@ export const financeService = {
 
         // Variable para rastrear la fecha de la cuota anterior
         let previousDate = firstDate;
+        // Guardar el día objetivo si es fixed_day
+        const targetDay = firstDate.getDate();
 
         for (let i = 1; i <= numInstallments; i++) {
-            // 🆕 Calcular fecha: último día del mes correspondiente
+            // 🆕 Calcular fecha
             let installmentDate: Date;
             
             if (i === 1) {
                 // Primera cuota: usar fecha manual o calculada
                 installmentDate = firstDate;
             } else {
-                // Cuotas siguientes: último día del mes siguiente a la cuota anterior
-                // Esto asegura que 31/01 → 28/02 → 31/03 → 30/04 (correcto)
-                // En lugar de 31/12 +2 meses → 03/03 → 31/03 (incorrecto)
-                installmentDate = financeService.getNextInstallmentDate(previousDate);
+                if (scheduleType === 'fixed_day') {
+                    installmentDate = financeService.getNextFixedDayInstallment(previousDate, targetDay);
+                } else {
+                    installmentDate = financeService.getNextInstallmentDate(previousDate);
+                }
             }
 
             const balanceAfterPayment = financeService.roundTo4Decimals(currentBalance - monthlyInstallment);
@@ -199,6 +232,7 @@ export const financeService = {
             remainingBalance, // 4 decimales
             monthlyInstallment, // 4 decimales
             firstInstallmentDate: firstDate, // 🆕 Fecha de primera cuota
+            scheduleType,
             installments
         };
     },

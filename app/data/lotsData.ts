@@ -63,8 +63,7 @@ const lotsDataRaw: Lot[] = [
             [308786.6627, 8622901.50]
         ],
         image: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
-    },
-
+    }
 
 
 

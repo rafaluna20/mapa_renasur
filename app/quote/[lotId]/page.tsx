@@ -92,6 +92,9 @@ export default function QuotePage({ params }: QuotePageProps) {
         return lastDay.toISOString().split('T')[0];
     });
     
+    // 🆕 Tipo de Cronograma
+    const [scheduleType, setScheduleType] = useState<'end_of_month' | 'fixed_day'>('end_of_month');
+
     // Mantener startDate para compatibilidad (usar initialPaymentDate)
     const [startDate, setStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
@@ -204,7 +207,8 @@ export default function QuotePage({ params }: QuotePageProps) {
                     numInstallments,
                     monthlyInstallment: calculations.monthlyInstallment,
                     remainingBalance: calculations.remainingBalance,
-                    startDate
+                    startDate,
+                    scheduleType
                 },
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
@@ -346,7 +350,8 @@ export default function QuotePage({ params }: QuotePageProps) {
                 initialPayment,
                 numInstallments,
                 initialDate,    // 🆕 Fecha de cuota inicial (local, no UTC)
-                firstDate       // 🆕 Fecha de primera cuota (local, no UTC)
+                firstDate,      // 🆕 Fecha de primera cuota (local, no UTC)
+                scheduleType    // 🆕 Tipo de cronograma
             );
         } catch (error) {
             console.error('Error al calcular cotización:', error);
@@ -735,6 +740,40 @@ export default function QuotePage({ params }: QuotePageProps) {
                                         </div>
                                         <p className="text-xs text-slate-500 mt-1.5">
                                             📆 Puede ser 1 o 2 meses después. Las siguientes cuotas serán el último día de cada mes
+                                        </p>
+                                    </div>
+
+                                    {/* 🆕 Tipo de Cronograma */}
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 mb-2">
+                                            Modo de Cronograma
+                                        </label>
+                                        <div className="flex gap-4">
+                                            <label className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-xl border cursor-pointer transition-all ${scheduleType === 'end_of_month' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-bold' : 'border-slate-200 hover:bg-slate-50 text-slate-600'}`}>
+                                                <input
+                                                    type="radio"
+                                                    name="scheduleType"
+                                                    value="end_of_month"
+                                                    checked={scheduleType === 'end_of_month'}
+                                                    onChange={() => setScheduleType('end_of_month')}
+                                                    className="hidden"
+                                                />
+                                                Fines de Mes
+                                            </label>
+                                            <label className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-xl border cursor-pointer transition-all ${scheduleType === 'fixed_day' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-bold' : 'border-slate-200 hover:bg-slate-50 text-slate-600'}`}>
+                                                <input
+                                                    type="radio"
+                                                    name="scheduleType"
+                                                    value="fixed_day"
+                                                    checked={scheduleType === 'fixed_day'}
+                                                    onChange={() => setScheduleType('fixed_day')}
+                                                    className="hidden"
+                                                />
+                                                Día Fijo ({firstInstallmentDate ? financeService.parseLocalDate(firstInstallmentDate).getDate() : ''})
+                                            </label>
+                                        </div>
+                                        <p className="text-xs text-slate-500 mt-1.5">
+                                            {scheduleType === 'end_of_month' ? 'Las cuotas se programarán para el último día de cada mes.' : 'Las cuotas mantendrán el mismo día de la primera cuota.'}
                                         </p>
                                     </div>
 

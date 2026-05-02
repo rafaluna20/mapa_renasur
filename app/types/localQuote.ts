@@ -13,6 +13,7 @@ export interface LocalQuoteTerms {
     monthlyInstallment: number;
     remainingBalance: number;
     startDate: string;
+    scheduleType?: 'end_of_month' | 'fixed_day';
 }
 
 export interface LocalQuoteClient {
