@@ -566,13 +566,16 @@ export const odooService = {
         }
     },
 
-    // Get invoices for a specific client (partner_id)
-    async getClientInvoices(partnerId: number): Promise<any[]> {
+    // Get invoices for a specific client (partner_id) and optionally filter by product (lot)
+    async getClientInvoices(partnerId: number, productCode?: string): Promise<any[]> {
         try {
             const response = await fetch('/api/odoo/get_client_invoices', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ partnerId })
+                body: JSON.stringify({
+                    partnerId,
+                    productCode // 🆕 Pasar código del producto para filtrar
+                })
             });
             const result = await response.json();
             if (!result.success) return [];

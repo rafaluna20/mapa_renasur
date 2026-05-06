@@ -1,6 +1,6 @@
 import { Lot } from '@/app/data/lotsData';
 import { X, User, Ruler, FileText, Lock, Users, Clock, Receipt, CheckCircle, AlertCircle, Calendar } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ReservationModal from './ReservationModal';
 import { odooService, OdooUser } from '@/app/services/odooService';
 
@@ -38,35 +38,136 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
     const [invoices, setInvoices] = useState<any[]>([]);
     const [loadingInvoices, setLoadingInvoices] = useState(false);
 
-    // Fetch reservation owner if status is Separado/Reservado/Vendido
-    useEffect(() => {
-        if (lot && (lot.x_statu === 'separado' || lot.x_statu === 'reservado' || lot.x_statu === 'vendido') && lot.default_code) {
-            odooService.getReservationOwner(lot.default_code).then(res => {
-                if (res) {
-                    setReservationOwner({
-                        id: res.ownerId,
-                        name: res.ownerName,
-                        partnerId: res.partnerId,
-                        totalInstallments: res.totalInstallments
-                    });
-                }
-            });
-        } else {
-            setReservationOwner(null);
-            setInvoices([]);
-        }
-    }, [lot]);
+    // 🎯 ENTERPRISE SOLUTION: Use refs to track current lot and prevent stale updates
+    const currentLotIdRef = useRef<string | null>(null);
+    const requestIdRef = useRef<number>(0);
 
-    // Fetch Invoices if partnerId is available
+    // 🔧 SOLUCIÓN ROBUSTA NIVEL ENTERPRISE
     useEffect(() => {
-        if (reservationOwner?.partnerId) {
-            setLoadingInvoices(true);
-            odooService.getClientInvoices(reservationOwner.partnerId).then(inv => {
-                setInvoices(inv);
-                setLoadingInvoices(false);
-            });
+        // Generar ID único para este request
+        const thisRequestId = ++requestIdRef.current;
+        const lotId = lot?.id || null;
+        
+        // Logging detallado para debugging
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log(`🔵 [REQUEST #${thisRequestId}] INICIO - Lote: ${lot?.name || 'N/A'} (ID: ${lotId})`);
+        console.log(`📊 Estado antes de reset:`, {
+            invoicesCount: invoices.length,
+            hasReservationOwner: !!reservationOwner,
+            previousLotId: currentLotIdRef.current
+        });
+
+        // Actualizar ref con el ID del lote actual
+        currentLotIdRef.current = lotId;
+
+        // RESET COMPLETO E INMEDIATO - Esto garantiza que la UI se limpie
+        setInvoices([]);
+        setReservationOwner(null);
+        setActiveTab('info');
+        setLoadingInvoices(false);
+
+        console.log(`🧹 [REQUEST #${thisRequestId}] Estado reseteado`);
+
+        // Guard clause: Verificar que tenemos un lote válido
+        if (!lot || !lot.default_code) {
+            console.log(`⚠️ [REQUEST #${thisRequestId}] No hay lote o default_code - ABORTANDO`);
+            return;
         }
-    }, [reservationOwner]);
+
+        // Guard clause: Solo proceder si el lote está en estado que requiere mostrar pagos
+        if (lot.x_statu !== 'separado' && lot.x_statu !== 'reservado' && lot.x_statu !== 'vendido') {
+            console.log(`ℹ️ [REQUEST #${thisRequestId}] Lote en estado '${lot.x_statu}' - No requiere cargar pagos`);
+            return;
+        }
+
+        // Función asíncrona para fetch secuencial con validación de vigencia
+        const fetchData = async () => {
+            try {
+                console.log(`📡 [REQUEST #${thisRequestId}] Iniciando fetch de reservation owner...`);
+                
+                // 1. Obtener el owner del lote
+                const ownerData = await odooService.getReservationOwner(lot.default_code!);
+                
+                // 🚨 VALIDACIÓN CRÍTICA: Verificar que seguimos en el mismo lote
+                if (currentLotIdRef.current !== lotId) {
+                    console.log(`❌ [REQUEST #${thisRequestId}] STALE DATA DETECTED - Lote cambió de ${lotId} a ${currentLotIdRef.current} - DESCARTANDO`);
+                    return;
+                }
+                
+                // Verificar que el request actual sigue siendo el más reciente
+                if (thisRequestId !== requestIdRef.current) {
+                    console.log(`❌ [REQUEST #${thisRequestId}] REQUEST OBSOLETO - Request actual es #${requestIdRef.current} - DESCARTANDO`);
+                    return;
+                }
+                
+                if (!ownerData) {
+                    console.log(`⚠️ [REQUEST #${thisRequestId}] No se encontró owner para lote: ${lot.default_code}`);
+                    return;
+                }
+
+                console.log(`✅ [REQUEST #${thisRequestId}] Owner encontrado:`, ownerData.ownerName, `(Partner ID: ${ownerData.partnerId})`);
+
+                // Actualizar reservation owner solo si seguimos en el mismo lote
+                setReservationOwner({
+                    id: ownerData.ownerId,
+                    name: ownerData.ownerName,
+                    partnerId: ownerData.partnerId,
+                    totalInstallments: ownerData.totalInstallments
+                });
+
+                // 2. Si hay partnerId, obtener facturas FILTRADAS POR ESTE LOTE
+                if (ownerData.partnerId) {
+                    console.log(`📡 [REQUEST #${thisRequestId}] Iniciando fetch de facturas para Partner ID: ${ownerData.partnerId} - Lote: ${lot.default_code}...`);
+                    setLoadingInvoices(true);
+                    
+                    // 🔑 CLAVE: Pasar el productCode para filtrar solo facturas de este lote
+                    const invoicesData = await odooService.getClientInvoices(
+                        ownerData.partnerId,
+                        lot.default_code // Filtrar por código del lote
+                    );
+                    
+                    // 🚨 VALIDACIÓN CRÍTICA NUEVAMENTE
+                    if (currentLotIdRef.current !== lotId) {
+                        console.log(`❌ [REQUEST #${thisRequestId}] STALE INVOICES - Lote cambió - DESCARTANDO ${invoicesData?.length || 0} facturas`);
+                        setLoadingInvoices(false);
+                        return;
+                    }
+                    
+                    if (thisRequestId !== requestIdRef.current) {
+                        console.log(`❌ [REQUEST #${thisRequestId}] INVOICES OBSOLETAS - Request actual es #${requestIdRef.current} - DESCARTANDO`);
+                        setLoadingInvoices(false);
+                        return;
+                    }
+                    
+                    const validInvoices = Array.isArray(invoicesData) ? invoicesData : [];
+                    console.log(`✅ [REQUEST #${thisRequestId}] Facturas recibidas: ${validInvoices.length} para lote ${lot.name}`);
+                    console.log(`📋 [REQUEST #${thisRequestId}] IDs de facturas:`, validInvoices.map((inv: any) => inv.id || inv.name).join(', '));
+                    
+                    setInvoices(validInvoices);
+                    setLoadingInvoices(false);
+                    
+                    console.log(`🎉 [REQUEST #${thisRequestId}] COMPLETADO EXITOSAMENTE`);
+                }
+            } catch (error) {
+                // Verificar vigencia incluso en error
+                if (currentLotIdRef.current !== lotId || thisRequestId !== requestIdRef.current) {
+                    console.log(`❌ [REQUEST #${thisRequestId}] Error en request obsoleto - IGNORANDO`);
+                    return;
+                }
+                
+                console.error(`💥 [REQUEST #${thisRequestId}] ERROR:`, error);
+                setInvoices([]);
+                setLoadingInvoices(false);
+            }
+        };
+
+        fetchData();
+
+        // Cleanup function
+        return () => {
+            console.log(`🧹 [REQUEST #${thisRequestId}] CLEANUP ejecutado`);
+        };
+    }, [lot?.id]); // ⚠️ CRÍTICO: Solo dependencia en lot.id para evitar re-renders innecesarios
 
     if (!lot) return null;
     const config = STATUS_CONFIG[lot.x_statu?.toLowerCase()] || STATUS_CONFIG.libre;
