@@ -251,7 +251,7 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
                 fallbackLots.push({
                     id: `fb-${normCode}`,
                     name: `Lote ${normCode} (Geometría)`,
-                    x_statu: 'libre',
+                    x_statu: 'no vender',
                     list_price: 0,
                     x_area: geometry.measurements?.area || 0,
                     x_mz: metadataMatch ? metadataMatch[2] : '',
