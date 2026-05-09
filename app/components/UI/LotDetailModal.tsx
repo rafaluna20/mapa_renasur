@@ -207,6 +207,10 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                     <div>
                         <h2 className={`text-lg md:text-2xl font-bold ${config.text} capitalize truncate w-full`}>{lot.name}</h2>
                         <span className={`text-[10px] md:text-sm font-medium ${config.text} opacity-80 uppercase tracking-wide`}>{config.label}</span>
+                        {/* DEBUG INFO */}
+                        <div className="text-[9px] text-slate-400 mt-1 font-mono">
+                            ID: {lot.id} | Code: {lot.default_code}
+                        </div>
                     </div>
                 </div>
 

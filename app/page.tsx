@@ -17,7 +17,8 @@ export default async function Home() {
       [[["active", "=", true]]],
       {
         fields: ["id", "name", "default_code", "list_price", "qty_available", "x_statu", "x_area", "x_mz", "x_etapa", "x_lote", "x_cliente"],
-        limit: 1000
+        limit: 1000,
+        context: { lang: "es_PE" }
       }
     );
     console.log(`Successfully fetched ${products.length} products from Odoo.`);
