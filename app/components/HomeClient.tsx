@@ -191,11 +191,14 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
                 return {
                     ...lot,
                     id: odooMatch.id.toString(),
+                    name: odooMatch.name || lot.name, // ← Nombre siempre desde Odoo
                     x_statu: mappedStatus || lot.x_statu,
                     list_price: parseVal(odooMatch.list_price, lot.list_price),
                     x_area: parseVal(odooMatch.x_area, lot.x_area, true),
                     x_mz: getOdooVal(odooMatch.x_mz, lot.x_mz),
                     x_etapa: getOdooVal(odooMatch.x_etapa, lot.x_etapa),
+                    x_lote: getOdooVal(odooMatch.x_lote, lot.x_lote),
+                    default_code: getOdooVal(odooMatch.default_code, lot.default_code),
                     x_cliente: getOdooVal(odooMatch.x_cliente, ''),
                     points: registryGeometry?.coordinates || lot.points,
                     measurements: registryGeometry?.measurements
