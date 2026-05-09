@@ -136,13 +136,21 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
             return v.toString();
         };
 
-        const parseVal = (v: any, fallback: number, isArea: boolean = false): number => {
-            if (v === undefined || v === null || v === false) return fallback;
-            let s = v.toString().trim().replace(/\./g, '').replace(',', '.');
+        const parseVal = (v: any, fallback: number): number => {
+            if (v === undefined || v === null || v === false || v === '') return fallback;
+            if (typeof v === 'number') return v;
+            
+            let s = v.toString().trim();
+            if (s.includes(',') && (!s.includes('.') || s.indexOf(',') > s.lastIndexOf('.'))) {
+                // Formatos como "1.000,50" o "1000,50"
+                s = s.replace(/\./g, '').replace(',', '.');
+            } else {
+                // Formatos como "1,000.50"
+                s = s.replace(/,/g, '');
+            }
+            
             let n = parseFloat(s);
-            if (isNaN(n)) return fallback;
-            if (isArea && n >= 1000) n = n / 100;
-            return n;
+            return isNaN(n) ? fallback : n;
         };
 
         const mapOdooStatus = (s: string | undefined): string | null => {
@@ -194,7 +202,7 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
                     name: odooMatch.name || lot.name, // ← Nombre siempre desde Odoo
                     x_statu: mappedStatus || lot.x_statu,
                     list_price: parseVal(odooMatch.list_price, lot.list_price),
-                    x_area: parseVal(odooMatch.x_area, lot.x_area, true),
+                    x_area: parseVal(odooMatch.x_area, lot.x_area),
                     x_mz: getOdooVal(odooMatch.x_mz, lot.x_mz),
                     x_etapa: getOdooVal(odooMatch.x_etapa, lot.x_etapa),
                     x_lote: getOdooVal(odooMatch.x_lote, lot.x_lote),
@@ -229,7 +237,7 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
                         name: odooMatch.name || `Lote ${code}`,
                         x_statu: mapOdooStatus(odooMatch.x_statu) || 'libre',
                         list_price: parseVal(odooMatch.list_price, 0),
-                        x_area: parseVal(odooMatch.x_area, 0, true),
+                        x_area: parseVal(odooMatch.x_area, 0),
                         x_mz: getOdooVal(odooMatch.x_mz, ''),
                         x_etapa: getOdooVal(odooMatch.x_etapa, ''),
                         x_cliente: getOdooVal(odooMatch.x_cliente, ''),
