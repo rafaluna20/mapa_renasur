@@ -6,7 +6,7 @@ import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility
 import 'leaflet-defaulticon-compatibility';
 import proj4 from 'proj4';
 import { Lot } from '@/app/data/lotsData';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import L from 'leaflet';
 import { calculateMidpoint } from '@/app/utils/geometryUtils';
 
@@ -25,6 +25,7 @@ interface LeafletMapProps {
 
 function MapController({ lots, selectedLotId, onZoomChange }: { lots: Lot[], selectedLotId: string | null, onZoomChange: (z: number) => void }) {
     const map = useMap();
+    const initialZoomDone = useRef(false);
 
     useEffect(() => {
         onZoomChange(map.getZoom());
@@ -71,7 +72,7 @@ function MapController({ lots, selectedLotId, onZoomChange }: { lots: Lot[], sel
                     console.error("Zoom to lot error", e);
                 }
             }
-        } else if (lots.length > 0) {
+        } else if (lots.length > 0 && !initialZoomDone.current) {
             try {
                 const bounds = L.latLngBounds([]);
                 lots.forEach(lot => {
@@ -88,6 +89,7 @@ function MapController({ lots, selectedLotId, onZoomChange }: { lots: Lot[], sel
                         duration: 1.2,
                         easeLinearity: 0.1
                     });
+                    initialZoomDone.current = true;
                 }
             } catch (e) {
                 console.error("FitBounds error", e);

@@ -10,6 +10,7 @@ import LotCard from '@/app/components/UI/LotCard';
 import { lotsData, Lot } from '@/app/data/lotsData';
 import geometriesEnrichedRaw from '@/app/data/geometries-enriched.json';
 import { useSmartSearch } from '@/app/hooks/useSmartSearch';
+import { mergeLotsData } from '@/app/utils/dataMerger';
 
 // Type for enriched geometries with measurements
 interface EnrichedGeometry {
@@ -23,7 +24,7 @@ interface EnrichedGeometry {
 }
 
 const geometriesJson = geometriesEnrichedRaw as unknown as Record<string, EnrichedGeometry>;
-import { Menu, Filter, Loader2 } from 'lucide-react';
+import { Menu, Filter, Loader2, WifiOff } from 'lucide-react';
 import { useAuth } from '@/app/context/AuthContext';
 import { useRouter } from 'next/navigation';
 
@@ -42,6 +43,7 @@ import { exportToPdf } from '@/app/utils/pdfExporter'; // Utilidad para exportar
 // Props que recibe este componente desde el Servidor (page.tsx)
 interface HomeClientProps {
     odooProducts: OdooProduct[]; // Array de productos obtenidos de Odoo
+    hasConnectionError?: boolean; // Flag if Odoo fetch failed
 }
 
 // ----------------------------------------------------------------------
@@ -52,7 +54,7 @@ interface HomeClientProps {
  * Recibe datos de Odoo, los fusiona con geometría local, y coordina
  * la comunicación entre el Mapa, la Barra Lateral y los Filtros.
  */
-export default function HomeClient({ odooProducts }: HomeClientProps) {
+export default function HomeClient({ odooProducts, hasConnectionError = false }: HomeClientProps) {
 
     // Hooks de Contexto y Enrutamiento
     const { user, loading } = useAuth(); // Obtiene el usuario autenticado
@@ -112,174 +114,11 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
     // ------------------------------------------------------------------
 
     /**
-     * Helper paramanejar valores de Odoo que pueden venir como 'false' cuando están vacíos.
-     */
-    function getOdooVal<T>(val: T | false | undefined | null, fallback: T): T {
-        if (val === false || val === undefined || val === null) return fallback;
-        if (typeof val === 'string' && val.trim() === '') return fallback;
-        return val;
-    }
-
-    /**
      * useMemo: Estrategia de Fusión MEJORADA
-     * Combina la data geométrica estática (lotsData.ts) con la data dinámica de precios/estado (Odoo).
-     * AHORA usa 'default_code' para la coincidencia (más preciso que el nombre).
-     * IMPORTANTE: Solo muestra lotes que coinciden con Odoo. Los que NO coinciden se eliminan.
-     * Se recalcula solo cuando 'odooProducts' cambia.
+     * Extraída a la utilidad dataMerger para evitar bloqueos del main thread y mejorar la mantenibilidad.
      */
     const mergedLots = useMemo(() => {
-        // Helpers de procesamiento -----------------------------------------------
-        const normalizeCode = (c: string) => (c || '').toString().replace(/\s+/g, '').toUpperCase().trim();
-
-        const getOdooVal = (v: any, fallback: string): string => {
-            if (v === undefined || v === null || v === false) return fallback;
-            return v.toString();
-        };
-
-        const parseVal = (v: any, fallback: number): number => {
-            if (v === undefined || v === null || v === false || v === '') return fallback;
-            if (typeof v === 'number') return v;
-            
-            let s = v.toString().trim();
-            if (s.includes(',') && (!s.includes('.') || s.indexOf(',') > s.lastIndexOf('.'))) {
-                // Formatos como "1.000,50" o "1000,50"
-                s = s.replace(/\./g, '').replace(',', '.');
-            } else {
-                // Formatos como "1,000.50"
-                s = s.replace(/,/g, '');
-            }
-            
-            let n = parseFloat(s);
-            return isNaN(n) ? fallback : n;
-        };
-
-        const mapOdooStatus = (s: string | undefined): string | null => {
-            if (!s) return null;
-            const status = s.toLowerCase();
-            if (status.includes('disponible')) return 'libre';
-            if (status.includes('cotizacion') || status.includes('cotización')) return 'cotizacion';
-            if (status.includes('reservado')) return 'separado';
-            if (status.includes('vendido')) return 'vendido';
-            return status;
-        };
-
-        // 1. Mapa de productos Odoo
-        const odooMap = new Map<string, OdooProduct>();
-        odooProducts.forEach(p => {
-            if (p.default_code) {
-                const code = normalizeCode(p.default_code);
-                odooMap.set(code, p);
-            }
-        });
-
-        console.log("[SYNC_DEBUG] Odoo Map entries:", odooMap.size);
-        const integratedCodes = new Set<string>();
-        const integratedIds = new Set<string>();
-
-        // 2. Procesar lotes locales (Base fija lotsData.ts)
-        const matched = lotsData.map(lot => {
-            const rawCode = lot.default_code;
-            const normCode = normalizeCode(rawCode);
-            integratedCodes.add(normCode);
-
-            // Intentar match con y sin sufijo 'P'
-            let odooMatch = odooMap.get(normCode);
-            if (!odooMatch) {
-                odooMatch = normCode.endsWith('P') ? odooMap.get(normCode.slice(0, -1)) : odooMap.get(normCode + 'P');
-            }
-
-            const registryGeometry = geometriesJson[normCode] || geometriesJson[rawCode];
-
-            if (odooMatch) {
-                // Registrar tanto el código buscado como el código real de Odoo e ID para evitar duplicados
-                if (odooMatch.default_code) integratedCodes.add(normalizeCode(odooMatch.default_code));
-                integratedIds.add(odooMatch.id.toString());
-
-                const mappedStatus = mapOdooStatus(odooMatch.x_statu);
-                return {
-                    ...lot,
-                    id: odooMatch.id.toString(),
-                    name: odooMatch.name || lot.name, // ← Nombre siempre desde Odoo
-                    x_statu: mappedStatus || lot.x_statu,
-                    list_price: parseVal(odooMatch.list_price, lot.list_price),
-                    x_area: parseVal(odooMatch.x_area, lot.x_area),
-                    x_mz: getOdooVal(odooMatch.x_mz, lot.x_mz),
-                    x_etapa: getOdooVal(odooMatch.x_etapa, lot.x_etapa),
-                    x_lote: getOdooVal(odooMatch.x_lote, lot.x_lote),
-                    default_code: getOdooVal(odooMatch.default_code, lot.default_code),
-                    x_cliente: getOdooVal(odooMatch.x_cliente, ''),
-                    points: registryGeometry?.coordinates || lot.points,
-                    measurements: registryGeometry?.measurements
-                };
-            }
-
-            return {
-                ...lot,
-                id: `local-${lot.id}`,
-                points: registryGeometry?.coordinates || lot.points,
-                measurements: registryGeometry?.measurements
-            };
-        });
-
-        // 3. INTEGRACIÓN DINÁMICA: Productos Odoo no incluidos en lotsData
-        const dynamicLots: Lot[] = [];
-        odooProducts.forEach(odooMatch => {
-            const code = normalizeCode(odooMatch.default_code || '');
-            const odooId = odooMatch.id.toString();
-
-            if (code && !integratedCodes.has(code) && !integratedIds.has(odooId)) {
-                const registryGeometry = geometriesJson[code];
-                if (registryGeometry?.coordinates && registryGeometry.coordinates.length > 0) {
-                    integratedCodes.add(code);
-                    integratedIds.add(odooId);
-                    dynamicLots.push({
-                        id: odooMatch.id.toString(),
-                        name: odooMatch.name || `Lote ${code}`,
-                        x_statu: mapOdooStatus(odooMatch.x_statu) || 'libre',
-                        list_price: parseVal(odooMatch.list_price, 0),
-                        x_area: parseVal(odooMatch.x_area, 0),
-                        x_mz: getOdooVal(odooMatch.x_mz, ''),
-                        x_etapa: getOdooVal(odooMatch.x_etapa, ''),
-                        x_cliente: getOdooVal(odooMatch.x_cliente, ''),
-                        x_lote: getOdooVal(odooMatch.x_lote, ''),
-                        default_code: code,
-                        points: registryGeometry.coordinates,
-                        measurements: registryGeometry.measurements,
-                        image: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
-                        description: 'Lote detectado dinámicamente desde Odoo.'
-                    });
-                }
-            }
-        });
-
-        // 4. FALLBACK: Geometrías en JSON no cubiertas
-        const fallbackLots: Lot[] = [];
-        Object.keys(geometriesJson).forEach(code => {
-            const normCode = normalizeCode(code);
-            if (!integratedCodes.has(normCode)) {
-                const metadataMatch = normCode.match(/E(\d+)MZ([A-Z]+)(\w+)/);
-                const geometry = geometriesJson[code];
-                fallbackLots.push({
-                    id: `fb-${normCode}`,
-                    name: `Lote ${normCode} (Geometría)`,
-                    x_statu: 'no vender',
-                    list_price: 0,
-                    x_area: geometry.measurements?.area || 0,
-                    x_mz: metadataMatch ? metadataMatch[2] : '',
-                    x_etapa: metadataMatch ? metadataMatch[1] : '',
-                    x_lote: metadataMatch ? metadataMatch[3] : '',
-                    default_code: normCode,
-                    points: geometry.coordinates,
-                    measurements: geometry.measurements,
-                    image: '',
-                    description: 'Lote detectado únicamente por geometría.'
-                });
-            }
-        });
-
-        const finalResult = [...matched, ...dynamicLots, ...fallbackLots];
-        console.log(`[MAP_SYNC] Local: ${matched.length}, Odoo: ${dynamicLots.length}, Fallback: ${fallbackLots.length}`);
-        return finalResult;
+        return mergeLotsData(odooProducts, lotsData, geometriesJson);
     }, [odooProducts]);
 
     // Estado que almacena la lista final de lotes a mostrar
@@ -376,6 +215,10 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
             return;
         }
 
+        // 0. Capturar estado anterior para rollback
+        const lotToUpdate = lots.find(l => l.id === id);
+        const previousStatus = lotToUpdate ? lotToUpdate.x_statu : undefined;
+
         // 1. Optimistic Update (Actualizar UI inmediatamente)
         setLots(prev => prev.map(lot =>
             lot.id === id ? { ...lot, x_statu: newStatus } : lot
@@ -395,14 +238,14 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
             console.error("Error al actualizar estado:", error);
             // Mostrar el mensaje de error real si viene de la API
             const msg = error.message || "Error desconocido";
-            alert(`Error al guardar cambios en Odoo: ${msg}\n\nPor favor revisa la consola para más detalles.`);
+            alert(`Error al guardar cambios en Odoo: ${msg}\n\nSe revertirá el cambio localmente.`);
 
-            // Revertir cambio en UI (Optimistic rollback)
-            setLots(prev => prev.map(lot =>
-                lot.id === id ? { ...lot, x_statu: lot.x_statu } : lot // Esto requeriría guardar el estado anterior, 
-                // pero como simplificación forzamos un refresh si falla
-            ));
-            router.refresh();
+            // Revertir cambio en UI (Optimistic rollback real, sin recargar página)
+            if (previousStatus) {
+                setLots(prev => prev.map(lot =>
+                    lot.id === id ? { ...lot, x_statu: previousStatus } : lot
+                ));
+            }
         }
     };
 
@@ -426,6 +269,33 @@ export default function HomeClient({ odooProducts }: HomeClientProps) {
         return (
             <div className="flex h-screen items-center justify-center bg-slate-50">
                 <Loader2 className="animate-spin text-blue-600" size={32} />
+            </div>
+        );
+    }
+
+    // Pantalla de bloqueo: Fallo de conexión con Odoo
+    if (hasConnectionError) {
+        return (
+            <div className="flex flex-col h-screen bg-slate-50 font-sans">
+                <Header onSync={handleSync} />
+                <div className="flex-1 flex items-center justify-center p-4">
+                    <div className="bg-white p-8 md:p-12 rounded-2xl shadow-xl max-w-lg w-full text-center border border-red-100">
+                        <div className="mx-auto w-20 h-20 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-6">
+                            <WifiOff size={40} />
+                        </div>
+                        <h2 className="text-2xl md:text-3xl font-bold text-slate-800 mb-4">Error de Conexión</h2>
+                        <p className="text-slate-600 mb-8 leading-relaxed">
+                            No pudimos establecer comunicación con el servidor central de inventario (Odoo). 
+                            Por seguridad e integridad de los datos, el portal ha sido bloqueado temporalmente.
+                        </p>
+                        <button 
+                            onClick={() => window.location.reload()} 
+                            className="bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-8 rounded-xl transition-colors shadow-md shadow-red-200"
+                        >
+                            Intentar Reconectar
+                        </button>
+                    </div>
+                </div>
             </div>
         );
     }

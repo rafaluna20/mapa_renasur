@@ -9,6 +9,7 @@ export default async function Home() {
   // Fetch real-time data from Odoo
   // We explicitly ask for products that are active
   let products: OdooProduct[] = [];
+  let hasConnectionError = false;
 
   try {
     products = await fetchOdoo(
@@ -29,13 +30,12 @@ export default async function Home() {
 
   } catch (error) {
     console.error("Failed to fetch initial Odoo data:", error);
-    // We don't crash the whole app, just pass empty array. 
-    // The client component will fallback to local data.
+    hasConnectionError = true;
   }
 
   return (
     <main>
-      <HomeClient odooProducts={products} />
+      <HomeClient odooProducts={products} hasConnectionError={hasConnectionError} />
     </main>
   );
 }

@@ -1,0 +1,171 @@
+import { OdooProduct } from '@/app/services/odooService';
+import { Lot } from '@/app/data/lotsData';
+
+export interface EnrichedGeometry {
+    coordinates: [number, number][];
+    measurements: {
+        sides: number[];
+        area: number;
+        perimeter: number;
+        centroid: [number, number];
+    };
+}
+
+// Helpers exportados por si se necesitan en otro lado
+export const normalizeCode = (c: string) => (c || '').toString().replace(/\s+/g, '').toUpperCase().trim();
+
+export const getOdooVal = (v: any, fallback: string): string => {
+    if (v === undefined || v === null || v === false) return fallback;
+    return v.toString();
+};
+
+export const parseVal = (v: any, fallback: number): number => {
+    if (v === undefined || v === null || v === false || v === '') return fallback;
+    if (typeof v === 'number') return v;
+    
+    let s = v.toString().trim();
+    if (s.includes(',') && (!s.includes('.') || s.indexOf(',') > s.lastIndexOf('.'))) {
+        s = s.replace(/\./g, '').replace(',', '.');
+    } else {
+        s = s.replace(/,/g, '');
+    }
+    
+    let n = parseFloat(s);
+    return isNaN(n) ? fallback : n;
+};
+
+export const mapOdooStatus = (s: string | undefined): 'libre' | 'separado' | 'vendido' | 'cotizacion' | string | null => {
+    if (!s) return null;
+    const status = s.toLowerCase();
+    if (status.includes('disponible') || status === 'available' || status === 'libre') return 'libre';
+    if (status.includes('cotizacion') || status.includes('cotización')) return 'cotizacion';
+    if (status.includes('reservado') || status === 'reserved' || status === 'separado') return 'separado';
+    if (status.includes('vendido') || status === 'sold') return 'vendido';
+    return status;
+};
+
+/**
+ * Fusiona la data dinámica de Odoo con la data estática y geométrica local.
+ */
+export function mergeLotsData(
+    odooProducts: OdooProduct[],
+    localLotsData: Lot[],
+    geometriesJson: Record<string, EnrichedGeometry>
+): Lot[] {
+    // 1. Mapa de productos Odoo
+    const odooMap = new Map<string, OdooProduct>();
+    odooProducts.forEach(p => {
+        if (p.default_code) {
+            const code = normalizeCode(p.default_code);
+            odooMap.set(code, p);
+        }
+    });
+
+    console.log("[SYNC_DEBUG] Odoo Map entries:", odooMap.size);
+    const integratedCodes = new Set<string>();
+    const integratedIds = new Set<string>();
+
+    // 2. Procesar lotes locales (Base fija lotsData.ts)
+    const matched = localLotsData.map(lot => {
+        const rawCode = lot.default_code;
+        const normCode = normalizeCode(rawCode);
+        integratedCodes.add(normCode);
+
+        // Intentar match con y sin sufijo 'P'
+        let odooMatch = odooMap.get(normCode);
+        if (!odooMatch) {
+            odooMatch = normCode.endsWith('P') ? odooMap.get(normCode.slice(0, -1)) : odooMap.get(normCode + 'P');
+        }
+
+        const registryGeometry = geometriesJson[normCode] || geometriesJson[rawCode];
+
+        if (odooMatch) {
+            if (odooMatch.default_code) integratedCodes.add(normalizeCode(odooMatch.default_code));
+            integratedIds.add(odooMatch.id.toString());
+
+            const mappedStatus = mapOdooStatus(odooMatch.x_statu);
+            return {
+                ...lot,
+                id: odooMatch.id.toString(),
+                name: odooMatch.name || lot.name,
+                x_statu: mappedStatus || lot.x_statu,
+                list_price: parseVal(odooMatch.list_price, lot.list_price),
+                x_area: parseVal(odooMatch.x_area, lot.x_area),
+                x_mz: getOdooVal(odooMatch.x_mz, lot.x_mz),
+                x_etapa: getOdooVal(odooMatch.x_etapa, lot.x_etapa),
+                x_lote: getOdooVal(odooMatch.x_lote, lot.x_lote),
+                default_code: getOdooVal(odooMatch.default_code, lot.default_code),
+                x_cliente: getOdooVal(odooMatch.x_cliente, ''),
+                points: registryGeometry?.coordinates || lot.points,
+                measurements: registryGeometry?.measurements
+            } as Lot;
+        }
+
+        return {
+            ...lot,
+            id: `local-${lot.id}`,
+            points: registryGeometry?.coordinates || lot.points,
+            measurements: registryGeometry?.measurements
+        } as Lot;
+    });
+
+    // 3. INTEGRACIÓN DINÁMICA: Productos Odoo no incluidos en lotsData
+    const dynamicLots: Lot[] = [];
+    odooProducts.forEach(odooMatch => {
+        const code = normalizeCode(odooMatch.default_code || '');
+        const odooId = odooMatch.id.toString();
+
+        if (code && !integratedCodes.has(code) && !integratedIds.has(odooId)) {
+            const registryGeometry = geometriesJson[code];
+            if (registryGeometry?.coordinates && registryGeometry.coordinates.length > 0) {
+                integratedCodes.add(code);
+                integratedIds.add(odooId);
+                dynamicLots.push({
+                    id: odooId,
+                    name: odooMatch.name || `Lote ${code}`,
+                    x_statu: (mapOdooStatus(odooMatch.x_statu) as any) || 'libre',
+                    list_price: parseVal(odooMatch.list_price, 0),
+                    x_area: parseVal(odooMatch.x_area, 0),
+                    x_mz: getOdooVal(odooMatch.x_mz, ''),
+                    x_etapa: getOdooVal(odooMatch.x_etapa, ''),
+                    x_cliente: getOdooVal(odooMatch.x_cliente, ''),
+                    x_lote: getOdooVal(odooMatch.x_lote, ''),
+                    default_code: code,
+                    points: registryGeometry.coordinates,
+                    measurements: registryGeometry.measurements,
+                    image: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
+                    description: 'Lote detectado dinámicamente desde Odoo.'
+                });
+            }
+        }
+    });
+
+    // 4. FALLBACK: Geometrías en JSON no cubiertas
+    const fallbackLots: Lot[] = [];
+    Object.keys(geometriesJson).forEach(code => {
+        const normCode = normalizeCode(code);
+        if (!integratedCodes.has(normCode)) {
+            const metadataMatch = normCode.match(/E(\d+)MZ([A-Z]+)(\w+)/);
+            const geometry = geometriesJson[code];
+            fallbackLots.push({
+                id: `fb-${normCode}`,
+                name: `Lote ${normCode} (Geometría)`,
+                x_statu: 'no vender',
+                list_price: 0,
+                x_area: geometry.measurements?.area || 0,
+                x_mz: metadataMatch ? metadataMatch[2] : '',
+                x_etapa: metadataMatch ? metadataMatch[1] : '',
+                x_lote: metadataMatch ? metadataMatch[3] : '',
+                default_code: normCode,
+                points: geometry.coordinates,
+                measurements: geometry.measurements,
+                image: '',
+                description: 'Lote detectado únicamente por geometría.'
+            });
+        }
+    });
+
+    const finalResult = [...matched, ...dynamicLots, ...fallbackLots];
+    console.log(`[MAP_SYNC] Local: ${matched.length}, Odoo: ${dynamicLots.length}, Fallback: ${fallbackLots.length}`);
+    return finalResult;
+}
