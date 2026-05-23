@@ -271,31 +271,12 @@ button:active:not(:disabled) {
 
 /* Contenedor base de la etiqueta del lote */
 .lot-label-container {
-  opacity: 0;
-  transform: scale(0.75);
+  opacity: 1;
+  transform: scale(1);
   transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1), transform 0.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
   will-change: opacity, transform;
   backface-visibility: hidden;
-}
-
-/* --- Mostrar etiquetas basado en clases de zoom de Leaflet --- */
-
-/* Lotes grandes y medianos: visibles desde zoom 20 */
-.leaflet-zoom-20 .label-area-medium,
-.leaflet-zoom-20 .label-area-large,
-.leaflet-zoom-21 .label-area-medium,
-.leaflet-zoom-21 .label-area-large,
-.leaflet-zoom-22 .label-area-medium,
-.leaflet-zoom-22 .label-area-large {
-  opacity: 1;
-  transform: scale(1);
-}
-
-/* Lotes pequeños: visibles a partir de zoom 21 */
-.leaflet-zoom-21 .label-area-small,
-.leaflet-zoom-22 .label-area-small {
-  opacity: 1;
-  transform: scale(1);
+  animation: fadeIn 0.3s ease-out;
 }
 
 /* --- La etiqueta del lote SELECCIONADO siempre destaca --- */

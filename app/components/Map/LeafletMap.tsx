@@ -241,8 +241,8 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
 
     const [mapBounds, setMapBounds] = useState<L.LatLngBounds | null>(null);
 
-    // Umbral adaptativo para renderizar etiquetas: 17.3 en móvil (se ven en zoom inicial 17.5), 17.0 en escritorio
-    const labelZoomThreshold = isMobile ? 17.3 : 17.0;
+    // Umbral alto para que las etiquetas solo aparezcan cuando el zoom esté bien cerca
+    const labelZoomThreshold = 21;
     const showLabels = zoom >= labelZoomThreshold;
 
     // OPTIMIZACIÓN CRÍTICA: Memoizar todas las posiciones Lat/Lng
@@ -380,7 +380,10 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
                             weight: isSelected ? 3 : 1,
                             className: isSelected ? 'lot-selected leaflet-interactive' : 'leaflet-interactive'
                         }}
-                        eventHandlers={{
+                        // Optimización: en móvil desactivamos los listeners de hover completamente
+                        eventHandlers={isMobile ? {
+                            click: () => onLotSelect(lot)
+                        } : {
                             click: () => onLotSelect(lot),
                             mouseover: (e) => {
                                 if (isMobile) return; // Omitir cálculos de hover en móviles
@@ -410,17 +413,16 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
                                 key={`tooltip-${lot.id}`}
                                 permanent={true}
                                 direction="center"
-                                className="!bg-transparent !border-0 !shadow-none p-0"
+                                className="!bg-transparent !border-0 !shadow-none p-0 tooltip-opt"
                                 opacity={1}
                             >
-                                {/* Optimizada: Reemplazada la clase cara de backdrop-blur por bg-white sólida en móviles para máxima suavidad */}
-                                <div className={`flex flex-col items-center justify-center bg-white rounded-md shadow-sm border border-slate-200/80 p-1.5 min-w-[50px] cursor-pointer lot-label-container ${areaClass} ${isSelected ? 'label-selected border-blue-500 shadow-blue-500/10' : ''}`}>
-                                    <span className="text-slate-800 font-bold text-[10px] tracking-tight uppercase text-center leading-none">
+                                <div className={`flex flex-col items-center justify-center bg-white rounded shadow-sm border border-slate-200 p-1 min-w-[40px] cursor-pointer lot-label-container ${areaClass} ${isSelected ? 'label-selected border-blue-500 shadow-blue-500/20' : ''}`}>
+                                    <span className="text-slate-800 font-bold text-[9px] tracking-tight uppercase text-center leading-none">
                                         {lot.x_mz}{lot.x_lote}
                                     </span>
-                                    <div className="h-[0.5px] w-full bg-slate-100 my-1"></div>
-                                    <span className="text-blue-600 text-[8px] font-bold bg-blue-50 px-1.5 rounded-full tracking-wide shadow-sm">
-                                        {Number(lot.x_area).toFixed(2)} m²
+                                    <div className="h-[0.5px] w-full bg-slate-100 my-0.5"></div>
+                                    <span className="text-blue-600 text-[8px] font-bold tracking-wide">
+                                        {Number(lot.x_area).toFixed(1)} m²
                                     </span>
                                 </div>
                             </Tooltip>

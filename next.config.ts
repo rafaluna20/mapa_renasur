@@ -20,8 +20,6 @@ const nextConfig: NextConfig = {
           },
           {
             key: "Content-Security-Policy",
-            // He agregado aquí tu dominio exacto de Odoo.
-            // Mantenemos localhost para pruebas locales.
             value: "frame-ancestors 'self' http://localhost:8069 https://bot-odoo.2fsywk.easypanel.host;",
           },
           {
