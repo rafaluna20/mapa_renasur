@@ -2,7 +2,7 @@
 
 import { use, useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, Download, Calculator, Calendar, Tag, DollarSign, Table, Loader2, Percent, User, Search, Check, Plus, X, Save, Send, CheckCircle, Map } from 'lucide-react';
+import { ChevronLeft, Calculator, Calendar, Tag, Table, Loader2, User, Search, Check, Plus, X, Save, Send, CheckCircle, Map } from 'lucide-react';
 import { lotsData, Lot } from '@/app/data/lotsData';
 import { financeService, QuoteCalculations } from '@/app/services/financeService';
 import Header from '@/app/components/UI/Header';
@@ -44,7 +44,7 @@ export default function QuotePage({ params }: QuotePageProps) {
                 if (data.success && data.product) {
                     const p = data.product;
                     const code = (p.default_code || '').toString();
-                    const geometry = (geometriesJson as any)[code];
+                    const geometry = (geometriesJson as Record<string, { coordinates: [number, number][], measurements: { area: number } }>)[code];
 
                     setDynamicLot({
                         id: p.id.toString(),
@@ -96,7 +96,7 @@ export default function QuotePage({ params }: QuotePageProps) {
     const [scheduleType, setScheduleType] = useState<'end_of_month' | 'fixed_day'>('end_of_month');
 
     // Mantener startDate para compatibilidad (usar initialPaymentDate)
-    const [startDate, setStartDate] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [startDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
     // Cliente (Búsqueda de Odoo)
     const [searchTerm, setSearchTerm] = useState('');
@@ -301,9 +301,9 @@ export default function QuotePage({ params }: QuotePageProps) {
             alert("Cotización confirmada exitosamente en Odoo. Lote pasado a estado 'Cotización'.");
             router.push('/');
 
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Confirmation error:", error);
-            alert(`Error al confirmar en Odoo: ${error.message}`);
+            alert(`Error al confirmar en Odoo: ${error instanceof Error ? error.message : String(error)}`);
         } finally {
             setIsConfirmingQuote(false);
         }
@@ -591,7 +591,7 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                     </div>
                                                 ) : searchTerm.length > 0 && !isSearching && !selectedClient && (
                                                     <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-slate-300 rounded-xl shadow-2xl z-50 p-4 text-center">
-                                                        <p className="text-xs text-slate-500 mb-3 font-medium">No se encontraron resultados para "{searchTerm}"</p>
+                                                        <p className="text-xs text-slate-500 mb-3 font-medium">No se encontraron resultados para &quot;{searchTerm}&quot;</p>
                                                         <button
                                                             onClick={() => setShowCreateClient(true)}
                                                             className="w-full py-2 bg-blue-100 text-blue-800 rounded-lg text-xs font-bold hover:bg-blue-200 transition-colors flex items-center justify-center gap-2"

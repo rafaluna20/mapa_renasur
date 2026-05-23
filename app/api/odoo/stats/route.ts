@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
 
         console.log(`[API Stats] Fetching stats for user ${uid}`);
 
-        // 1. Sold Count
+        // 1. Sold Count (state in ['sale', 'done'])
         const soldCount = await fetchOdoo(
             "sale.order",
             "search_count",
@@ -27,10 +27,27 @@ export async function GET(request: NextRequest) {
             ]]
         );
 
-        // 2. Reserved Count (TODO: Add filter logic when requested)
-        const reservedCount = 0; // Placeholder as per user request (implement next time)
+        // 2. Reserved Count (state = 'sale')
+        const reservedCount = await fetchOdoo(
+            "sale.order",
+            "search_count",
+            [[
+                ["user_id", "=", uid],
+                ["state", "=", "sale"]
+            ]]
+        );
 
-        // 3. Total Sales Amount
+        // 3. Draft/Quotes Count (state = 'draft')
+        const draftCount = await fetchOdoo(
+            "sale.order",
+            "search_count",
+            [[
+                ["user_id", "=", uid],
+                ["state", "=", "draft"]
+            ]]
+        );
+
+        // 4. Total Sales Amount (Confirmed or Done orders)
         // read_group(domain, fields, groupby)
         const totalSalesData = await fetchOdoo(
             "sale.order",
@@ -57,6 +74,7 @@ export async function GET(request: NextRequest) {
             stats: {
                 sold: soldCount,
                 reserved: reservedCount,
+                draft: draftCount,
                 totalValue: totalValue
             }
         });

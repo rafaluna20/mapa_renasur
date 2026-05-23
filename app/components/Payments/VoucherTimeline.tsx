@@ -1,6 +1,6 @@
 'use client';
 
-import { Check, Clock, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Check, Clock, ShieldCheck } from 'lucide-react';
 
 interface VoucherTimelineProps {
     status: 'pending' | 'approved' | 'rejected' | string;

@@ -1,5 +1,5 @@
 import { Lot } from '@/app/data/lotsData';
-import { X, User, Ruler, FileText, Lock, Users, Clock, Receipt, CheckCircle, AlertCircle, Calendar } from 'lucide-react';
+import { X, User, FileText, Users, Receipt, Calendar } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import ReservationModal from './ReservationModal';
 import { odooService, OdooUser } from '@/app/services/odooService';
@@ -16,7 +16,7 @@ interface LotDetailModalProps {
     onClose: () => void;
     onUpdateStatus?: (id: string, status: string) => void;
     onQuotation?: (lot: Lot) => void;
-    activeQuotes?: { count: number; quotes: any[] };
+    activeQuotes?: { count: number; quotes: { orderId: number; clientName: string; vendorName: string }[] };
     currentUser?: OdooUser | null;
 }
 
@@ -35,7 +35,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
     const [showReservationModal, setShowReservationModal] = useState(false);
     const [reservationOwner, setReservationOwner] = useState<{ id: number; name: string; partnerId?: number; totalInstallments?: number } | null>(null);
     const [activeTab, setActiveTab] = useState<'info' | 'pagos'>('info');
-    const [invoices, setInvoices] = useState<any[]>([]);
+    const [invoices, setInvoices] = useState<{ id: number; name: string; ref?: string; invoice_date: string; invoice_date_due: string; amount_total: number; amount_residual: number; payment_state: string }[]>([]);
     const [loadingInvoices, setLoadingInvoices] = useState(false);
 
     // 🎯 ENTERPRISE SOLUTION: Use refs to track current lot and prevent stale updates
@@ -141,7 +141,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                     
                     const validInvoices = Array.isArray(invoicesData) ? invoicesData : [];
                     console.log(`✅ [REQUEST #${thisRequestId}] Facturas recibidas: ${validInvoices.length} para lote ${lot.name}`);
-                    console.log(`📋 [REQUEST #${thisRequestId}] IDs de facturas:`, validInvoices.map((inv: any) => inv.id || inv.name).join(', '));
+                    console.log(`📋 [REQUEST #${thisRequestId}] IDs de facturas:`, validInvoices.map((inv: { id: number; name: string }) => inv.id || inv.name).join(', '));
                     
                     setInvoices(validInvoices);
                     setLoadingInvoices(false);
@@ -167,7 +167,8 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
         return () => {
             console.log(`🧹 [REQUEST #${thisRequestId}] CLEANUP ejecutado`);
         };
-    }, [lot?.id]); // ⚠️ CRÍTICO: Solo dependencia en lot.id para evitar re-renders innecesarios
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [lot?.id]); // CRÍTICO: Solo dependencia en lot.id para evitar re-renders innecesarios
 
     if (!lot) return null;
     const config = STATUS_CONFIG[lot.x_statu?.toLowerCase()] || STATUS_CONFIG.libre;
@@ -176,11 +177,8 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
     const isReservationOwner = currentUser && reservationOwner && currentUser.uid === reservationOwner.id;
 
     const isLocked = lot.name.endsWith('5');
-    const lockedBy = "Carlos V.";
-    let assignedClient = lot.x_cliente || "Sin asignar";
+    const assignedClient = lot.x_cliente || "Sin asignar";
 
-    // Computed Invoice Stats
-    const totalInvoices = invoices.length;
     const paidInvoices = invoices.filter(i => i.payment_state === 'paid').length;
 
     // Total Installments from Odoo (Contract) or Default 72
@@ -283,7 +281,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                                     </span>
                                 </div>
                                 <div className="p-2 space-y-2 max-h-32 overflow-y-auto">
-                                    {activeQuotes.quotes.map((quote: any) => (
+                                    {activeQuotes.quotes.map((quote) => (
                                         <div key={quote.orderId} className="bg-white p-2 rounded border border-orange-100 text-xs shadow-sm">
                                             <p className="font-bold text-slate-700">{quote.clientName}</p>
                                             <p className="text-[10px] text-slate-500">Asesor: {quote.vendorName}</p>
@@ -417,7 +415,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
 
                         {(lot.x_statu === 'vendido') && (
                             <div className="col-span-2 text-center text-[10px] text-slate-400 italic">
-                                Gestione la cobranza desde la pestaña "Pagos"
+                                Gestione la cobranza desde la pestaña &quot;Pagos&quot;
                             </div>
                         )}
                     </div>

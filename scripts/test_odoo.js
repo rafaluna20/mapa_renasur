@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
+
 const https = require('https');
 
 // HARDCODED CREDENTIALS FROM USER REPORT

@@ -10,7 +10,7 @@ import type { PaymentHistory } from '@/app/services/paymentService';
 export const dynamic = 'force-dynamic';
 
 export default function PaymentHistoryPage() {
-    const { data: session, status } = useSession();
+    const { status } = useSession();
     const router = useRouter();
     const [payments, setPayments] = useState<PaymentHistory[]>([]);
     const [loading, setLoading] = useState(true);
@@ -37,7 +37,7 @@ export default function PaymentHistoryPage() {
             } else {
                 setError(data.error || 'Error al cargar historial');
             }
-        } catch (err) {
+        } catch {
             setError('Error de conexión');
         } finally {
             setLoading(false);

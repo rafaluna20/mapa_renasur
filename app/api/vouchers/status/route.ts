@@ -42,13 +42,13 @@ export async function GET(request: Request) {
             operation_number: status.x_voucher_operation || 'No especificado',
             amount: status.x_voucher_amount || 0,
             transfer_date: status.x_voucher_transfer_date || null,
-            message: getStatusMessage(status.x_voucher_status || 'pending')
+            message: getStatusMessage(String(status.x_voucher_status || 'pending'))
         });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error fetching voucher status:', error);
         return Response.json({
             success: false,
-            error: error.message || 'Error al obtener estado del comprobante'
+            error: error instanceof Error ? error.message : 'Error al obtener estado del comprobante'
         }, { status: 500 });
     }
 }

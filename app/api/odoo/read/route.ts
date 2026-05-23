@@ -24,10 +24,10 @@ export async function POST(request: Request) {
         );
 
         return NextResponse.json({ records });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[read] Error:', error);
         return NextResponse.json(
-            { error: error.message || 'Failed to read records' },
+            { error: error instanceof Error ? error.message : 'Failed to read records' },
             { status: 500 }
         );
     }

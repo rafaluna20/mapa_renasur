@@ -24,10 +24,10 @@ export async function POST(request: Request) {
         );
 
         return NextResponse.json({ records });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[search-read] Error:', error);
         return NextResponse.json(
-            { error: error.message || 'Failed to search records' },
+            { error: error instanceof Error ? error.message : 'Failed to search records' },
             { status: 500 }
         );
     }

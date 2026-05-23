@@ -136,6 +136,13 @@ export default function HomeClient({ odooProducts, hasConnectionError = false }:
         }
     }, [user, loading, router]);
 
+    // Efecto: Limpiar parámetro de sincronización de la URL silenciosamente
+    useEffect(() => {
+        if (typeof window !== 'undefined' && window.location.search.includes('refresh=true')) {
+            router.replace('/', { scroll: false });
+        }
+    }, [router]);
+
     // Efecto: Guardar filtros en localStorage cuando cambien
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -234,10 +241,10 @@ export default function HomeClient({ odooProducts, hasConnectionError = false }:
             } else {
                 throw new Error("Falló la actualización en Odoo");
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Error al actualizar estado:", error);
             // Mostrar el mensaje de error real si viene de la API
-            const msg = error.message || "Error desconocido";
+            const msg = error instanceof Error ? error.message : "Error desconocido";
             alert(`Error al guardar cambios en Odoo: ${msg}\n\nSe revertirá el cambio localmente.`);
 
             // Revertir cambio en UI (Optimistic rollback real, sin recargar página)
@@ -259,8 +266,8 @@ export default function HomeClient({ odooProducts, hasConnectionError = false }:
 
     // Función para recargar la página y traer datos frescos del servidor
     const handleSync = () => {
-        router.refresh();
-        alert("Sincronizando datos con Odoo...");
+        alert("Sincronizando datos en tiempo real con Odoo...");
+        router.push('/?refresh=true');
     };
 
 
@@ -475,20 +482,4 @@ export default function HomeClient({ odooProducts, hasConnectionError = false }:
     );
 }
 
-// ----------------------------------------------------------------------
-// Funciones Auxiliares
-// ----------------------------------------------------------------------
 
-/**
- * Mapea los valores de texto crudos de Odoo a nuestro tipo interno 'status'.
- * Esto asegura que la UI entienda los estados 'disponible', 'reservado', 'vendido'
- * independientemente de leves variaciones en el texto de origen.
- */
-function mapOdooStatus(odooStatus: string | undefined): 'libre' | 'separado' | 'vendido' | undefined {
-    if (!odooStatus) return undefined;
-    const s = odooStatus.toLowerCase();
-    if (s.includes('disponible') || s === 'available' || s === 'libre') return 'libre';
-    if (s.includes('reservado') || s === 'reserved' || s === 'separado') return 'separado';
-    if (s.includes('vendido') || s === 'sold') return 'vendido';
-    return undefined;
-}

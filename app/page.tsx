@@ -4,33 +4,63 @@ import HomeClient from '@/app/components/HomeClient';
 // Force dynamic rendering because Odoo data changes regularly
 export const dynamic = 'force-dynamic';
 
-export default async function Home() {
+// Estructura de caché en memoria del servidor para navegación ultra veloz
+interface CacheContainer {
+  data: OdooProduct[];
+  timestamp: number;
+}
 
-  // Fetch real-time data from Odoo
-  // We explicitly ask for products that are active
+let serverSideLotsCache: CacheContainer | null = null;
+const CACHE_TTL = 30000; // 30 segundos de caché de alto rendimiento en memoria del servidor
+
+export default async function Home({ searchParams }: { searchParams: Promise<{ refresh?: string }> }) {
+  const resolvedParams = await searchParams;
+  const forceRefresh = resolvedParams?.refresh === 'true';
+
   let products: OdooProduct[] = [];
   let hasConnectionError = false;
+  const now = Date.now();
 
-  try {
-    products = await fetchOdoo(
-      "product.template",
-      "search_read",
-      [[["active", "=", true]]],
-      {
-        fields: ["id", "name", "default_code", "list_price", "qty_available", "x_statu", "x_area", "x_mz", "x_etapa", "x_lote", "x_cliente"],
-        limit: 1000,
-        context: { lang: "es_PE" }
+  // Si existe cache, no ha expirado y no se solicita refresco manual forzado
+  if (serverSideLotsCache && (now - serverSideLotsCache.timestamp < CACHE_TTL) && !forceRefresh) {
+    console.log(`[⚡ LIGHTNING CACHE HIT] Sirviendo ${serverSideLotsCache.data.length} lotes al instante desde memoria del servidor.`);
+    products = serverSideLotsCache.data;
+  } else {
+    try {
+      console.log(forceRefresh 
+        ? `[🌀 FORCE REFRESH BYPASS] Saltando caché por solicitud de sincronización manual. Consultando Odoo...`
+        : `[🌀 CACHE MISS / EXPIRED] Consultando inventario actualizado a Odoo...`
+      );
+      
+      products = await fetchOdoo(
+        "product.template",
+        "search_read",
+        [[["active", "=", true]]],
+        {
+          fields: ["id", "name", "default_code", "list_price", "qty_available", "x_statu", "x_area", "x_mz", "x_etapa", "x_lote", "x_cliente"],
+          limit: 1000,
+          context: { lang: "es_PE" }
+        }
+      );
+      
+      console.log(`Successfully fetched ${products.length} products from Odoo.`);
+
+      // Guardar en la caché en memoria del servidor
+      serverSideLotsCache = {
+        data: products,
+        timestamp: now
+      };
+    } catch (error) {
+      console.error("Failed to fetch initial Odoo data:", error);
+      
+      // Resiliencia empresarial: si Odoo falla, servimos la caché existente aunque esté expirada
+      if (serverSideLotsCache) {
+        console.warn("Sirviendo caché existente debido a problemas de comunicación con Odoo.");
+        products = serverSideLotsCache.data;
+      } else {
+        hasConnectionError = true;
       }
-    );
-    console.log(`Successfully fetched ${products.length} products from Odoo.`);
-    if (products.length > 0) {
-      console.log("Sample Product Data:", JSON.stringify(products[0], null, 2));
     }
-
-
-  } catch (error) {
-    console.error("Failed to fetch initial Odoo data:", error);
-    hasConnectionError = true;
   }
 
   return (

@@ -1,0 +1,355 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { fetchOdoo } from '@/app/services/odooService';
+
+interface OdooOrder {
+    id: number;
+    name: string;
+    state: string;
+    partner_id: [number, string] | false;
+    user_id: [number, string] | false;
+    create_date?: string;
+    date_order?: string;
+    amount_total?: number;
+    order_line?: number[];
+}
+
+interface QuoteInfo {
+    client: string;
+    advisor: string;
+    hours: number;
+}
+
+interface ProductDraftInfo {
+    name: string;
+    quotes: QuoteInfo[];
+}
+
+interface OdooOrderLine {
+    id: number;
+    product_id: [number, string] | false;
+}
+
+export async function GET(request: NextRequest) {
+    try {
+        const { searchParams } = new URL(request.url);
+        const userId = searchParams.get('userId');
+        const reqStartDate = searchParams.get('startDate');
+        const reqEndDate = searchParams.get('endDate');
+
+        if (!userId) {
+            return NextResponse.json({ success: false, error: "Missing userId parameter" }, { status: 400 });
+        }
+
+        const uid = parseInt(userId);
+        if (isNaN(uid)) {
+            return NextResponse.json({ success: false, error: "Invalid userId parameter" }, { status: 400 });
+        }
+
+        console.log(`[API Detailed Stats] Querying Odoo for user ID: ${uid} (Range: ${reqStartDate || 'YTD'} to ${reqEndDate || 'YTD'})`);
+
+        // 1. DYNAMIC KPIs
+        // A. Active draft quotes count (state = 'draft')
+        const draftDomain: any[] = [
+            ["user_id", "=", uid],
+            ["state", "=", "draft"]
+        ];
+        if (reqStartDate && reqEndDate) {
+            draftDomain.push(["date_order", ">=", `${reqStartDate} 00:00:00`]);
+            draftDomain.push(["date_order", "<=", `${reqEndDate} 23:59:59`]);
+        }
+
+        const draftCount = await fetchOdoo(
+            "sale.order",
+            "search_count",
+            [draftDomain]
+        );
+
+        // B. Total sales amount (confirmed/done) — filtrado dinámicamente o al año actual para
+        //    que coincida con el gráfico de tendencia y el % de meta mensual sea coherente
+        const currentYearForKpi = new Date().getFullYear();
+        const kpiStartDate = reqStartDate ? `${reqStartDate} 00:00:00` : `${currentYearForKpi}-01-01 00:00:00`;
+        const kpiEndDate   = reqEndDate ? `${reqEndDate} 23:59:59` : `${currentYearForKpi}-12-31 23:59:59`;
+
+        const totalSalesData = await fetchOdoo(
+            "sale.order",
+            "read_group",
+            [[
+                ["user_id", "=", uid],
+                ["state", "in", ["sale", "done"]],
+                ["date_order", ">=", kpiStartDate],
+                ["date_order", "<=", kpiEndDate]
+            ]],
+            {
+                fields: ["amount_total"],
+                groupby: ["user_id"]
+            }
+        ) as { amount_total?: number }[];
+
+        let totalValue = 0;
+        if (totalSalesData && totalSalesData.length > 0) {
+            totalValue = totalSalesData[0].amount_total || 0;
+        }
+
+        // C. Calculate dynamic commission (6% dynamic real estate fee)
+        const commission = totalValue * 0.06;
+
+        // D. Monthly goal — configurable via env var, fallback a S/200,000
+        const monthlyGoal = parseInt(process.env.SALES_MONTHLY_GOAL || '200000', 10);
+
+        // 2. DYNAMIC SALES TREND (Last 12 Months or dynamic range)
+        const currentYear = new Date().getFullYear();
+        const startDate = reqStartDate ? `${reqStartDate} 00:00:00` : `${currentYear}-01-01 00:00:00`;
+        const endDate = reqEndDate ? `${reqEndDate} 23:59:59` : `${currentYear}-12-31 23:59:59`;
+
+        const ordersThisYear = await fetchOdoo(
+            "sale.order",
+            "search_read",
+            [[
+                ["user_id", "=", uid],
+                ["state", "in", ["sale", "done"]],
+                ["date_order", ">=", startDate],
+                ["date_order", "<=", endDate]
+            ]],
+            {
+                fields: ["date_order", "amount_total"]
+            }
+        ) as OdooOrder[];
+
+        const monthsAbbr = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+        const salesTrend = monthsAbbr.map(name => ({ name, ventas: 0 }));
+
+        if (ordersThisYear && Array.isArray(ordersThisYear)) {
+            for (const order of ordersThisYear) {
+                const dateStr = order.date_order;
+                if (dateStr) {
+                    const orderDate = new Date(dateStr);
+                    const monthIndex = orderDate.getMonth(); // 0-11
+                    if (monthIndex >= 0 && monthIndex < 12) {
+                        salesTrend[monthIndex].ventas += (order.amount_total || 0);
+                    }
+                }
+            }
+        }
+
+        // 3. RECENT ACTIVITY & ASSIGNED LOTS
+        // Get the latest 10 orders of any state, filtered by dates if provided
+        const recentOrdersDomain: any[] = [
+            ["user_id", "=", uid],
+            ["state", "in", ["draft", "sent", "sale", "done"]]
+        ];
+        if (reqStartDate && reqEndDate) {
+            recentOrdersDomain.push(["date_order", ">=", `${reqStartDate} 00:00:00`]);
+            recentOrdersDomain.push(["date_order", "<=", `${reqEndDate} 23:59:59`]);
+        }
+
+        const recentOrders = await fetchOdoo(
+            "sale.order",
+            "search_read",
+            [recentOrdersDomain],
+            {
+                fields: ["id", "name", "state", "partner_id", "date_order", "amount_total", "order_line"],
+                limit: 10,
+                order: "date_order desc"
+            }
+        ) as OdooOrder[];
+
+        // Batch read the product names and statuses from order lines
+        const allLineIds = recentOrders.flatMap((order: OdooOrder) => order.order_line || []);
+        const lineMap: Record<number, string> = {};
+        const lineStatusMap: Record<number, string> = {};
+
+        if (allLineIds.length > 0) {
+            const orderLines = await fetchOdoo(
+                "sale.order.line",
+                "search_read",
+                [[["id", "in", allLineIds]]],
+                {
+                    fields: ["id", "product_id"]
+                }
+            ) as OdooOrderLine[];
+
+            if (orderLines && Array.isArray(orderLines)) {
+                // Extract unique product template/variant IDs
+                const productIds = orderLines
+                    .map((line) => line.product_id ? line.product_id[0] : null)
+                    .filter(Boolean) as number[];
+
+                const productStatusMap: Record<number, string> = {};
+                if (productIds.length > 0) {
+                    const products = await fetchOdoo(
+                        "product.product",
+                        "search_read",
+                        [[["id", "in", productIds]]],
+                        {
+                            fields: ["id", "x_statu"]
+                        }
+                    ) as { id: number; x_statu?: string }[];
+
+                    if (products && Array.isArray(products)) {
+                        for (const prod of products) {
+                            productStatusMap[prod.id] = prod.x_statu || 'cotizacion';
+                        }
+                    }
+                }
+
+                for (const line of orderLines) {
+                    if (line.product_id) {
+                        let prodName = line.product_id[1];
+                        if (prodName.includes(']')) {
+                            prodName = prodName.split(']').pop()?.trim() || prodName;
+                        }
+                        lineMap[line.id] = prodName;
+                        lineStatusMap[line.id] = productStatusMap[line.product_id[0]] || 'cotizacion';
+                    }
+                }
+            }
+        }
+
+        // Map recent activity list
+        const recentActivity = recentOrders.map((order: OdooOrder) => {
+            const firstLineId = order.order_line && order.order_line.length > 0 ? order.order_line[0] : null;
+            const lotName = firstLineId ? (lineMap[firstLineId] || "Lote") : "Lote";
+            const lotStatus = firstLineId ? (lineStatusMap[firstLineId] || "cotizacion") : "cotizacion";
+
+            let action = "Cotización";
+            if (lotStatus === 'reservado') action = "Reserva";
+            if (lotStatus === 'vendido') action = "Venta";
+
+            const date = order.date_order ? new Date(order.date_order).toLocaleDateString('es-PE', {
+                day: 'numeric',
+                month: 'short',
+                hour: '2-digit',
+                minute: '2-digit'
+            }) : "Reciente";
+
+            return {
+                id: order.id,
+                action,
+                lot: lotName,
+                date
+            };
+        });
+
+        // Map assigned lots list — deduplicado por nombre de lote para evitar
+        // que la misma propiedad aparezca múltiples veces cuando hay varias líneas/órdenes
+        const seenLotNames = new Set<string>();
+        const assignedLots: { lot: string; stage: string; client: string; status: string; price: number }[] = [];
+
+        for (const order of recentOrders) {
+            const firstLineId = order.order_line && order.order_line.length > 0 ? order.order_line[0] : null;
+            if (!firstLineId) continue;
+
+            const lotName = lineMap[firstLineId] || "Lote";
+            if (seenLotNames.has(lotName)) continue; // saltar duplicados
+            seenLotNames.add(lotName);
+
+            const lotStatus = lineStatusMap[firstLineId] || "cotizacion";
+
+            let status = "Cotización";
+            if (lotStatus === 'reservado') status = "Separado";
+            if (lotStatus === 'vendido')   status = "Vendido";
+            if (lotStatus === 'disponible') status = "Disponible";
+
+            assignedLots.push({
+                lot: lotName,
+                stage: "Etapa Activa",
+                client: Array.isArray(order.partner_id) ? order.partner_id[1] : "Cliente",
+                status,
+                price: order.amount_total || 0
+            });
+        }
+
+        // 4. DYNAMIC HOT CONFLICTED LOTS (Competed Lots)
+        // Find all draft orders in Odoo across all advisors
+        const draftOrders = await fetchOdoo(
+            "sale.order",
+            "search_read",
+            [[["state", "=", "draft"]]],
+            {
+                fields: ["id", "name", "partner_id", "user_id", "create_date", "order_line"]
+            }
+        ) as OdooOrder[];
+
+        const draftLineIds = draftOrders.flatMap((order: OdooOrder) => order.order_line || []);
+        const draftLineMap: Record<number, { productId: number; productName: string }> = {};
+
+        if (draftLineIds.length > 0) {
+            const lines = await fetchOdoo(
+                "sale.order.line",
+                "search_read",
+                [[["id", "in", draftLineIds]]],
+                { fields: ["id", "product_id"] }
+            ) as OdooOrderLine[];
+
+            if (lines && Array.isArray(lines)) {
+                for (const line of lines) {
+                    if (line.product_id) {
+                        let prodName = line.product_id[1];
+                        if (prodName.includes(']')) {
+                            prodName = prodName.split(']').pop()?.trim() || prodName;
+                        }
+                        draftLineMap[line.id] = {
+                            productId: line.product_id[0],
+                            productName: prodName
+                        };
+                    }
+                }
+            }
+        }
+
+        const productDrafts: Record<number, ProductDraftInfo> = {};
+        for (const order of draftOrders) {
+            for (const lineId of (order.order_line || [])) {
+                const productData = draftLineMap[lineId];
+                if (productData) {
+                    if (!productDrafts[productData.productId]) {
+                        productDrafts[productData.productId] = {
+                            name: productData.productName,
+                            quotes: []
+                        };
+                    }
+
+                    // Compute relative hours elapsed
+                    const created = order.create_date ? new Date(order.create_date) : new Date();
+                    const hoursElapsed = Math.max(1, Math.round((new Date().getTime() - created.getTime()) / (1000 * 60 * 60)));
+
+                    productDrafts[productData.productId].quotes.push({
+                        client: Array.isArray(order.partner_id) ? order.partner_id[1] : "Cliente",
+                        advisor: Array.isArray(order.user_id) ? order.user_id[1] : "Asesor",
+                        hours: hoursElapsed
+                    });
+                }
+            }
+        }
+
+        // Keep products with > 1 draft quotes
+        const competedLots = Object.values(productDrafts)
+            .filter((item: ProductDraftInfo) => item.quotes.length > 1)
+            .map((item: ProductDraftInfo) => ({
+                lot: item.name,
+                stage: "Etapa Activa",
+                quotes: item.quotes
+            }));
+
+        return NextResponse.json({
+            success: true,
+            stats: {
+                kpis: {
+                    totalSales: totalValue,
+                    monthlyGoal,
+                    commission,
+                    pendingLeads: draftCount
+                },
+                salesTrend,
+                recentActivity,
+                competedLots,
+                assignedLots
+            }
+        });
+
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : "Internal Server Error";
+        console.error("API Detailed Stats Error:", error);
+        return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
+    }
+}

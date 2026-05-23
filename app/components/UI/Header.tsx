@@ -9,7 +9,7 @@ interface HeaderProps {
 }
 
 export default function Header({ onSync }: HeaderProps) {
-    const { user, salesCount, reservedCount, logout } = useAuth();
+    const { user, salesCount, quotesCount, logout } = useAuth();
     const [showProfile, setShowProfile] = useState(false);
 
     return (
@@ -78,7 +78,7 @@ export default function Header({ onSync }: HeaderProps) {
                                     <TrendingUp size={14} className="text-blue-400" />
                                     <span className="text-slate-400 font-medium">Cotizadas:</span>
                                     <span className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-2 py-0.5 rounded-md font-bold shadow-sm">
-                                        12
+                                        {quotesCount}
                                     </span>
                                 </div>
                                 

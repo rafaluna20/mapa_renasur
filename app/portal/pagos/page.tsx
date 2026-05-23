@@ -32,10 +32,10 @@ export default function PaymentsPortal() {
             // ✅ Auto-refresh REMOVIDO para reducir consumo de datos
             // Usuario puede actualizar manualmente con el botón de refresh
         }
-    }, [status]);
+    }, [status, loadInvoices]);
 
     // ✅ Función mejorada con retry automático y exponential backoff
-    const loadInvoices = async (silent = false, attempt = 0) => {
+    const loadInvoices = useCallback(async (silent = false, attempt = 0) => {
         if (!silent) setLoading(true);
         setRefreshing(true);
 
@@ -60,7 +60,7 @@ export default function PaymentsPortal() {
             } else {
                 throw new Error(data.error || 'Error al cargar facturas');
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error(`[PAYMENTS] ❌ Error loading invoices (attempt ${attempt + 1}):`, err);
             
             if (attempt < maxRetries) {
@@ -86,7 +86,7 @@ export default function PaymentsPortal() {
                 setRefreshing(false);
             }
         }
-    };
+    }, []);
 
     const handleManualRefresh = () => {
         loadInvoices(false);

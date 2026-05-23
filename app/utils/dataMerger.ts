@@ -14,12 +14,12 @@ export interface EnrichedGeometry {
 // Helpers exportados por si se necesitan en otro lado
 export const normalizeCode = (c: string) => (c || '').toString().replace(/\s+/g, '').toUpperCase().trim();
 
-export const getOdooVal = (v: any, fallback: string): string => {
+export const getOdooVal = (v: unknown, fallback: string): string => {
     if (v === undefined || v === null || v === false) return fallback;
     return v.toString();
 };
 
-export const parseVal = (v: any, fallback: number): number => {
+export const parseVal = (v: unknown, fallback: number): number => {
     if (v === undefined || v === null || v === false || v === '') return fallback;
     if (typeof v === 'number') return v;
     
@@ -30,7 +30,7 @@ export const parseVal = (v: any, fallback: number): number => {
         s = s.replace(/,/g, '');
     }
     
-    let n = parseFloat(s);
+    const n = parseFloat(s);
     return isNaN(n) ? fallback : n;
 };
 
@@ -123,7 +123,7 @@ export function mergeLotsData(
                 dynamicLots.push({
                     id: odooId,
                     name: odooMatch.name || `Lote ${code}`,
-                    x_statu: (mapOdooStatus(odooMatch.x_statu) as any) || 'libre',
+                    x_statu: mapOdooStatus(odooMatch.x_statu) || 'libre',
                     list_price: parseVal(odooMatch.list_price, 0),
                     x_area: parseVal(odooMatch.x_area, 0),
                     x_mz: getOdooVal(odooMatch.x_mz, ''),

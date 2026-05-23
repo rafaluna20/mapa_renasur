@@ -46,8 +46,8 @@ export async function POST(request: Request) {
         }
 
         // Extract unique order IDs
-        const orderIds = [...new Set(orderLines.map((line: any) =>
-            Array.isArray(line.order_id) ? line.order_id[0] : line.order_id
+        const orderIds = [...new Set(orderLines.map((line: Record<string, unknown>) =>
+            Array.isArray(line.order_id) ? (line.order_id as unknown[])[0] : line.order_id
         ))];
 
         // 3. Get order details for draft orders only
@@ -69,13 +69,13 @@ export async function POST(request: Request) {
         }
 
         // 4. Format response
-        const quotes = orders.map((order: any) => ({
+        const quotes = orders.map((order: Record<string, unknown>) => ({
             orderId: order.id,
             orderName: order.name,
-            clientName: Array.isArray(order.partner_id) ? order.partner_id[1] : 'Cliente Desconocido',
-            vendorName: Array.isArray(order.user_id) ? order.user_id[1] : 'Vendedor Desconocido',
+            clientName: Array.isArray(order.partner_id) ? (order.partner_id as unknown[])[1] : 'Cliente Desconocido',
+            vendorName: Array.isArray(order.user_id) ? (order.user_id as unknown[])[1] : 'Vendedor Desconocido',
             createdAt: order.create_date,
-            amount: order.amount_total || 0
+            amount: (order.amount_total as number) || 0
         }));
 
         console.log(`✅ Found ${quotes.length} active quote(s) for lot ${defaultCode}`);
@@ -85,10 +85,10 @@ export async function POST(request: Request) {
             quotes
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Get Active Quotes API Error:", error);
         return NextResponse.json(
-            { success: false, error: error.message || 'Internal Server Error' },
+            { success: false, error: error instanceof Error ? error.message : 'Internal Server Error' },
             { status: 500 }
         );
     }

@@ -1,4 +1,4 @@
-import { odooService, fetchOdoo } from './odooService';
+import { fetchOdoo } from './odooService';
 
 /**
  * Estructura de una factura pendiente
@@ -70,9 +70,9 @@ export const paymentService = {
         if (invoices.length === 0) return [];
 
         // Obtener comprobantes para estas facturas de forma resiliente
-        let vouchers: any[] = [];
+        let vouchers: Record<string, unknown>[] = [];
         try {
-            const invoiceIds = invoices.map((inv: any) => inv.id);
+            const invoiceIds = invoices.map((inv: Record<string, unknown>) => inv.id);
             const voucherDomain = [
                 ['res_model', '=', 'account.move'],
                 ['res_id', 'in', invoiceIds],
@@ -81,10 +81,10 @@ export const paymentService = {
             const voucherFields = ['res_id', 'x_voucher_status', 'x_voucher_submitted_at', 'x_voucher_amount'];
 
             vouchers = await fetchOdoo('ir.attachment', 'search_read', [voucherDomain], { fields: voucherFields });
-        } catch (e: any) {
+        } catch {
             console.warn('[PAYMENT] ⚠️ Los campos personalizados x_voucher_* no existen en Odoo. Usando fallback por descripción.');
 
-            const invoiceIds = invoices.map((inv: any) => inv.id);
+            const invoiceIds = invoices.map((inv: Record<string, unknown>) => inv.id);
             const fallbackDomain = [
                 ['res_model', '=', 'account.move'],
                 ['res_id', 'in', invoiceIds],
@@ -96,8 +96,8 @@ export const paymentService = {
                 order: 'create_date desc'
             });
 
-            vouchers = fallbackVouchers.map((v: any) => ({
-                res_id: v.res_id[0],
+            vouchers = fallbackVouchers.map((v: Record<string, unknown>) => ({
+                res_id: Array.isArray(v.res_id) ? v.res_id[0] : v.res_id,
                 x_voucher_status: 'pending',
                 x_voucher_submitted_at: v.create_date,
                 x_voucher_amount: 0
@@ -105,8 +105,8 @@ export const paymentService = {
         }
 
         // Mapear vouchers a un objeto para búsqueda rápida
-        const voucherMap = vouchers.reduce((acc: any, v: any) => {
-            const resId = Array.isArray(v.res_id) ? v.res_id[0] : v.res_id;
+        const voucherMap = vouchers.reduce((acc: Record<string, { status: string; submitted_at: string; amount: number }>, v: Record<string, unknown>) => {
+            const resId = String(Array.isArray(v.res_id) ? v.res_id[0] : v.res_id);
 
             // ✅ CORREGIDO: Siempre guardar el más reciente
             const currentDate = new Date(v.x_voucher_submitted_at || 0);
@@ -123,7 +123,7 @@ export const paymentService = {
         }, {});
 
         // Parsear información del lote y adjuntar voucher status
-        return invoices.map((inv: any) => ({
+        return invoices.map((inv: Record<string, unknown>) => ({
             ...inv,
             lot_info: this.parsePaymentReference(inv.payment_reference),
             voucher_status: voucherMap[inv.id] || null
@@ -153,8 +153,8 @@ export const paymentService = {
         const paidInvoices = await fetchOdoo('account.move', 'search_read', [domain], { fields });
 
         // Mapeamos facturas pagadas a la estructura de historial
-        return paidInvoices.map((inv: any) => ({
-            id: inv.id,
+        return paidInvoices.map((inv: Record<string, unknown>) => ({
+            id: inv.id as number,
             name: inv.name,
             amount: inv.amount_total,
             date: inv.invoice_date,
@@ -213,7 +213,7 @@ export const paymentService = {
     /**
      * Obtener el estado del comprobante subido para una factura
      */
-    async getVoucherStatus(invoiceId: number): Promise<any | null> {
+    async getVoucherStatus(invoiceId: number): Promise<Record<string, unknown> | null> {
         try {
             const domain = [
                 ['res_model', '=', 'account.move'],
@@ -238,7 +238,7 @@ export const paymentService = {
             });
 
             return attachments?.[0] || null;
-        } catch (e: any) {
+        } catch {
             console.warn('[PAYMENT] ⚠️ getVoucherStatus fallback por campos inexistentes');
             const fallbackDomain = [
                 ['res_model', '=', 'account.move'],

@@ -97,10 +97,7 @@ export function ScenarioSimulator({
         };
     }, [basePrice, discountPercent, initialPayment, baseInstallments, startDate]);
 
-    // Calcular ahorro de intereses (si hubiera) - Por ahora es 0 ya que no hay TEA
-    const calculateSavings = (baseMonthly: number, compareMonthly: number, months: number) => {
-        return (compareMonthly * months) - (baseMonthly * baseInstallments);
-    };
+
 
     // ========================================================================
     // RENDERIZADO
@@ -374,7 +371,13 @@ export function ScenarioComparisonTable({
     scenarios,
     baseInstallments
 }: {
-    scenarios: any;
+    scenarios: {
+        optimistic: QuoteCalculations;
+        realistic: QuoteCalculations;
+        extended: QuoteCalculations;
+        shortInstallments: number;
+        longInstallments: number;
+    };
     baseInstallments: number;
 }) {
     return (

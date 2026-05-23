@@ -40,8 +40,8 @@ function LoginForm() {
             setStep('code');
             setLoading(false);
 
-        } catch (err: any) {
-            setError(err.message || 'Error al solicitar código');
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Error al solicitar código');
             setLoading(false);
         }
     };
@@ -65,8 +65,8 @@ function LoginForm() {
             } else if (result?.ok) {
                 router.push(searchParams.get('callbackUrl') || '/portal/pagos');
             }
-        } catch (err: any) {
-            setError(err.message || 'Error al verificar código');
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Error al verificar código');
             setLoading(false);
         }
     };

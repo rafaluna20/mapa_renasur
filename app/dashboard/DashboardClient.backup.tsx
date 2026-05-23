@@ -1,21 +1,17 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 import {
     DollarSign, TrendingUp, Users, Target, ArrowUpRight,
-    MapPin, Clock, Loader2, Award, Zap, FileDown, RefreshCw
+    MapPin, Clock, Loader2, Award, Zap, FileDown
 } from 'lucide-react';
 import { useAuth } from '@/app/context/AuthContext';
 import { odooService } from '@/app/services/odooService';
 import { generateEnterpriseReport, generateProjectGeneralReport, type ReportData } from '@/app/services/reportService';
 import { useRouter } from 'next/navigation';
-import { useDashboardData } from '@/app/hooks/useDashboardData';
-import { usePersistedState } from '@/app/hooks/usePersistedState';
-import DashboardSkeleton from '@/app/components/Dashboard/DashboardSkeleton';
-import { InfoTooltip } from '@/app/components/UI/InfoTooltip';
 
 // ── CRÍTICO: CustomTooltip DEBE estar fuera del componente padre.
 // Si se define dentro del render, Recharts lo trata como un nuevo tipo en cada
@@ -45,24 +41,16 @@ export default function DashboardClient() {
     const { user: authUser, loading: authLoading, salesCount } = useAuth();
     const router = useRouter();
 
-    // ✅ MEJORA 1: Usar hook personalizado con validación y polling automático
-    const {
-        stats,
-        loading: loadingStats,
-        error,
-        lastUpdate,
-        refresh
-    } = useDashboardData({
-        userId: authUser?.uid || 0,
-        pollingInterval: 30000, // 30 segundos
-        enablePolling: true,
-    });
-
-    // ✅ MEJORA 2: Persistir preferencias del usuario
-    const [chartTimeframe, setChartTimeframe] = usePersistedState<'6m' | '12m'>(
-        'dashboard-chart-timeframe',
-        '6m'
-    );
+    const [stats, setStats] = useState<{
+        kpis: { monthlyGoal: number; commission: number; pendingLeads: number; totalSales: number };
+        salesTrend: { name: string; ventas: number }[];
+        recentActivity: { id: number; action: string; lot: string; date: string }[];
+        competedLots: { lot: string; stage: string; quotes: { client: string; advisor: string; hours: number }[] }[];
+        assignedLots: { lot: string; stage: string; client: string; status: string; price: number }[];
+    } | null>(null);
+    const [loadingStats, setLoadingStats] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [chartTimeframe, setChartTimeframe] = useState<'6m' | '12m'>('6m');
     const [generatingPdf, setGeneratingPdf] = useState(false);
     const [generatingGeneralPdf, setGeneratingGeneralPdf] = useState(false);
 
@@ -114,13 +102,42 @@ export default function DashboardClient() {
         }
     }, [authUser, authLoading, router]);
 
-    // ✅ MEJORA 3: Usar skeleton loader mejorado en lugar de spinner simple
-    if (authLoading || (loadingStats && !stats)) {
-        return <DashboardSkeleton />;
+    // 2. Fetch real dynamic dashboard metrics
+    useEffect(() => {
+        const fetchDashboardData = async () => {
+            if (!authUser) return;
+            try {
+                setLoadingStats(true);
+                setError(null);
+                const data = await odooService.getDetailedSalesStats(authUser.uid);
+                setStats(data);
+            } catch (err: unknown) {
+                console.error("Error fetching dashboard statistics:", err);
+                setError("Error al cargar los datos del panel. Por favor intente más tarde.");
+            } finally {
+                setLoadingStats(false);
+            }
+        };
+
+        fetchDashboardData();
+    }, [authUser]);
+
+    // Loading State
+    if (authLoading || loadingStats) {
+        return (
+            <div className="flex h-screen items-center justify-center bg-slate-950 text-slate-100">
+                <div className="absolute top-0 left-1/4 w-96 h-96 bg-indigo-500/5 rounded-full blur-[120px] pointer-events-none" />
+                <div className="absolute bottom-10 right-1/4 w-96 h-96 bg-emerald-500/5 rounded-full blur-[120px] pointer-events-none" />
+                <div className="flex flex-col items-center gap-3 z-10">
+                    <Loader2 className="animate-spin text-indigo-500" size={48} />
+                    <p className="text-sm font-semibold tracking-wide text-slate-400 animate-pulse">Cargando panel de control corporativo...</p>
+                </div>
+            </div>
+        );
     }
 
-    // Error State - Solo mostrar si hay error y no tenemos datos en cache
-    if (error && !stats) {
+    // Error State
+    if (error || !stats) {
         return (
             <div className="flex h-screen flex-col items-center justify-center bg-slate-950 p-4 text-center">
                 <div className="bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl p-8 rounded-2xl shadow-2xl max-w-md w-full relative">
@@ -128,9 +145,9 @@ export default function DashboardClient() {
                         <Clock size={36} />
                     </div>
                     <h2 className="text-xl font-bold text-slate-100 mt-8 mb-2">Fallo en la Sincronización</h2>
-                    <p className="text-slate-400 mb-6 text-sm leading-relaxed">{error}</p>
-                    <button
-                        onClick={refresh}
+                    <p className="text-slate-400 mb-6 text-sm leading-relaxed">{error || "No se pudieron obtener las analíticas desde Odoo."}</p>
+                    <button 
+                        onClick={() => window.location.reload()} 
                         className="w-full bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-semibold py-3 px-6 rounded-xl transition-all shadow-lg shadow-indigo-950/50 hover:shadow-indigo-500/10"
                     >
                         Reintentar Conexión
@@ -140,37 +157,27 @@ export default function DashboardClient() {
         );
     }
 
-    // Si no hay stats aún pero no hay error, mostrar skeleton
-    if (!stats) {
-        return <DashboardSkeleton />;
-    }
-
     const currentUser = authUser!;
 
-    // ✅ MEJORA 4: Memoizar cálculos complejos para mejor performance
-    const displayedSalesTrend = useMemo(() => {
-        if (!stats) return [];
-        const currentMonthIndex = new Date().getMonth();
-        const last6Start = Math.max(0, currentMonthIndex - 5);
-        return chartTimeframe === '6m'
-            ? stats.salesTrend.slice(last6Start, currentMonthIndex + 1)
-            : stats.salesTrend;
-    }, [stats, chartTimeframe]);
+    // Gráfico: últimos 6 meses móviles vs. todo el año actual
+    // Calculamos el mes actual (0-11) y tomamos los últimos 6 índices
+    const currentMonthIndex = new Date().getMonth(); // e.g. mayo = 4
+    const last6Start = Math.max(0, currentMonthIndex - 5);  // e.g. 4-5 = -1 → 0 (Ene)
+    // Si currentMonth < 5, tomamos desde 0 hasta currentMonth+1 para no salir del rango
+    const displayedSalesTrend = chartTimeframe === '6m'
+        ? stats.salesTrend.slice(last6Start, currentMonthIndex + 1)
+        : stats.salesTrend;
 
-    const yAxisDomain = useMemo<[number, number]>(() => {
-        if (!displayedSalesTrend.length) return [0, 100000];
-        const maxSalesValue = Math.max(...displayedSalesTrend.map(d => d.ventas), 0);
-        return maxSalesValue > 0
-            ? [0, Math.ceil(maxSalesValue * 1.2)]
-            : [0, 100000];
-    }, [displayedSalesTrend]);
+    // Dominio del eje Y: dinámico con fallback cuando todos los valores son 0
+    const maxSalesValue = Math.max(...displayedSalesTrend.map(d => d.ventas), 0);
+    const yAxisDomain: [number, number] = maxSalesValue > 0
+        ? [0, Math.ceil(maxSalesValue * 1.2)]
+        : [0, 100000];
 
-    const goalPercentage = useMemo(() => {
-        if (!stats) return 0;
-        return stats.kpis.monthlyGoal > 0
-            ? Math.min(100, Math.round((stats.kpis.totalSales / stats.kpis.monthlyGoal) * 100))
-            : 0;
-    }, [stats]);
+    // Porcentaje de meta — basado en datos del año actual (coherente con el KPI)
+    const goalPercentage = stats.kpis.monthlyGoal > 0
+        ? Math.min(100, Math.round((stats.kpis.totalSales / stats.kpis.monthlyGoal) * 100))
+        : 0;
 
     return (
         <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8 relative overflow-hidden">
@@ -188,29 +195,7 @@ export default function DashboardClient() {
                         <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-slate-100 to-slate-400 bg-clip-text text-transparent">
                             Hola, {currentUser.name} 👋
                         </h1>
-                        <div className="flex items-center gap-3 mt-2">
-                            <p className="text-sm text-slate-400">Supervisa tus ventas, comisiones y cotizaciones en curso.</p>
-                            {/* ✅ MEJORA 5: Indicador de última actualización */}
-                            {lastUpdate && (
-                                <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-900/40 px-3 py-1.5 rounded-full border border-slate-800">
-                                    <Clock size={12} />
-                                    <span>
-                                        Actualizado: {lastUpdate.toLocaleTimeString('es-PE', {
-                                            hour: '2-digit',
-                                            minute: '2-digit',
-                                            second: '2-digit'
-                                        })}
-                                    </span>
-                                    <button
-                                        onClick={refresh}
-                                        className="text-indigo-400 hover:text-indigo-300 transition-colors ml-1"
-                                        title="Actualizar datos manualmente"
-                                    >
-                                        <RefreshCw size={12} className={loadingStats ? 'animate-spin' : ''} />
-                                    </button>
-                                </div>
-                            )}
-                        </div>
+                        <p className="text-sm text-slate-400 mt-1">Supervisa tus ventas, comisiones y cotizaciones en curso.</p>
                     </div>
 
                     <div className="flex flex-wrap gap-3">
@@ -261,13 +246,7 @@ export default function DashboardClient() {
                                 {salesCount} Lotes Vendidos
                             </span>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                            <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Ventas {new Date().getFullYear()}</p>
-                            <InfoTooltip
-                                content="Suma total de todas las ventas confirmadas desde enero hasta la fecha. Se actualiza automáticamente cada 30 segundos."
-                                side="top"
-                            />
-                        </div>
+                        <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Ventas {new Date().getFullYear()}</p>
                         <h3 className="text-2xl font-bold text-slate-100 mt-1">
                             S/ {stats.kpis.totalSales.toLocaleString('es-PE')}
                         </h3>
@@ -285,13 +264,7 @@ export default function DashboardClient() {
                                 {goalPercentage}% de la Meta
                             </span>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                            <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Meta Mensual</p>
-                            <InfoTooltip
-                                content="Objetivo de ventas establecido para el mes actual. La barra de progreso muestra tu avance hacia esta meta."
-                                side="top"
-                            />
-                        </div>
+                        <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Meta Mensual</p>
                         <h3 className="text-2xl font-bold text-slate-100 mt-1">
                             S/ {stats.kpis.monthlyGoal.toLocaleString()}
                         </h3>
@@ -314,13 +287,7 @@ export default function DashboardClient() {
                                 Tasa 6% Est.
                             </span>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                            <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Comisión Devengada</p>
-                            <InfoTooltip
-                                content="Comisión calculada al 6% sobre el total de ventas confirmadas. Se devenga al momento de la venta pero se paga mensualmente según contrato."
-                                side="top"
-                            />
-                        </div>
+                        <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Comisión Devengada</p>
                         <h3 className="text-2xl font-bold text-indigo-300 mt-1">
                             S/ {stats.kpis.commission.toLocaleString()}
                         </h3>
@@ -337,13 +304,7 @@ export default function DashboardClient() {
                                 En Borrador
                             </span>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                            <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Cotizaciones Activas</p>
-                            <InfoTooltip
-                                content="Número de cotizaciones en estado borrador que aún no se han confirmado como ventas. Estas representan tu pipeline de oportunidades."
-                                side="top"
-                            />
-                        </div>
+                        <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Cotizaciones Activas</p>
                         <h3 className="text-2xl font-bold text-slate-100 mt-1">
                             {stats.kpis.pendingLeads} {stats.kpis.pendingLeads === 1 ? 'Cotización' : 'Cotizaciones'}
                         </h3>
@@ -624,162 +585,6 @@ export default function DashboardClient() {
                             </tbody>
                         </table>
                     </div>
-                </div>
-
-                {/* Nueva Sección: Mis Lotes Vendidos */}
-                <div className="bg-gradient-to-br from-emerald-950/20 to-green-950/10 rounded-2xl border border-emerald-500/20 shadow-2xl overflow-hidden">
-                    <div className="p-6 border-b border-emerald-500/10 bg-emerald-500/5 flex justify-between items-center">
-                        <div className="flex items-center gap-3">
-                            <div className="p-2.5 bg-emerald-950/60 border border-emerald-500/20 text-emerald-400 rounded-xl">
-                                <Award size={20} />
-                            </div>
-                            <div>
-                                <h3 className="text-lg font-bold text-emerald-300">🏆 Mis Lotes Vendidos</h3>
-                                <p className="text-xs text-slate-400">Historial completo de ventas confirmadas en Odoo</p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-3.5 py-1 rounded-full text-xs font-bold tracking-wide">
-                                {stats.assignedLots.filter(lot => lot.status === 'Vendido').length} Ventas Confirmadas
-                            </span>
-                            <button
-                                onClick={() => router.push('/')}
-                                className="text-emerald-400 hover:text-emerald-300 text-xs font-bold hover:underline"
-                            >
-                                Ver en Mapa
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead>
-                                <tr className="bg-emerald-950/60 text-emerald-300 text-xs font-semibold uppercase tracking-wider border-b border-emerald-500/20">
-                                    <th className="px-6 py-4.5 text-left">#</th>
-                                    <th className="px-6 py-4.5 text-left">Lote</th>
-                                    <th className="px-6 py-4.5 text-left">Cliente</th>
-                                    <th className="px-6 py-4.5 text-left">Etapa/Manzana</th>
-                                    <th className="px-6 py-4.5 text-right">Precio de Venta</th>
-                                    <th className="px-6 py-4.5 text-right">Comisión (6%)</th>
-                                    <th className="px-6 py-4.5 text-center">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-emerald-500/10">
-                                {stats.assignedLots.filter(lot => lot.status === 'Vendido').length === 0 ? (
-                                    <tr>
-                                        <td colSpan={7} className="px-6 py-12 text-center text-slate-500 text-sm">
-                                            Aún no tienes lotes vendidos registrados en el sistema.
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    stats.assignedLots
-                                        .filter(lot => lot.status === 'Vendido')
-                                        .map((item, idx) => (
-                                            <tr key={idx} className="hover:bg-emerald-950/10 transition-colors duration-150 group">
-                                                <td className="px-6 py-4">
-                                                    <div className="w-8 h-8 rounded-full bg-emerald-950/50 text-emerald-400 border border-emerald-500/20 flex items-center justify-center text-xs font-bold group-hover:scale-110 transition-transform">
-                                                        {idx + 1}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="bg-emerald-950/50 text-emerald-400 border border-emerald-500/10 p-2.5 rounded-xl group-hover:scale-110 transition-transform">
-                                                            <MapPin size={16} />
-                                                        </div>
-                                                        <div>
-                                                            <p className="font-bold text-emerald-200 text-sm">{item.lot}</p>
-                                                            <p className="text-[10px] text-emerald-400/60">{item.stage}</p>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="w-7 h-7 rounded-full bg-emerald-950/50 text-emerald-300 flex items-center justify-center text-[10px] font-bold border border-emerald-500/20">
-                                                            {item.client.split(' ').map((n: string) => n[0]).slice(0, 2).join('')}
-                                                        </div>
-                                                        <span className="text-slate-200 text-sm font-medium">{item.client}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-950/30 text-emerald-300 border border-emerald-500/20">
-                                                        {item.stage.split(' ')[0]} {/* Extraer etapa/manzana */}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <span className="text-base font-bold text-emerald-200">
-                                                        S/ {item.price.toLocaleString('es-PE')}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <div className="flex flex-col items-end">
-                                                        <span className="text-sm font-bold text-emerald-400">
-                                                            S/ {Math.round(item.price * 0.06).toLocaleString('es-PE')}
-                                                        </span>
-                                                        <span className="text-[10px] text-emerald-500/60">Tasa 6%</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-center">
-                                                    <button
-                                                        onClick={() => router.push('/')}
-                                                        className="text-emerald-400 hover:text-emerald-300 transition-colors p-2 hover:bg-emerald-950/30 rounded-lg group-hover:scale-110 transition-transform"
-                                                        title="Ver en mapa"
-                                                    >
-                                                        <ArrowUpRight size={18} />
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                    
-                    {/* Resumen de ventas */}
-                    {stats.assignedLots.filter(lot => lot.status === 'Vendido').length > 0 && (
-                        <div className="p-6 border-t border-emerald-500/10 bg-emerald-950/20">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div className="flex items-center justify-between p-4 bg-emerald-950/30 rounded-xl border border-emerald-500/20">
-                                    <div>
-                                        <p className="text-[10px] text-emerald-400/60 uppercase font-bold mb-1">Total Vendido</p>
-                                        <p className="text-lg font-bold text-emerald-300">
-                                            S/ {stats.assignedLots
-                                                .filter(lot => lot.status === 'Vendido')
-                                                .reduce((sum, lot) => sum + lot.price, 0)
-                                                .toLocaleString('es-PE')}
-                                        </p>
-                                    </div>
-                                    <DollarSign className="text-emerald-400/40" size={32} />
-                                </div>
-                                
-                                <div className="flex items-center justify-between p-4 bg-emerald-950/30 rounded-xl border border-emerald-500/20">
-                                    <div>
-                                        <p className="text-[10px] text-emerald-400/60 uppercase font-bold mb-1">Comisión Total</p>
-                                        <p className="text-lg font-bold text-emerald-300">
-                                            S/ {Math.round(stats.assignedLots
-                                                .filter(lot => lot.status === 'Vendido')
-                                                .reduce((sum, lot) => sum + (lot.price * 0.06), 0))
-                                                .toLocaleString('es-PE')}
-                                        </p>
-                                    </div>
-                                    <TrendingUp className="text-emerald-400/40" size={32} />
-                                </div>
-                                
-                                <div className="flex items-center justify-between p-4 bg-emerald-950/30 rounded-xl border border-emerald-500/20">
-                                    <div>
-                                        <p className="text-[10px] text-emerald-400/60 uppercase font-bold mb-1">Ticket Promedio</p>
-                                        <p className="text-lg font-bold text-emerald-300">
-                                            S/ {Math.round(stats.assignedLots
-                                                .filter(lot => lot.status === 'Vendido')
-                                                .reduce((sum, lot) => sum + lot.price, 0) /
-                                                Math.max(stats.assignedLots.filter(lot => lot.status === 'Vendido').length, 1))
-                                                .toLocaleString('es-PE')}
-                                        </p>
-                                    </div>
-                                    <Target className="text-emerald-400/40" size={32} />
-                                </div>
-                            </div>
-                        </div>
-                    )}
                 </div>
             </div>
         </div>

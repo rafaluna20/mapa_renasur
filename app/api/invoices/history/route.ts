@@ -6,14 +6,14 @@ import { paymentService } from '@/app/services/paymentService';
  * GET /api/invoices/history
  * Obtener historial de pagos del cliente autenticado
  */
-export async function GET(request: Request) {
+export async function GET() {
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
         return new Response('No autenticado', { status: 401 });
     }
 
-    const odooPartnerId = (session.user as any).odooPartnerId;
+    const odooPartnerId = (session.user as unknown as { odooPartnerId: number }).odooPartnerId;
 
     try {
         console.log(`[HISTORY_API] Fetching history for partner: ${odooPartnerId}`);
@@ -34,11 +34,11 @@ export async function GET(request: Request) {
             count: sorted.length,
             payments: sorted
         });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error fetching payment history:', error);
         return Response.json({
             success: false,
-            error: error.message || 'Error al obtener historial'
+            error: error instanceof Error ? error.message : 'Error al obtener historial'
         }, { status: 500 });
     }
 }

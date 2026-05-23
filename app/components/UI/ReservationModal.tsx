@@ -88,9 +88,9 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
 
             onSuccess();
             onClose();
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Error reserving lot:', error);
-            alert(`Error al procesar la reserva: ${error.message || 'Intente nuevamente'}`);
+            alert(`Error al procesar la reserva: ${error instanceof Error ? error.message : 'Intente nuevamente'}`);
         } finally {
             setIsSubmitting(false);
         }
@@ -209,7 +209,7 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
                                         </div>
                                     ) : searchTerm.length > 0 && !isSearching && !selectedClient && (
                                         <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-slate-300 rounded-xl shadow-2xl z-50 p-4 text-center">
-                                            <p className="text-xs text-slate-500 mb-3 font-medium">No se encontraron resultados para "{searchTerm}"</p>
+                                            <p className="text-xs text-slate-500 mb-3 font-medium">No se encontraron resultados para &quot;{searchTerm}&quot;</p>
                                             <button
                                                 onClick={() => setShowCreateClient(true)}
                                                 className="w-full py-2 bg-blue-100 text-blue-800 rounded-lg text-xs font-bold hover:bg-blue-200 transition-colors flex items-center justify-center gap-2"

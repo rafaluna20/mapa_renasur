@@ -1,5 +1,5 @@
-import { X, FileText, Check, Search, User, Loader2, Plus, Calculator, Calendar } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
+import { X, Check, User, Loader2, Plus, Calculator, Calendar } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { Lot } from '@/app/data/lotsData';
 import { odooService } from '@/app/services/odooService';
 import { useAuth } from '@/app/context/AuthContext';
@@ -114,9 +114,9 @@ export default function QuotationModal({ lot, onClose, onSuccess }: QuotationMod
 
             onSuccess();
             onClose();
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Quotation Error:", error);
-            alert(`Error al crear la cotización: ${error.message}`);
+            alert(`Error al crear la cotización: ${error instanceof Error ? error.message : String(error)}`);
         } finally {
             setIsSubmitting(false);
         }
@@ -187,7 +187,7 @@ export default function QuotationModal({ lot, onClose, onSuccess }: QuotationMod
                                 {searchTerm.length > 2 && !isSearching && searchResults.length === 0 && !selectedClient && (
                                     <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-50 p-2">
                                         <button onClick={() => setShowCreateClient(true)} className="w-full text-center py-2 text-sm text-indigo-600 font-bold hover:bg-indigo-50 rounded-md">
-                                            + Crear "{searchTerm}"
+                                            + Crear &quot;{searchTerm}&quot;
                                         </button>
                                     </div>
                                 )}

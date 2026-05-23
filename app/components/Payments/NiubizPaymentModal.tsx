@@ -19,7 +19,6 @@ export default function NiubizPaymentModal({
     onSuccess
 }: NiubizPaymentModalProps) {
     const [loading, setLoading] = useState(false);
-    const [sessionKey, setSessionKey] = useState<string | null>(null);
     const [error, setError] = useState('');
     const [step, setStep] = useState<'init' | 'payment' | 'processing' | 'success' | 'error'>('init');
 
@@ -37,7 +36,6 @@ export default function NiubizPaymentModal({
             const data = await response.json();
 
             if (data.success) {
-                setSessionKey(data.sessionKey);
                 setStep('payment');
 
                 // Cargar script de Niubiz
@@ -46,8 +44,8 @@ export default function NiubizPaymentModal({
                 setError(data.error || 'Error al inicializar pago');
                 setStep('error');
             }
-        } catch (err: any) {
-            setError(err.message || 'Error de conexión');
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Error de conexión');
             setStep('error');
         } finally {
             setLoading(false);

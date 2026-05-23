@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
+
 /**
  * Pre-processing script to enrich geometries.json with measurements
  * Run with: node scripts/processGeometries.js

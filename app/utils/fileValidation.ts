@@ -80,7 +80,7 @@ export async function validateFileType(file: File): Promise<{
             isValid: false,
             error: 'Tipo de archivo no permitido. Solo se aceptan JPG, PNG o PDF'
         };
-    } catch (error) {
+    } catch {
         return {
             isValid: false,
             error: 'Error al validar el archivo'

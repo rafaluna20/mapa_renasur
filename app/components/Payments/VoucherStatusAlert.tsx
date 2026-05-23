@@ -1,6 +1,6 @@
 'use client';
 
-import { Info, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 
 interface VoucherStatusAlertProps {
     status: 'pending' | 'approved' | 'rejected' | string;

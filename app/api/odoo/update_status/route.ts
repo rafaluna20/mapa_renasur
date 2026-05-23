@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Prepare write values
-        const vals: any = { "x_statu": odooValue };
+        const vals: Record<string, unknown> = { "x_statu": odooValue };
 
         // If clientName is provided (e.g. for Quote Confirmation or Reservation), update x_cliente
         // We allow empty string to clear it if needed, or check undefined

@@ -144,14 +144,14 @@ export async function POST(request: Request) {
                     }, { status: 400 });
                 }
             }
-        } catch (e) {
+        } catch {
             console.warn('[VOUCHER] ⚠️ Could not validate amount against invoice');
         }
 
-        const odooPartnerId = (session.user as any).odooPartnerId;
+        const odooPartnerId = (session.user as unknown as { odooPartnerId: number }).odooPartnerId;
 
         // ✅ VALIDACIÓN ROBUSTA: Verificar duplicados con fallback
-        let existingVouchers: any[] = [];
+        let existingVouchers: Record<string, unknown>[] = [];
         try {
             // Intento 1: Buscar por campos custom
             existingVouchers = await fetchOdoo('ir.attachment', 'search_read', [[
@@ -162,7 +162,7 @@ export async function POST(request: Request) {
                 fields: ['id', 'create_date'],
                 limit: 1
             });
-        } catch (e) {
+        } catch {
             // Intento 2: Fallback con búsqueda por descripción reciente
             console.warn('[VOUCHER] Using fallback duplicate detection');
             const sevenDaysAgo = new Date();
@@ -237,7 +237,7 @@ export async function POST(request: Request) {
                 x_voucher_transfer_date: transferDate || new Date().toISOString().split('T')[0]
             }]);
             console.log(`[VOUCHER] ✅ Attachment created with custom fields: ${attachmentId}`);
-        } catch (e: any) {
+        } catch {
             console.warn('[VOUCHER] ⚠️ Custom fields not available, using standard creation');
             // Intento 2: Solo campos estándar (fallback)
             attachmentId = await fetchOdoo('ir.attachment', 'create', [{
@@ -264,7 +264,7 @@ export async function POST(request: Request) {
 ## Validación de Comprobante Bancario
 
 **Cliente:** ${session.user.name}
-**DNI:** ${(session.user as any).dni}
+**DNI:** ${(session.user as unknown as { dni: string }).dni}
 **Email:** ${userEmail}
 **Factura ID:** ${invoiceId}
 
@@ -300,8 +300,8 @@ ${blobUrl ? `🔗 URL: ${blobUrl}` : '⚠️ URL Blob no disponible'}
                 }]);
                 console.log(`[VOUCHER] ✅ Validation task created: ${taskId}`);
             }
-        } catch (taskError: any) {
-            console.error('[VOUCHER] ❌ Failed to create validation task (non-blocking):', taskError.message);
+        } catch (taskError: unknown) {
+            console.error('[VOUCHER] ❌ Failed to create validation task (non-blocking):', taskError instanceof Error ? taskError.message : String(taskError));
         }
 
         console.log(`[VOUCHER] ========== SUCCESS ==========`);
@@ -315,11 +315,11 @@ ${blobUrl ? `🔗 URL: ${blobUrl}` : '⚠️ URL Blob no disponible'}
             submitted_at: new Date().toISOString(),
             message: '✅ Comprobante subido exitosamente. Tu pago está en revisión y será validado en las próximas 24 horas.'
         });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[VOUCHER] ❌ Error uploading voucher:', error);
         return Response.json({
             success: false,
-            error: error.message || 'Error al subir comprobante'
+            error: error instanceof Error ? error.message : 'Error al subir comprobante'
         }, { status: 500 });
     }
 }

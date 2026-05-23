@@ -3,6 +3,11 @@ import CredentialsProvider from 'next-auth/providers/credentials';
 import { fetchOdoo } from '@/app/services/odooService';
 import { emailService } from '@/app/services/emailService';
 
+interface ExtendedUser {
+    odooPartnerId?: number;
+    dni?: string;
+}
+
 export const authOptions: NextAuthOptions = {
     providers: [
         // Paso único de NextAuth: Verificar código y autenticar sesión
@@ -55,15 +60,15 @@ export const authOptions: NextAuthOptions = {
     callbacks: {
         async jwt({ token, user }) {
             if (user) {
-                token.odooPartnerId = (user as any).odooPartnerId;
-                token.dni = (user as any).dni;
+                token.odooPartnerId = (user as unknown as ExtendedUser).odooPartnerId;
+                token.dni = (user as unknown as ExtendedUser).dni;
             }
             return token;
         },
         async session({ session, token }) {
             if (session.user) {
-                (session.user as any).odooPartnerId = token.odooPartnerId;
-                (session.user as any).dni = token.dni;
+                (session.user as unknown as ExtendedUser).odooPartnerId = token.odooPartnerId as number;
+                (session.user as unknown as ExtendedUser).dni = token.dni as string;
             }
             return session;
         }

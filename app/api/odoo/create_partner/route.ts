@@ -32,10 +32,10 @@ export async function POST(request: Request) {
 
         return NextResponse.json({ success: true, id: newPartnerId, name });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Create Partner API Error:", error);
         return NextResponse.json(
-            { success: false, error: error.message || 'Error creando cliente' },
+            { success: false, error: error instanceof Error ? error.message : 'Error creando cliente' },
             { status: 500 }
         );
     }

@@ -43,7 +43,7 @@ export async function POST(request: Request) {
         // - state in ['draft', 'sent'] (Quotations)
         // - order_line.product_id = productId
 
-        const domain: any[] = [
+        const domain: unknown[] = [
             ['state', 'in', ['draft', 'sent']],
             ['order_line.product_id', '=', productId]
         ];
@@ -82,10 +82,10 @@ export async function POST(request: Request) {
             }
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("❌ Find Draft Order API Error:", error);
         return NextResponse.json(
-            { success: false, error: error.message || 'Internal Server Error' },
+            { success: false, error: error instanceof Error ? error.message : 'Internal Server Error' },
             { status: 500 }
         );
     }

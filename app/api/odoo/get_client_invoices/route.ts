@@ -48,7 +48,7 @@ export async function POST(request: Request) {
             }
 
             // Extraer IDs de facturas
-            const invoiceIds = [...new Set(invoiceLines.map((line: any) => line.move_id[0]))];
+            const invoiceIds = [...new Set(invoiceLines.map((line: Record<string, unknown>) => (line.move_id as unknown[])[0]))];
             console.log(`📋 Facturas encontradas para producto: ${invoiceIds.length}`);
 
             // Paso 3: Filtrar por partner_id + invoice IDs + tipo + estado
@@ -96,11 +96,11 @@ export async function POST(request: Request) {
             invoices: invoices || []
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("❌ Get Client Invoices Error:");
         console.error(error);
         // Return success:false but with a 200 OK so the client doesn't throw a network error
         // and handles the empty list gracefully.
-        return NextResponse.json({ success: false, error: error.message, invoices: [] }, { status: 200 });
+        return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Internal Server Error', invoices: [] }, { status: 200 });
     }
 }

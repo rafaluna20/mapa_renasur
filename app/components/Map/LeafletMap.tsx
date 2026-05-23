@@ -55,16 +55,15 @@ function MapController({ lots, selectedLotId, onZoomChange }: { lots: Lot[], sel
                             map.fitBounds(bounds, {
                                 paddingBottomRight: [0, 300], // 300px de padding inferior para dejar espacio al modal
                                 animate: true,
-                                duration: 2.2,  // Duración óptima
-                                maxZoom: 20,
-                                easeLinearity: 0.15 // Balance perfecto - suave pero sin saltos
+                                duration: 1.5,  // Snappy, premium transition
+                                maxZoom: 20
                             });
                         } else {
                             const targetZoom = map.getBoundsZoom(bounds, false, L.point(50, 50));
                             const finalZoom = Math.min(targetZoom, 21);
                             map.flyTo(bounds.getCenter(), finalZoom, {
-                                duration: 2.2,  // Duración óptima
-                                easeLinearity: 0.15 // Balance perfecto entre suavidad y naturalidad
+                                duration: 1.5,  // Snappy, premium transition
+                                animate: true
                             });
                         }
                     }
@@ -116,16 +115,11 @@ function MapController({ lots, selectedLotId, onZoomChange }: { lots: Lot[], sel
 
 // Component to render side measurements for selected lot
 function SideMeasurementTooltips({ lot, map }: { lot: Lot; map: L.Map }) {
-    const [tooltips, setTooltips] = useState<L.Tooltip[]>([]);
-
     useEffect(() => {
-        // Clear previous tooltips
-        tooltips.forEach(t => t.remove());
         const newTooltips: L.Tooltip[] = [];
 
         // Only show if lot has measurements and points
         if (!lot.measurements?.sides || !lot.points || lot.points.length < 2) {
-            setTooltips([]);
             return;
         }
 
@@ -188,15 +182,11 @@ function SideMeasurementTooltips({ lot, map }: { lot: Lot; map: L.Map }) {
             }
         });
 
-        setTooltips(newTooltips);
-
         // Cleanup on unmount
         return () => {
             newTooltips.forEach(t => t.remove());
         };
-        // Optimization: Only re-run if geometry/measurements or map changes.
-        // We use JSON.stringify to create stable dependencies for arrays/objects.
-    }, [map, JSON.stringify(lot.points), JSON.stringify(lot.measurements)]);
+    }, [map, lot]);
 
     return null;
 }
@@ -268,11 +258,7 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
         }
     };
 
-    const getMinZoomForLabel = (area: number) => {
-        if (area < 200) return 22;
-        if (area < 1200) return 21;
-        return 21;
-    };
+
 
     return (
         <MapContainer
@@ -329,7 +315,7 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
                 if (!positions || positions.length === 0) return null;
 
                 const isSelected = selectedLotId === lot.id;
-                const isPermanent = zoom >= getMinZoomForLabel(lot.x_area);
+                const areaClass = lot.x_area < 200 ? 'label-area-small' : (lot.x_area < 1200 ? 'label-area-medium' : 'label-area-large');
 
                 return (
                     <Polygon
@@ -339,7 +325,8 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
                             color: isSelected ? '#2563EB' : (mapType === 'satellite' ? 'white' : '#64748b'),
                             fillColor: getColor(lot.x_statu),
                             fillOpacity: 0.6,
-                            weight: isSelected ? 3 : 1
+                            weight: isSelected ? 3 : 1,
+                            className: isSelected ? 'lot-selected leaflet-interactive' : 'leaflet-interactive'
                         }}
                         eventHandlers={{
                             click: () => onLotSelect(lot),
@@ -366,13 +353,13 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
                     >
                         {zoom > 16 && (
                             <Tooltip
-                                key={`tooltip-${lot.id}-${isPermanent}`}
-                                permanent={isPermanent}
+                                key={`tooltip-${lot.id}`}
+                                permanent={true}
                                 direction="center"
                                 className="!bg-transparent !border-0 !shadow-none p-0"
                                 opacity={1}
                             >
-                                <div className="flex flex-col items-center justify-center bg-white/95 backdrop-blur-md rounded-md shadow-md border border-white/50 p-1.5 min-w-[50px] cursor-pointer animate-appear">
+                                <div className={`flex flex-col items-center justify-center bg-white/95 backdrop-blur-md rounded-md shadow-md border border-white/50 p-1.5 min-w-[50px] cursor-pointer lot-label-container ${areaClass} ${isSelected ? 'label-selected' : ''}`}>
                                     <span className="text-slate-800 font-bold text-[10px] tracking-tight uppercase text-center leading-none">
                                         {lot.x_mz}{lot.x_lote}
                                     </span>

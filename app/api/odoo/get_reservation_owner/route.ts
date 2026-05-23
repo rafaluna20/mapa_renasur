@@ -70,8 +70,8 @@ export async function POST(request: Request) {
             orderDate: order.date_order
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("❌ Get Reservation Owner Error:", error);
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+        return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Internal Server Error' }, { status: 500 });
     }
 }

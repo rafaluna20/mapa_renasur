@@ -37,15 +37,19 @@ export default function MapArea({
     currentUser,
     onExport, onExportPdf
 }: MapAreaProps) {
-    const [activeQuotes, setActiveQuotes] = useState<{ count: number; quotes: any[] } | null>(null);
+    const [activeQuotes, setActiveQuotes] = useState<{ count: number; quotes: { orderId: number; clientName: string; vendorName: string }[] } | null>(null);
 
     // Fetch active quotes when a lot is selected
     useEffect(() => {
-        if (selectedLot && selectedLot.default_code) {
-            odooService.getActiveQuotesByLot(selectedLot.default_code).then(setActiveQuotes);
-        } else {
-            setActiveQuotes(null);
-        }
+        const fetchQuotes = async () => {
+            if (selectedLot && selectedLot.default_code) {
+                const data = await odooService.getActiveQuotesByLot(selectedLot.default_code);
+                setActiveQuotes(data);
+            } else {
+                setActiveQuotes(null);
+            }
+        };
+        fetchQuotes();
     }, [selectedLot]);
 
     return (

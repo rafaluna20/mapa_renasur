@@ -9,7 +9,7 @@ export async function GET(
 
     // Si el ID es local (formato local-XXXX), intentamos buscar por el ID numérico
     // Si es fallback (fb-XXXX), intentamos buscar por el default_code
-    let filter: any[] = [];
+    let filter: unknown[] = [];
     const idStr = id.replace('local-', '');
 
     if (id.startsWith('fb-')) {
@@ -40,8 +40,8 @@ export async function GET(
         }
 
         return NextResponse.json({ success: true, product: products[0] });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("API Get Product Error:", error);
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+        return NextResponse.json({ success: false, error: error instanceof Error ? error.message : 'Internal Server Error' }, { status: 500 });
     }
 }

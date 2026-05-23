@@ -11,13 +11,22 @@ import {
     User,
     DollarSign,
     ArrowLeft,
-    ShieldCheck,
-    AlertCircle
+    ShieldCheck
 } from 'lucide-react';
+
+interface Reservation {
+    id: number;
+    evidenceUrl: string;
+    lotName: string;
+    date: string;
+    amount: number;
+    customer: string;
+    advisor: string;
+}
 
 export default function ManagerDashboard() {
     const router = useRouter();
-    const [pendingReservations, setPendingReservations] = useState<any[]>([]);
+    const [pendingReservations, setPendingReservations] = useState<Reservation[]>([]);
     const [loading, setLoading] = useState(true);
     const [processingId, setProcessingId] = useState<number | null>(null);
 
@@ -44,7 +53,7 @@ export default function ManagerDashboard() {
             await odooService.approveReservation(id);
             // Remove from list
             setPendingReservations(prev => prev.filter(r => r.id !== id));
-        } catch (error) {
+        } catch {
             alert('Error al aprobar la reserva');
         } finally {
             setProcessingId(null);
@@ -60,7 +69,7 @@ export default function ManagerDashboard() {
             await odooService.rejectReservation(id, reason || "Sin motivo especificado");
             // Remove from list
             setPendingReservations(prev => prev.filter(r => r.id !== id));
-        } catch (error) {
+        } catch {
             alert('Error al rechazar la reserva');
         } finally {
             setProcessingId(null);
@@ -130,6 +139,7 @@ export default function ManagerDashboard() {
                                 <div className="grid grid-cols-1 md:grid-cols-3">
                                     {/* Evidence View */}
                                     <div className="h-48 md:h-auto bg-slate-100 relative group cursor-pointer overflow-hidden border-b md:border-b-0 md:border-r border-slate-100">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
                                         <img
                                             src={res.evidenceUrl}
                                             alt="Comprobante"

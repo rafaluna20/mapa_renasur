@@ -13,7 +13,7 @@
  * normalizeText("Manzaña D - Lote 100") // "manzana d lote 100"
  * normalizeText("Etápa 1") // "etapa 1"
  */
-export function normalizeText(text: any): string {
+export function normalizeText(text: unknown): string {
   if (!text || text === false || text === null || text === undefined) return '';
   
   return text
@@ -71,7 +71,7 @@ export function highlightMatch(text: string, query: string): string {
  * @param value - Valor potencialmente nulo de Odoo
  * @returns String seguro para búsqueda
  */
-export function safeString(value: any): string {
+export function safeString(value: unknown): string {
   if (value === false || value === null || value === undefined) return '';
   return String(value).trim();
 }

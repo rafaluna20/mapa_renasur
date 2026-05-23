@@ -35,7 +35,7 @@ export async function POST(request: Request) {
         console.log(`✅ Found product.product ID: ${productId} (${products[0].name})`);
 
         // STEP 2: Create Sale Order in draft state
-        const orderData: any = {
+        const orderData: Record<string, unknown> = {
             partner_id: partnerId,
             state: 'draft',  // Draft state - waiting for approval
             note: notes || '',
@@ -65,10 +65,11 @@ export async function POST(request: Request) {
         // 🐛 DEBUG: Log complete data being sent to Odoo
         console.log('📤 ===== SALE ORDER DATA TO ODOO =====');
         console.log('Partner ID:', orderData.partner_id);
+        const orderLineData = (orderData.order_line as any[])[0][2] as { product_id: number; price_unit: number; product_uom_qty: number };
         console.log('Product:', {
-            id: orderData.order_line[0][2].product_id,
-            price_unit: orderData.order_line[0][2].price_unit,
-            quantity: orderData.order_line[0][2].product_uom_qty
+            id: orderLineData.product_id,
+            price_unit: orderLineData.price_unit,
+            quantity: orderLineData.product_uom_qty
         });
         console.log('Financial Details:', {
             x_plazo_meses: orderData.x_plazo_meses || 'NOT SET',
@@ -79,7 +80,7 @@ export async function POST(request: Request) {
         console.log('Metadata:', {
             state: orderData.state,
             user_id: orderData.user_id,
-            note: orderData.note?.substring(0, 50) + '...'
+            note: typeof orderData.note === 'string' ? orderData.note.substring(0, 50) + '...' : 'N/A'
         });
         console.log('======================================');
 
@@ -98,12 +99,13 @@ export async function POST(request: Request) {
             orderId: orderId
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("❌ Create Sale Order API Error:");
-        console.error("Error message:", error.message);
+        const errorMessage = error instanceof Error ? error.message : 'Internal Server Error';
+        console.error("Error message:", errorMessage);
         console.error("Full error:", JSON.stringify(error, null, 2));
         return NextResponse.json(
-            { success: false, error: error.message || 'Internal Server Error' },
+            { success: false, error: errorMessage },
             { status: 500 }
         );
     }

@@ -52,10 +52,10 @@ export async function POST(request: Request) {
             maskedEmail
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[AUTH] Request code error:', error);
         return NextResponse.json(
-            { error: error.message || 'Error interno al enviar código' },
+            { error: error instanceof Error ? error.message : 'Error interno al enviar código' },
             { status: 500 }
         );
     }

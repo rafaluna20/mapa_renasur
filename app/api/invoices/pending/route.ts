@@ -6,14 +6,14 @@ import { paymentService } from '@/app/services/paymentService';
  * GET /api/invoices/pending
  * Obtener facturas pendientes del cliente autenticado
  */
-export async function GET(request: Request) {
+export async function GET() {
     const session = await getServerSession(authOptions);
 
     if (!session?.user) {
         return new Response('No autenticado', { status: 401 });
     }
 
-    const odooPartnerId = (session.user as any).odooPartnerId;
+    const odooPartnerId = (session.user as unknown as { odooPartnerId: number }).odooPartnerId;
 
     if (!odooPartnerId) {
         return new Response('Partner ID no encontrado en sesión', { status: 400 });
@@ -34,11 +34,11 @@ export async function GET(request: Request) {
             count: sorted.length,
             invoices: sorted
         });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error fetching pending invoices:', error);
         return Response.json({
             success: false,
-            error: error.message || 'Error al obtener facturas'
+            error: error instanceof Error ? error.message : 'Error al obtener facturas'
         }, { status: 500 });
     }
 }

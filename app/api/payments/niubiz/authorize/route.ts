@@ -49,7 +49,7 @@ export async function POST(request: Request) {
 
         // Registrar pago en Odoo
         try {
-            const odooPartnerId = (session.user as any).odooPartnerId;
+            const odooPartnerId = (session.user as unknown as { odooPartnerId: number }).odooPartnerId;
 
             const paymentId = await fetchOdoo('account.payment', 'create', [{
                 payment_type: 'inbound',
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
                 transactionId: authorization.order.transactionId,
                 paymentId
             });
-        } catch (odooError: any) {
+        } catch (odooError: unknown) {
             console.error('Error registering payment in Odoo:', odooError);
             return Response.json({
                 success: true, // El pago en Niubiz fue exitoso, pero falló el registro en Odoo
@@ -95,11 +95,11 @@ export async function POST(request: Request) {
                 transactionId: authorization.order.transactionId
             });
         }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error authorizing Niubiz transaction:', error);
         return Response.json({
             success: false,
-            error: error.message || 'Error al procesar la autorización'
+            error: error instanceof Error ? error.message : 'Error al procesar la autorización'
         }, { status: 500 });
     }
 }

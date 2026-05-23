@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { X, Upload, FileText, Loader2, AlertCircle, CheckCircle2, Calendar, Building2, Hash, Clock } from 'lucide-react';
+import { X, Upload, FileText, Loader2, AlertCircle, Calendar, Building2, Hash, Clock } from 'lucide-react';
 import { validateFileType } from '@/app/utils/fileValidation';
 import { useFocusTrap } from '@/app/hooks/useFocusTrap';
 import BankDetailsCard from './BankDetailsCard';
@@ -144,7 +144,7 @@ export default function VoucherUploadModal({
                 }
                 console.error('[VOUCHER_UPLOAD] Error:', data.error);
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('[VOUCHER_UPLOAD] Network error:', err);
             setError('No pudimos conectar con el servidor. Verifica tu conexión a internet e intenta nuevamente.');
         } finally {
@@ -327,6 +327,7 @@ export default function VoucherUploadModal({
                                 ) : (
                                     <div className="border border-slate-200 rounded-xl p-4">
                                         {preview ? (
+                                            // eslint-disable-next-line @next/next/no-img-element
                                             <img src={preview} alt="Vista previa del comprobante" className="w-full rounded-lg mb-4" />
                                         ) : (
                                             <div className="flex items-center justify-center p-8 bg-slate-50 rounded-lg">

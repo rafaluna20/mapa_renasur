@@ -111,9 +111,9 @@ export const odooService = {
     },
 
     // Generic search_read for querying Odoo models
-    async searchRead<T = any>(
+    async searchRead<T = Record<string, unknown>>(
         model: string,
-        domain: any[],
+        domain: (string | [string, string, unknown])[],
         fields: string[] = []
     ): Promise<T[]> {
         const response = await fetch('/api/odoo/search-read', {
@@ -132,7 +132,7 @@ export const odooService = {
     },
 
     // Generic read for fetching specific records
-    async read<T = any>(
+    async read<T = Record<string, unknown>>(
         model: string,
         id: number | number[],
         fields: string[] = []
@@ -159,9 +159,9 @@ export const odooService = {
     async call(
         model: string,
         method: string,
-        args: any[] = [],
-        kwargs: Record<string, any> = {}
-    ): Promise<any> {
+        args: unknown[] = [],
+        kwargs: Record<string, unknown> = {}
+    ): Promise<unknown> {
         const response = await fetch('/api/odoo/call', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -177,18 +177,19 @@ export const odooService = {
         return data.result;
     },
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     async getSalesCount(_partnerId: number): Promise<number> {
         // Placeholder for future implementation
         return 0;
     },
 
-    async getSalesStats(userId: number): Promise<{ sold: number, reserved: number, totalValue: number }> {
+    async getSalesStats(userId: number): Promise<{ sold: number, reserved: number, draft: number, totalValue: number }> {
         const response = await fetch(`/api/odoo/stats?userId=${userId}`);
         const result = await response.json();
 
         if (!result.success) {
             console.error("Failed to fetch stats:", result.error);
-            return { sold: 0, reserved: 0, totalValue: 0 };
+            return { sold: 0, reserved: 0, draft: 0, totalValue: 0 };
         }
 
         return result.stats;
@@ -212,37 +213,66 @@ export const odooService = {
         }
     },
 
-    async getDetailedSalesStats(userId: number) {
-        // MOCK DATA for Dashboard Prototype
-        // In the future, this will fetch real data from Odoo
-        return {
-            salesTrend: [
-                { name: 'Ene', ventas: 4000 },
-                { name: 'Feb', ventas: 3000 },
-                { name: 'Mar', ventas: 2000 },
-                { name: 'Abr', ventas: 2780 },
-                { name: 'May', ventas: 1890 },
-                { name: 'Jun', ventas: 2390 },
-                { name: 'Jul', ventas: 3490 },
-            ],
-            kpis: {
-                totalSales: 154000,
-                monthlyGoal: 200000,
-                commission: 4620,
-                pendingLeads: 12
-            },
-            recentActivity: [
-                { id: 1, action: "Reserva", lot: "Mz C Lote 12", date: "Hace 2 horas" },
-                { id: 2, action: "Venta", lot: "Mz A Lote 04", date: "Ayer" },
-                { id: 3, action: "Cotización", lot: "Mz D Lote 08", date: "Hace 2 días" }
-            ]
+    async getDetailedSalesStats(userId: number, startDate?: string, endDate?: string): Promise<{
+        kpis: { totalSales: number; monthlyGoal: number; commission: number; pendingLeads: number };
+        salesTrend: { name: string; ventas: number }[];
+        recentActivity: { id: number; action: string; lot: string; date: string }[];
+        competedLots: { lot: string; stage: string; quotes: { client: string; advisor: string; hours: number }[] }[];
+        assignedLots: { lot: string; stage: string; client: string; status: string; price: number }[];
+    }> {
+        let url = `/api/odoo/stats/detailed?userId=${userId}`;
+        if (startDate) url += `&startDate=${startDate}`;
+        if (endDate) url += `&endDate=${endDate}`;
+        const response = await fetch(url);
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error || "Failed to fetch detailed stats");
+        }
+
+        return result.stats;
+    },
+
+    async getGeneralProjectStats(userId: number, isSystem: boolean, startDate?: string, endDate?: string): Promise<{
+        kpis: {
+            totalSales: number;
+            projectValue: number;
+            commission: number;
+            occupationRate: number;
+            totalLots: number;
+            soldLots: number;
+            reservedLots: number;
+            availableLots: number;
         };
+        salesTrend: { name: string; ventas: number }[];
+        advisorRanking: { name: string; lotsCount: number; amountTotal: number; commission: number }[];
+        recentActivity: { id: number; action: string; lot: string; advisor: string; date: string }[];
+    }> {
+        let url = '/api/odoo/stats/general';
+        const params = new URLSearchParams();
+        if (startDate) params.set('startDate', startDate);
+        if (endDate) params.set('endDate', endDate);
+        if (params.toString()) url += `?${params.toString()}`;
+
+        const response = await fetch(url, {
+            headers: {
+                'X-User-Id': String(userId),
+                'X-Is-System': String(isSystem)
+            }
+        });
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error || "Failed to fetch general stats");
+        }
+
+        return result.stats;
     },
 
     // --- LEVEL 2: Real Exchange Architecture (Sales & Partners) ---
 
     // 1. Search for clients (res.partner) for the dropdown
-    async searchPartners(query: string): Promise<any[]> {
+    async searchPartners(query: string): Promise<Record<string, unknown>[]> {
         if (!query) return [];
         try {
             const response = await fetch('/api/odoo/search_partners', {
@@ -327,7 +357,7 @@ export const odooService = {
     },
 
     // Get active quotations (draft orders) for a specific lot
-    async getActiveQuotesByLot(defaultCode: string): Promise<{ count: number; quotes: any[] }> {
+    async getActiveQuotesByLot(defaultCode: string): Promise<{ count: number; quotes: Record<string, unknown>[] }> {
         try {
             const response = await fetch('/api/odoo/get_active_quotes', {
                 method: 'POST',
@@ -527,7 +557,7 @@ export const odooService = {
             const activeQuotes = await this.getActiveQuotesByLot(defaultCode);
             if (activeQuotes.count > 1) {
                 console.log(`ℹ️ NOTIFICACIÓN: ${activeQuotes.count - 1} cotización(es) competitiva(s) ahora son obsoletas para el lote ${defaultCode}`);
-                activeQuotes.quotes.forEach((quote: any) => {
+                activeQuotes.quotes.forEach((quote: Record<string, unknown>) => {
                     if (quote.orderId !== orderId) {
                         console.log(`📧 [MOCK] Notifying vendor ${quote.vendorName}: Client ${quote.clientName}'s quote is no longer valid.`);
                     }
@@ -567,7 +597,7 @@ export const odooService = {
     },
 
     // Get invoices for a specific client (partner_id) and optionally filter by product (lot)
-    async getClientInvoices(partnerId: number, productCode?: string): Promise<any[]> {
+    async getClientInvoices(partnerId: number, productCode?: string): Promise<Record<string, unknown>[]> {
         try {
             const response = await fetch('/api/odoo/get_client_invoices', {
                 method: 'POST',
@@ -587,13 +617,15 @@ export const odooService = {
     },
 
     // --- MOCK: Reservation Logic with Evidence (Legacy/Simple) ---
-    async reserveLotWithEvidence(productId: number, userId: number, file: File, notes: string): Promise<any> {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    async reserveLotWithEvidence(productId: number, userId: number, file: File, notes: string): Promise<unknown> {
         // Deprecated in favor of processReservationLevel2 for the new flow,
         // but kept for backward compatibility if needed.
         return this.updateLotStatus(productId, 'separado');
     },
 
     // --- MOCK: Locking System ---
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     async checkLotLock(productId: number): Promise<{ isLocked: boolean; lockedBy?: string }> {
         // Simulation: Lots ending in '5' are locked by another user
         // In production, this would call a real endpoint checking an ephemeral lock (Redis/Odoo)
@@ -601,7 +633,7 @@ export const odooService = {
     },
 
     // --- MOCK: Management Dashboard ---
-    async getPendingReservations(): Promise<any[]> {
+    async getPendingReservations(): Promise<Record<string, unknown>[]> {
         // Simulate a delay
         await new Promise(resolve => setTimeout(resolve, 800));
 
@@ -643,7 +675,7 @@ export const odooService = {
     },
 
     // Create recurring contract from sale order
-    async createRecurringContract(saleOrderId: number): Promise<{ contractId: number; details: any }> {
+    async createRecurringContract(saleOrderId: number): Promise<{ contractId: number; details: unknown }> {
         try {
             const response = await fetch('/api/odoo/create_contract', {
                 method: 'POST',
@@ -674,7 +706,7 @@ export const odooService = {
         paymentDate: string,
         paymentRef: string,
         journalId?: number
-    ): Promise<any> {
+    ): Promise<unknown> {
         try {
             // 1. If no journalId provided, find the first 'bank' journal
             if (!journalId) {

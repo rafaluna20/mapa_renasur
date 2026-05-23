@@ -79,11 +79,11 @@ export async function POST(request: Request) {
             message: `Email de confirmación enviado a ${partner[0].email}`
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('[WEBHOOK] ❌ Error procesando webhook:', error);
         return Response.json({
             success: false,
-            error: error.message
+            error: error instanceof Error ? error.message : 'Internal Server Error'
         }, { status: 500 });
     }
 }

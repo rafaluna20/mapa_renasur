@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
+
 /**
  * Script para convertir el logo de TERRA LIMA a base64
  * Ejecutar con: node scripts/convertLogoToBase64.js

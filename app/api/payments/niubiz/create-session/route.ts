@@ -35,7 +35,7 @@ export async function POST(request: Request) {
         }
 
         // Verificar que la factura pertenece al cliente autenticado
-        const odooPartnerId = (session.user as any).odooPartnerId;
+        const odooPartnerId = (session.user as unknown as { odooPartnerId: number }).odooPartnerId;
         if (invoice.partner_id[0] !== odooPartnerId) {
             return Response.json({
                 success: false,
@@ -61,11 +61,11 @@ export async function POST(request: Request) {
                 due_date: invoice.invoice_date_due
             }
         });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('Error creating Niubiz session:', error);
         return Response.json({
             success: false,
-            error: error.message || 'Error al crear sesión de pago'
+            error: error instanceof Error ? error.message : 'Error al crear sesión de pago'
         }, { status: 500 });
     }
 }

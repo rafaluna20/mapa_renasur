@@ -74,7 +74,7 @@ export const exportQuoteToPdf = async (
             doc.addImage(logoBase64, 'PNG', margin, 10, 50, 20);
             logoLoaded = true;
         }
-    } catch (error) {
+    } catch {
         console.info('Logo no disponible, usando texto corporativo');
     }
     
@@ -166,7 +166,7 @@ export const exportQuoteToPdf = async (
     });
 
     // --- 4. RESUMEN FINANCIERO ---
-    const finalY = (doc as any).lastAutoTable.finalY + 12;
+    const finalY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
 
     // Título de sección
     doc.setFontSize(11);
@@ -219,7 +219,7 @@ export const exportQuoteToPdf = async (
     });
 
     // Cuota mensual destacada
-    const cuotaY = (doc as any).lastAutoTable.finalY + 8;
+    const cuotaY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
     const cuotaHeight = 18;
     
     // Caja destacada para cuota mensual (más suave)
@@ -254,7 +254,7 @@ export const exportQuoteToPdf = async (
         doc.text(`CRONOGRAMA DE PAGOS - ${calcs.installments.length} CUOTAS`, margin, tableY);
 
         // Preparar datos: fila inicial + cuotas
-        const tableBody: any[] = [
+        const tableBody: unknown[][] = [
             // Fila de pago inicial
             [
                 { content: '0', styles: { fontStyle: 'bold' as const } },
@@ -300,7 +300,7 @@ export const exportQuoteToPdf = async (
                 textColor: COLORS.gray.dark
             },
             alternateRowStyles: { fillColor: COLORS.gray.veryLight },
-            didParseCell: (data: any) => {
+            didParseCell: (data: { row: { index: number }, column: { index: number }, cell: { styles: { textColor: unknown, fontStyle: string } } }) => {
                 // Destacar última fila (saldo final = 0)
                 if (data.row.index === tableBody.length - 1 && data.column.index === 3) {
                     data.cell.styles.textColor = COLORS.primary.main;
@@ -311,7 +311,7 @@ export const exportQuoteToPdf = async (
     }
 
     // --- PIE DE PÁGINA ---
-    const totalPages = (doc as any).internal.getNumberOfPages();
+    const totalPages = (doc as jsPDF & { internal: { getNumberOfPages: () => number } }).internal.getNumberOfPages();
     for (let i = 1; i <= totalPages; i++) {
         doc.setPage(i);
         

@@ -130,7 +130,7 @@ export function useClientSearch(options: UseClientSearchOptions = {}): UseClient
         if (enableRecent) {
             loadRecentClients();
         }
-    }, [vendorId, enableRecent]);
+    }, [vendorId, enableRecent, loadRecentClients]);
 
     /**
      * Efecto 2: Búsqueda con debounce
@@ -152,7 +152,7 @@ export function useClientSearch(options: UseClientSearchOptions = {}): UseClient
 
         // Limpiar temporizador al desmontar o cuando cambie searchTerm
         return () => clearTimeout(timer);
-    }, [searchTerm, minChars, debounceMs, selectedClient]);
+    }, [searchTerm, minChars, debounceMs, selectedClient, performSearch]);
 
     // ========================================================================
     // FUNCIONES
@@ -161,7 +161,7 @@ export function useClientSearch(options: UseClientSearchOptions = {}): UseClient
     /**
      * Realiza la búsqueda de clientes
      */
-    const performSearch = async (term: string) => {
+    const performSearch = useCallback(async (term: string) => {
         const normalizedTerm = term.trim();
         
         if (!normalizedTerm) {
@@ -202,7 +202,7 @@ export function useClientSearch(options: UseClientSearchOptions = {}): UseClient
         } finally {
             setIsSearching(false);
         }
-    };
+    }, [cacheResults, maxResults]);
 
     /**
      * Carga los clientes recientes desde localStorage
@@ -215,7 +215,7 @@ export function useClientSearch(options: UseClientSearchOptions = {}): UseClient
                 
                 // Filtrar por vendedor si se especificó
                 const filtered = vendorId 
-                    ? parsed.filter(c => (c as any).vendorId === vendorId)
+                    ? parsed.filter(c => (c as Record<string, unknown>).vendorId === vendorId)
                     : parsed;
                 
                 setRecentClients(filtered.slice(0, 5)); // Mostrar solo top 5

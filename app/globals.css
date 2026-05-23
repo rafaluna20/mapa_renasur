@@ -254,3 +254,51 @@ button:active:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
 }
+
+/* ============================================================================
+   ESTILOS PARA ETIQUETAS DE LOTES SUAVES (Nivel Experto GIS)
+   ============================================================================ */
+
+/* Contenedor base de la etiqueta del lote */
+.lot-label-container {
+  opacity: 0;
+  transform: scale(0.75);
+  transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1), transform 0.5s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  will-change: opacity, transform;
+  backface-visibility: hidden;
+}
+
+/* --- Mostrar etiquetas basado en clases de zoom de Leaflet --- */
+
+/* Lotes grandes y medianos: visibles desde zoom 20 */
+.leaflet-zoom-20 .label-area-medium,
+.leaflet-zoom-20 .label-area-large,
+.leaflet-zoom-21 .label-area-medium,
+.leaflet-zoom-21 .label-area-large,
+.leaflet-zoom-22 .label-area-medium,
+.leaflet-zoom-22 .label-area-large {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* Lotes pequeños: visibles a partir de zoom 21 */
+.leaflet-zoom-21 .label-area-small,
+.leaflet-zoom-22 .label-area-small {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* --- La etiqueta del lote SELECCIONADO siempre destaca --- */
+.label-selected {
+  opacity: 1 !important;
+  transform: scale(1.1) !important;
+  border-color: #2563EB !important; /* Borde azul de selección */
+  box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.35), 0 4px 6px -2px rgba(37, 99, 235, 0.1) !important;
+  background-color: #ffffff !important;
+  z-index: 9999 !important;
+}
+
+/* --- Transiciones de color para Polígonos de Leaflet (SVG) --- */
+.leaflet-interactive {
+  transition: stroke 0.3s ease, stroke-width 0.3s ease, fill-color 0.3s ease, fill-opacity 0.3s ease !important;
+}

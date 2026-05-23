@@ -14,7 +14,7 @@ export async function POST(request: Request) {
 
         // Confirm the sale order by changing state from 'draft' to 'sale'
         // In Odoo, this is typically done via action_confirm() but we can also write directly
-        const result = await fetchOdoo(
+        await fetchOdoo(
             'sale.order',
             'action_confirm',
             [[parseInt(orderId)]]
@@ -27,10 +27,10 @@ export async function POST(request: Request) {
             message: 'Order confirmed successfully'
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Confirm Order API Error:", error);
         return NextResponse.json(
-            { success: false, error: error.message || 'Internal Server Error' },
+            { success: false, error: error instanceof Error ? error.message : 'Internal Server Error' },
             { status: 500 }
         );
     }

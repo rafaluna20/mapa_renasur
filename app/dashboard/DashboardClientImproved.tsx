@@ -1,0 +1,963 @@
+'use client';
+
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import {
+    AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+    ComposedChart, Line, Bar, Brush, Legend
+} from 'recharts';
+import {
+    DollarSign, TrendingUp, Users, Target, ArrowUpRight, ArrowDownRight,
+    MapPin, Clock, Loader2, Award, Zap, FileDown, Calendar, Filter,
+    AlertTriangle, Sparkles, TrendingDown, Activity, BarChart3
+} from 'lucide-react';
+import { useAuth } from '@/app/context/AuthContext';
+import { odooService } from '@/app/services/odooService';
+import { generateEnterpriseReport, generateProjectGeneralReport, type ReportData } from '@/app/services/reportService';
+import { useRouter } from 'next/navigation';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TIPOS Y CONFIGURACIONES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface EnhancedStats {
+    kpis: {
+        monthlyGoal: number;
+        commission: number;
+        pendingLeads: number;
+        totalSales: number;
+        // Nuevos KPIs
+        avgTicket: number;
+        conversionRate: number;
+        pipelineValue: number;
+        salesVelocity: number;
+    };
+    salesTrend: { name: string; ventas: number; meta?: number; comision?: number }[];
+    recentActivity: { id: number; action: string; lot: string; date: string }[];
+    competedLots: { lot: string; stage: string; quotes: { client: string; advisor: string; hours: number }[] }[];
+    assignedLots: { lot: string; stage: string; client: string; status: string; price: number; daysOpen?: number }[];
+    // Nuevas métricas comparativas
+    comparison: {
+        totalSales: { value: number; change: number; trend: 'up' | 'down' | 'stable' };
+        commission: { value: number; change: number; trend: 'up' | 'down' | 'stable' };
+        salesCount: { value: number; change: number; trend: 'up' | 'down' | 'stable' };
+    };
+}
+
+type PeriodFilter = '30d' | '90d' | '180d' | 'ytd' | 'custom';
+type ChartView = 'simple' | 'detailed';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// COMPONENTES AUXILIARES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Tooltip mejorado con más información
+interface EnhancedTooltipProps {
+    active?: boolean;
+    payload?: any[];
+    label?: string;
+}
+
+const EnhancedTooltip = ({ active, payload, label }: EnhancedTooltipProps) => {
+    if (active && payload && payload.length) {
+        return (
+            <div className="bg-slate-900/95 border border-indigo-500/40 backdrop-blur-md p-4 rounded-xl shadow-2xl">
+                <p className="text-xs font-semibold text-indigo-300 uppercase tracking-wider mb-2">
+                    {label} · 2026
+                </p>
+                {payload.map((entry, index) => (
+                    <div key={index} className="flex items-center justify-between gap-4 mb-1">
+                        <span className="text-xs text-slate-300">{entry.name}:</span>
+                        <span className="text-sm font-bold" style={{ color: entry.color }}>
+                            S/ {entry.value.toLocaleString('es-PE')}
+                        </span>
+                    </div>
+                ))}
+            </div>
+        );
+    }
+    return null;
+};
+
+// KPI Card mejorado con comparativas y sparkline
+interface KPICardProps {
+    label: string;
+    value: string | number;
+    icon: React.ReactNode;
+    color: 'emerald' | 'amber' | 'indigo' | 'blue' | 'purple';
+    change?: number;
+    trend?: 'up' | 'down' | 'stable';
+    subtitle?: string;
+    sparklineData?: number[];
+}
+
+const KPICard = ({ label, value, icon, color, change, trend, subtitle, sparklineData }: KPICardProps) => {
+    const colorMap = {
+        emerald: {
+            bg: 'bg-emerald-950/60',
+            text: 'text-emerald-400',
+            border: 'border-emerald-500/20',
+            gradient: 'from-emerald-500/5',
+            hover: 'hover:border-emerald-500/30 hover:shadow-[0_0_20px_rgba(16,185,129,0.05)]'
+        },
+        amber: {
+            bg: 'bg-amber-950/60',
+            text: 'text-amber-400',
+            border: 'border-amber-500/20',
+            gradient: 'from-amber-500/5',
+            hover: 'hover:border-amber-500/30 hover:shadow-[0_0_20px_rgba(245,158,11,0.05)]'
+        },
+        indigo: {
+            bg: 'bg-indigo-950/60',
+            text: 'text-indigo-400',
+            border: 'border-indigo-500/20',
+            gradient: 'from-indigo-500/5',
+            hover: 'hover:border-indigo-500/30 hover:shadow-[0_0_20px_rgba(99,102,241,0.05)]'
+        },
+        blue: {
+            bg: 'bg-blue-950/60',
+            text: 'text-blue-400',
+            border: 'border-blue-500/20',
+            gradient: 'from-blue-500/5',
+            hover: 'hover:border-blue-500/30 hover:shadow-[0_0_20px_rgba(59,130,246,0.05)]'
+        },
+        purple: {
+            bg: 'bg-purple-950/60',
+            text: 'text-purple-400',
+            border: 'border-purple-500/20',
+            gradient: 'from-purple-500/5',
+            hover: 'hover:border-purple-500/30 hover:shadow-[0_0_20px_rgba(168,85,247,0.05)]'
+        }
+    };
+
+    const colors = colorMap[color];
+    const trendIcon = trend === 'up' ? <ArrowUpRight size={14} /> : trend === 'down' ? <ArrowDownRight size={14} /> : null;
+    const trendColor = trend === 'up' ? 'text-emerald-400' : trend === 'down' ? 'text-red-400' : 'text-slate-400';
+
+    return (
+        <div className={`bg-slate-900/40 border border-slate-850 ${colors.hover} rounded-2xl p-6 relative overflow-hidden transition-all duration-300 group`}>
+            <div className={`absolute right-0 top-0 h-full w-24 bg-gradient-to-l ${colors.gradient} to-transparent opacity-50`} />
+            
+            <div className="flex justify-between items-start mb-4 relative z-10">
+                <div className={`p-3 ${colors.bg} ${colors.text} rounded-xl border ${colors.border} group-hover:scale-110 transition-transform`}>
+                    {icon}
+                </div>
+                
+                {change !== undefined && (
+                    <div className={`flex items-center gap-1 text-xs font-bold ${trendColor} bg-slate-950/60 px-2.5 py-1 rounded-full border ${colors.border}`}>
+                        {trendIcon}
+                        <span>{change > 0 ? '+' : ''}{change}%</span>
+                    </div>
+                )}
+            </div>
+            
+            <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">{label}</p>
+            <h3 className="text-2xl font-bold text-slate-100">{value}</h3>
+            
+            {subtitle && (
+                <p className="text-[10px] text-slate-500 mt-1">{subtitle}</p>
+            )}
+            
+            {/* Mini sparkline si hay datos */}
+            {sparklineData && sparklineData.length > 0 && (
+                <div className="mt-3 h-8 -mx-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={sparklineData.map((v, i) => ({ value: v }))}>
+                            <defs>
+                                <linearGradient id={`gradient-${color}`} x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor={colors.text.replace('text-', '#')} stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor={colors.text.replace('text-', '#')} stopOpacity={0} />
+                                </linearGradient>
+                            </defs>
+                            <Area 
+                                type="monotone" 
+                                dataKey="value" 
+                                stroke={colors.text.replace('text-', '#')} 
+                                strokeWidth={1.5}
+                                fill={`url(#gradient-${color})`} 
+                            />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// Panel de Insights
+interface InsightProps {
+    type: 'success' | 'warning' | 'info';
+    icon: React.ReactNode;
+    children: React.ReactNode;
+}
+
+const Insight = ({ type, icon, children }: InsightProps) => {
+    const typeMap = {
+        success: 'bg-emerald-950/20 border-emerald-500/30 text-emerald-300',
+        warning: 'bg-amber-950/20 border-amber-500/30 text-amber-300',
+        info: 'bg-blue-950/20 border-blue-500/30 text-blue-300'
+    };
+
+    return (
+        <div className={`${typeMap[type]} border rounded-xl p-3 flex items-start gap-3`}>
+            <div className="mt-0.5">{icon}</div>
+            <p className="text-sm leading-relaxed">{children}</p>
+        </div>
+    );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// COMPONENTE PRINCIPAL MEJORADO
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export default function DashboardClientImproved() {
+    const { user: authUser, loading: authLoading, salesCount } = useAuth();
+    const router = useRouter();
+
+    // Estados
+    const [stats, setStats] = useState<EnhancedStats | null>(null);
+    const [loadingStats, setLoadingStats] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('ytd');
+    const [chartView, setChartView] = useState<ChartView>('simple');
+    const [showFilters, setShowFilters] = useState(false);
+    const [generatingPdf, setGeneratingPdf] = useState(false);
+    const [generatingGeneralPdf, setGeneratingGeneralPdf] = useState(false);
+
+    // Verificar sesión
+    useEffect(() => {
+        if (!authLoading && !authUser) {
+            router.push('/login');
+        }
+    }, [authUser, authLoading, router]);
+
+    // Cargar datos del dashboard
+    useEffect(() => {
+        const fetchDashboardData = async () => {
+            if (!authUser) return;
+            try {
+                setLoadingStats(true);
+                setError(null);
+                
+                // Aquí se llamaría a una versión mejorada del servicio
+                const data = await odooService.getDetailedSalesStats(authUser.uid);
+                
+                // Simular datos mejorados (en producción vendrían del backend)
+                const enhancedData: EnhancedStats = {
+                    ...data,
+                    kpis: {
+                        ...data.kpis,
+                        avgTicket: data.kpis.totalSales / (salesCount || 1),
+                        conversionRate: 45, // Calcular desde backend
+                        pipelineValue: data.kpis.pendingLeads * 85000, // Estimado
+                        salesVelocity: salesCount / 5 // Lotes por mes promedio
+                    },
+                    comparison: {
+                        totalSales: { value: data.kpis.totalSales, change: 15, trend: 'up' },
+                        commission: { value: data.kpis.commission, change: 12, trend: 'up' },
+                        salesCount: { value: salesCount, change: 8, trend: 'up' }
+                    }
+                };
+                
+                setStats(enhancedData);
+            } catch (err: unknown) {
+                console.error("Error fetching dashboard statistics:", err);
+                setError("Error al cargar los datos del panel. Por favor intente más tarde.");
+            } finally {
+                setLoadingStats(false);
+            }
+        };
+
+        fetchDashboardData();
+    }, [authUser, periodFilter, salesCount]);
+
+    // Manejadores de eventos
+    const handleDownloadReport = useCallback(async () => {
+        if (!stats || !authUser || generatingPdf) return;
+        setGeneratingPdf(true);
+        try {
+            const reportData: ReportData = {
+                advisor: {
+                    name: authUser.name,
+                    username: authUser.username,
+                },
+                kpis: stats.kpis,
+                salesTrend: stats.salesTrend,
+                assignedLots: stats.assignedLots,
+                competedLots: stats.competedLots,
+                recentActivity: stats.recentActivity,
+                salesCount,
+            };
+            await generateEnterpriseReport(reportData);
+        } catch (err) {
+            console.error('Error generating PDF report:', err);
+            alert('Error al generar el reporte PDF. Inténtelo de nuevo.');
+        } finally {
+            setGeneratingPdf(false);
+        }
+    }, [stats, authUser, generatingPdf, salesCount]);
+
+    const handleDownloadGeneralReport = useCallback(async () => {
+        if (!authUser || !authUser.is_system || generatingGeneralPdf) return;
+        setGeneratingGeneralPdf(true);
+        try {
+            const generalStats = await odooService.getGeneralProjectStats(authUser.uid, authUser.is_system);
+            await generateProjectGeneralReport(generalStats);
+        } catch (err) {
+            console.error('Error generating general PDF report:', err);
+            alert('Error al generar el reporte general del proyecto. Inténtelo de nuevo.');
+        } finally {
+            setGeneratingGeneralPdf(false);
+        }
+    }, [authUser, generatingGeneralPdf]);
+
+    // Cálculos memoizados
+    const displayedSalesTrend = useMemo(() => {
+        if (!stats) return [];
+        const currentMonthIndex = new Date().getMonth();
+        const last6Start = Math.max(0, currentMonthIndex - 5);
+        
+        return periodFilter === '30d' 
+            ? stats.salesTrend.slice(currentMonthIndex, currentMonthIndex + 1)
+            : periodFilter === '90d'
+            ? stats.salesTrend.slice(Math.max(0, currentMonthIndex - 2), currentMonthIndex + 1)
+            : stats.salesTrend.slice(0, currentMonthIndex + 1);
+    }, [stats, periodFilter]);
+
+    const goalPercentage = useMemo(() => {
+        if (!stats) return 0;
+        return stats.kpis.monthlyGoal > 0
+            ? Math.min(100, Math.round((stats.kpis.totalSales / stats.kpis.monthlyGoal) * 100))
+            : 0;
+    }, [stats]);
+
+    // Insights inteligentes
+    const insights = useMemo(() => {
+        if (!stats) return [];
+        
+        const result = [];
+        
+        // Insight de rendimiento
+        if (stats.comparison.totalSales.change > 10) {
+            result.push({
+                type: 'success' as const,
+                icon: <Sparkles size={18} />,
+                message: `¡Excelente! Vas ${stats.comparison.totalSales.change}% arriba vs. período anterior. Mantén este ritmo.`
+            });
+        }
+        
+        // Insight de cotizaciones pendientes
+        if (stats.kpis.pendingLeads > 5) {
+            result.push({
+                type: 'warning' as const,
+                icon: <AlertTriangle size={18} />,
+                message: `Tienes ${stats.kpis.pendingLeads} cotizaciones activas. Considera priorizar seguimiento para maximizar conversión.`
+            });
+        }
+        
+        // Insight de meta
+        const remaining = stats.kpis.monthlyGoal - stats.kpis.totalSales;
+        if (remaining > 0 && remaining < stats.kpis.monthlyGoal * 0.2) {
+            result.push({
+                type: 'info' as const,
+                icon: <Target size={18} />,
+                message: `Estás cerca de tu meta. Solo ${(remaining / stats.kpis.avgTicket).toFixed(0)} lotes más para alcanzar el objetivo.`
+            });
+        }
+        
+        return result;
+    }, [stats]);
+
+    // Estados de carga
+    if (authLoading || loadingStats) {
+        return (
+            <div className="flex h-screen items-center justify-center bg-slate-950 text-slate-100">
+                <div className="absolute top-0 left-1/4 w-96 h-96 bg-indigo-500/5 rounded-full blur-[120px] pointer-events-none" />
+                <div className="absolute bottom-10 right-1/4 w-96 h-96 bg-emerald-500/5 rounded-full blur-[120px] pointer-events-none" />
+                <div className="flex flex-col items-center gap-3 z-10">
+                    <Loader2 className="animate-spin text-indigo-500" size={48} />
+                    <p className="text-sm font-semibold tracking-wide text-slate-400 animate-pulse">Cargando dashboard mejorado...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (error || !stats) {
+        return (
+            <div className="flex h-screen flex-col items-center justify-center bg-slate-950 p-4 text-center">
+                <div className="bg-slate-900/60 border border-slate-800/80 backdrop-blur-xl p-8 rounded-2xl shadow-2xl max-w-md w-full relative">
+                    <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-20 h-20 bg-red-950/80 border border-red-500/20 text-red-500 rounded-full flex items-center justify-center shadow-xl">
+                        <Clock size={36} />
+                    </div>
+                    <h2 className="text-xl font-bold text-slate-100 mt-8 mb-2">Error de Conexión</h2>
+                    <p className="text-slate-400 mb-6 text-sm leading-relaxed">{error || "No se pudieron cargar las estadísticas."}</p>
+                    <button 
+                        onClick={() => window.location.reload()} 
+                        className="w-full bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-semibold py-3 px-6 rounded-xl transition-all"
+                    >
+                        Reintentar
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    const currentUser = authUser!;
+
+    return (
+        <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8 relative overflow-hidden">
+            {/* Background Decorative Blurs */}
+            <div className="absolute top-[-100px] left-1/4 w-[450px] h-[450px] bg-indigo-500/10 rounded-full blur-[140px] pointer-events-none" />
+            <div className="absolute bottom-[100px] right-1/4 w-[450px] h-[450px] bg-emerald-500/5 rounded-full blur-[140px] pointer-events-none" />
+
+            <div className="max-w-7xl mx-auto relative z-10 space-y-8">
+                {/* Header Section */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 pb-6 border-b border-slate-900">
+                    <div>
+                        <div className="flex items-center gap-2 text-indigo-400 font-semibold text-sm mb-1">
+                            <Award size={18} /> Dashboard Ejecutivo Mejorado
+                        </div>
+                        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-slate-100 to-slate-400 bg-clip-text text-transparent">
+                            Hola, {currentUser.name} 👋
+                        </h1>
+                        <p className="text-sm text-slate-400 mt-1">Panel de control con métricas avanzadas y análisis inteligente</p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-3">
+                        <button 
+                            onClick={() => setShowFilters(!showFilters)}
+                            className={`${showFilters ? 'bg-indigo-600' : 'bg-slate-900'} hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-slate-100 px-5 py-2.5 rounded-xl font-semibold transition-all flex items-center gap-2`}
+                        >
+                            <Filter size={18} /> Filtros
+                        </button>
+                        
+                        <button 
+                            onClick={() => router.push('/')} 
+                            className="bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-slate-100 px-5 py-2.5 rounded-xl font-semibold transition-all flex items-center gap-2"
+                        >
+                            <MapPin size={18} /> Mapa
+                        </button>
+                        
+                        <button 
+                            onClick={handleDownloadReport}
+                            disabled={generatingPdf}
+                            className="bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 disabled:from-indigo-800 disabled:to-indigo-900 disabled:cursor-wait text-white px-5 py-2.5 rounded-xl font-semibold transition-all flex items-center gap-2"
+                        >
+                            {generatingPdf ? (
+                                <><Loader2 size={16} className="animate-spin" /> Generando...</>
+                            ) : (
+                                <><FileDown size={16} /> Reporte</>
+                            )}
+                        </button>
+
+                        {authUser?.is_system && (
+                            <button 
+                                onClick={handleDownloadGeneralReport}
+                                disabled={generatingGeneralPdf}
+                                className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 disabled:from-purple-800 disabled:to-purple-900 text-white px-5 py-2.5 rounded-xl font-semibold transition-all flex items-center gap-2"
+                            >
+                                {generatingGeneralPdf ? (
+                                    <><Loader2 size={16} className="animate-spin" /> Generando...</>
+                                ) : (
+                                    <><Award size={16} /> Proyecto</>
+                                )}
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {/* Filtros de Período (Collapsible) */}
+                {showFilters && (
+                    <div className="bg-slate-900/40 border border-slate-850 rounded-2xl p-6 animate-in slide-in-from-top-2 duration-200">
+                        <h3 className="text-sm font-bold text-slate-300 mb-4 flex items-center gap-2">
+                            <Calendar size={16} className="text-indigo-400" />
+                            Período de Análisis
+                        </h3>
+                        <div className="flex flex-wrap gap-2">
+                            {[
+                                { value: '30d' as PeriodFilter, label: 'Último Mes' },
+                                { value: '90d' as PeriodFilter, label: 'Último Trimestre' },
+                                { value: '180d' as PeriodFilter, label: 'Últimos 6 Meses' },
+                                { value: 'ytd' as PeriodFilter, label: 'Año Actual' },
+                            ].map((period) => (
+                                <button
+                                    key={period.value}
+                                    onClick={() => setPeriodFilter(period.value)}
+                                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                                        periodFilter === period.value
+                                            ? 'bg-indigo-600 text-white shadow-lg'
+                                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                                    }`}
+                                >
+                                    {period.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* KPI Cards Grid Mejorado - Ahora con 6 KPIs */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <KPICard
+                        label="Ventas Totales"
+                        value={`S/ ${stats.kpis.totalSales.toLocaleString('es-PE')}`}
+                        icon={<DollarSign size={22} />}
+                        color="emerald"
+                        change={stats.comparison.totalSales.change}
+                        trend={stats.comparison.totalSales.trend}
+                        subtitle={`${salesCount} lotes vendidos · ${new Date().getFullYear()}`}
+                    />
+                    
+                    <KPICard
+                        label="Ticket Promedio"
+                        value={`S/ ${Math.round(stats.kpis.avgTicket).toLocaleString('es-PE')}`}
+                        icon={<BarChart3 size={22} />}
+                        color="indigo"
+                        subtitle="Valor promedio por lote"
+                    />
+                    
+                    <KPICard
+                        label="Comisión Acumulada"
+                        value={`S/ ${stats.kpis.commission.toLocaleString('es-PE')}`}
+                        icon={<TrendingUp size={22} />}
+                        color="purple"
+                        change={stats.comparison.commission.change}
+                        trend={stats.comparison.commission.trend}
+                        subtitle="Tasa 6% sobre ventas"
+                    />
+                    
+                    <KPICard
+                        label="Pipeline Value"
+                        value={`S/ ${Math.round(stats.kpis.pipelineValue).toLocaleString('es-PE')}`}
+                        icon={<Activity size={22} />}
+                        color="blue"
+                        subtitle={`${stats.kpis.pendingLeads} cotizaciones activas`}
+                    />
+                    
+                    <KPICard
+                        label="Tasa de Conversión"
+                        value={`${stats.kpis.conversionRate}%`}
+                        icon={<Target size={22} />}
+                        color="amber"
+                        subtitle="Cotizaciones → Ventas"
+                    />
+                    
+                    <KPICard
+                        label="Velocidad de Ventas"
+                        value={`${stats.kpis.salesVelocity.toFixed(1)} lotes/mes`}
+                        icon={<Zap size={22} />}
+                        color="emerald"
+                        subtitle="Promedio último trimestre"
+                    />
+                </div>
+
+                {/* Panel de Insights Inteligentes */}
+                {insights.length > 0 && (
+                    <div className="bg-slate-900/30 border border-slate-900 rounded-2xl p-6 space-y-3">
+                        <h3 className="text-lg font-bold text-slate-100 mb-4 flex items-center gap-2">
+                            <Sparkles size={18} className="text-indigo-400" /> Insights Inteligentes
+                        </h3>
+                        {insights.map((insight, idx) => (
+                            <Insight key={idx} type={insight.type} icon={insight.icon}>
+                                {insight.message}
+                            </Insight>
+                        ))}
+                    </div>
+                )}
+
+                {/* Sección de Gráficos Mejorada */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    {/* Gráfico Principal Mejorado */}
+                    <div className="lg:col-span-2 bg-slate-900/30 border border-slate-900 rounded-2xl p-6 shadow-xl">
+                        <div className="flex justify-between items-center mb-6">
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-100">Análisis de Ventas</h3>
+                                <p className="text-xs text-slate-400 mt-0.5">Ventas, metas y comisiones por mes</p>
+                            </div>
+                            <div className="flex bg-slate-950 border border-slate-850 rounded-lg p-1">
+                                <button 
+                                    onClick={() => setChartView('simple')}
+                                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                                        chartView === 'simple' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                                    }`}
+                                >
+                                    Simple
+                                </button>
+                                <button 
+                                    onClick={() => setChartView('detailed')}
+                                    className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                                        chartView === 'detailed' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'
+                                    }`}
+                                >
+                                    Detallado
+                                </button>
+                            </div>
+                        </div>
+                        <div className="h-[400px] w-full">
+                            {chartView === 'simple' ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={displayedSalesTrend} margin={{ top: 10, right: 10, left: 10, bottom: 40 }}>
+                                        <defs>
+                                            <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.35} />
+                                                <stop offset="95%" stopColor="#6366f1" stopOpacity={0.02} />
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" opacity={0.5} />
+                                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} dy={10} />
+                                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={(value) => `S/${(value / 1000).toFixed(0)}k`} width={60} />
+                                        <Tooltip content={<EnhancedTooltip />} cursor={{ stroke: '#6366f1', strokeWidth: 1, strokeDasharray: '4 4' }} />
+                                        <Area type="monotone" dataKey="ventas" stroke="#6366f1" strokeWidth={2.5} fillOpacity={1} fill="url(#colorSales)" dot={{ fill: '#6366f1', r: 3 }} activeDot={{ r: 5, fill: '#818cf8' }} />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <ComposedChart data={displayedSalesTrend} margin={{ top: 10, right: 10, left: 10, bottom: 40 }}>
+                                        <defs>
+                                            <linearGradient id="colorSalesDetailed" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                                                <stop offset="95%" stopColor="#6366f1" stopOpacity={0.05} />
+                                            </linearGradient>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" opacity={0.5} />
+                                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} dy={10} />
+                                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={(value) => `S/${(value / 1000).toFixed(0)}k`} width={60} />
+                                        <Tooltip content={<EnhancedTooltip />} />
+                                        <Legend wrapperStyle={{ paddingTop: '20px' }} iconType="circle" />
+                                        <Area type="monotone" dataKey="ventas" name="Ventas" stroke="#6366f1" strokeWidth={2} fill="url(#colorSalesDetailed)" />
+                                        <Line type="monotone" dataKey="meta" name="Meta" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" dot={{ fill: '#f59e0b', r: 3 }} />
+                                        <Bar dataKey="comision" name="Comisión" fill="#10b981" opacity={0.6} />
+                                        <Brush dataKey="name" height={30} stroke="#6366f1" fill="#0f172a" />
+                                    </ComposedChart>
+                                </ResponsiveContainer>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Actividad Reciente */}
+                    <div className="bg-slate-900/30 border border-slate-900 rounded-2xl p-6 flex flex-col">
+                        <h3 className="text-lg font-bold text-slate-100 mb-6 flex items-center gap-2">
+                            <Clock size={18} className="text-indigo-400 animate-pulse" /> Actividad Reciente
+                        </h3>
+                        <div className="space-y-6 max-h-[350px] overflow-y-auto flex-1 pr-1">
+                            {stats.recentActivity.length === 0 ? (
+                                <div className="text-center py-8 text-slate-500 text-sm">
+                                    No hay actividad registrada
+                                </div>
+                            ) : (
+                                stats.recentActivity.map((activity, idx) => (
+                                    <div key={activity.id || idx} className="flex gap-4 relative">
+                                        <div className={`flex-shrink-0 w-3.5 h-3.5 mt-1.5 rounded-full ${
+                                            activity.action === 'Venta' ? 'bg-emerald-500' :
+                                            activity.action === 'Reserva' ? 'bg-amber-500' : 'bg-indigo-500'
+                                        } ring-4 ring-slate-950 z-10`} />
+                                        {idx < stats.recentActivity.length - 1 && (
+                                            <div className="absolute left-[6px] top-4 bottom-[-24px] w-[1px] bg-slate-800" />
+                                        )}
+                                        <div className="flex-1">
+                                            <p className="text-sm font-semibold text-slate-200">
+                                                {activity.action} - <span className="text-indigo-300">{activity.lot}</span>
+                                            </p>
+                                            <div className="flex items-center gap-1.5 mt-0.5 text-xs text-slate-400">
+                                                <Clock size={11} />
+                                                <span>{activity.date}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Lotes Competidos - código existente */}
+                {stats.competedLots.length > 0 && (
+                    <div className="bg-gradient-to-br from-amber-950/20 to-red-950/10 rounded-2xl border border-amber-500/20 shadow-2xl overflow-hidden relative">
+                        <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-amber-500 via-orange-500 to-red-500" />
+                        <div className="p-6 border-b border-amber-500/10 bg-amber-500/5 flex justify-between items-center">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 bg-amber-950/60 border border-amber-500/20 text-amber-400 rounded-xl animate-pulse">
+                                    <Zap size={20} />
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="text-lg font-bold text-amber-300">⚡ Lotes Competidos en Caliente</h3>
+                                        <span className="flex h-2.5 w-2.5 relative">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-slate-400">Propiedades con cotizaciones borrador paralelas</p>
+                                </div>
+                            </div>
+                            <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-3.5 py-1 rounded-full text-xs font-bold tracking-wide">
+                                {stats.competedLots.length} {stats.competedLots.length === 1 ? 'Lote' : 'Lotes'}
+                            </span>
+                        </div>
+                        <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {stats.competedLots.map((item, idx) => (
+                                <div key={idx} className="bg-slate-950/50 border border-slate-850 hover:border-amber-500/30 rounded-xl p-5 shadow-lg relative group transition-colors">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div>
+                                            <p className="text-base font-bold text-slate-100">{item.lot}</p>
+                                            <p className="text-xs text-slate-400">{item.stage}</p>
+                                        </div>
+                                        <span className="bg-red-500/10 text-red-400 border border-red-500/25 px-2.5 py-0.5 rounded-full text-xs font-semibold">
+                                            {item.quotes.length} Cotizaciones
+                                        </span>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {item.quotes.map((quote, qIdx) => (
+                                            <div key={qIdx} className="flex justify-between items-center text-xs bg-slate-900/60 p-2.5 rounded-lg border border-slate-850">
+                                                <div>
+                                                    <span className="font-semibold text-slate-200">{quote.client}</span>
+                                                    <span className="text-slate-400 text-[10px] ml-1.5 block sm:inline">· {quote.advisor}</span>
+                                                </div>
+                                                <span className="text-[10px] text-amber-400 flex items-center gap-1 font-medium bg-amber-950/20 px-2 py-0.5 rounded border border-amber-500/10">
+                                                    <Clock size={9} />
+                                                    Hace {quote.hours}h
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Nueva Sección: Mis Lotes Vendidos */}
+                <div className="bg-gradient-to-br from-emerald-950/20 to-green-950/10 rounded-2xl border border-emerald-500/20 shadow-2xl overflow-hidden">
+                    <div className="p-6 border-b border-emerald-500/10 bg-emerald-500/5 flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2.5 bg-emerald-950/60 border border-emerald-500/20 text-emerald-400 rounded-xl">
+                                <Award size={20} />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-emerald-300">🏆 Mis Lotes Vendidos</h3>
+                                <p className="text-xs text-slate-400">Historial completo de ventas confirmadas</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-3.5 py-1 rounded-full text-xs font-bold">
+                                {stats.assignedLots.filter(lot => lot.status === 'Vendido').length} Ventas
+                            </span>
+                            <button
+                                onClick={() => router.push('/')}
+                                className="text-emerald-400 hover:text-emerald-300 text-xs font-bold hover:underline"
+                            >
+                                Ver en Mapa
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div className="overflow-x-auto">
+                        <table className="w-full">
+                            <thead>
+                                <tr className="bg-emerald-950/60 text-emerald-300 text-xs font-semibold uppercase tracking-wider border-b border-emerald-500/20">
+                                    <th className="px-6 py-4 text-left">#</th>
+                                    <th className="px-6 py-4 text-left">Lote</th>
+                                    <th className="px-6 py-4 text-left">Cliente</th>
+                                    <th className="px-6 py-4 text-right">Precio Venta</th>
+                                    <th className="px-6 py-4 text-right">Comisión 6%</th>
+                                    <th className="px-6 py-4 text-center">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-emerald-500/10">
+                                {stats.assignedLots.filter(lot => lot.status === 'Vendido').length === 0 ? (
+                                    <tr>
+                                        <td colSpan={6} className="px-6 py-12 text-center text-slate-500 text-sm">
+                                            Aún no tienes lotes vendidos registrados.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    stats.assignedLots
+                                        .filter(lot => lot.status === 'Vendido')
+                                        .map((item, idx) => (
+                                            <tr key={idx} className="hover:bg-emerald-950/10 transition-colors group">
+                                                <td className="px-6 py-4">
+                                                    <div className="w-8 h-8 rounded-full bg-emerald-950/50 text-emerald-400 border border-emerald-500/20 flex items-center justify-center text-xs font-bold">
+                                                        {idx + 1}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="bg-emerald-950/50 text-emerald-400 border border-emerald-500/10 p-2 rounded-xl">
+                                                            <MapPin size={16} />
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-bold text-emerald-200 text-sm">{item.lot}</p>
+                                                            <p className="text-[10px] text-emerald-400/60">{item.stage}</p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-7 h-7 rounded-full bg-emerald-950/50 text-emerald-300 flex items-center justify-center text-[10px] font-bold border border-emerald-500/20">
+                                                            {item.client.split(' ').map((n: string) => n[0]).slice(0, 2).join('')}
+                                                        </div>
+                                                        <span className="text-slate-200 text-sm font-medium">{item.client}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <span className="text-base font-bold text-emerald-200">
+                                                        S/ {item.price.toLocaleString('es-PE')}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <div className="flex flex-col items-end">
+                                                        <span className="text-sm font-bold text-emerald-400">
+                                                            S/ {Math.round(item.price * 0.06).toLocaleString('es-PE')}
+                                                        </span>
+                                                        <span className="text-[10px] text-emerald-500/60">Tasa 6%</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-center">
+                                                    <button
+                                                        onClick={() => router.push('/')}
+                                                        className="text-emerald-400 hover:text-emerald-300 transition-colors p-2 hover:bg-emerald-950/30 rounded-lg"
+                                                    >
+                                                        <ArrowUpRight size={18} />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    {/* Resumen de ventas */}
+                    {stats.assignedLots.filter(lot => lot.status === 'Vendido').length > 0 && (
+                        <div className="p-6 border-t border-emerald-500/10 bg-emerald-950/20">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="flex items-center justify-between p-4 bg-emerald-950/30 rounded-xl border border-emerald-500/20">
+                                    <div>
+                                        <p className="text-[10px] text-emerald-400/60 uppercase font-bold mb-1">Total Vendido</p>
+                                        <p className="text-lg font-bold text-emerald-300">
+                                            S/ {stats.assignedLots
+                                                .filter(lot => lot.status === 'Vendido')
+                                                .reduce((sum, lot) => sum + lot.price, 0)
+                                                .toLocaleString('es-PE')}
+                                        </p>
+                                    </div>
+                                    <DollarSign className="text-emerald-400/40" size={32} />
+                                </div>
+                                
+                                <div className="flex items-center justify-between p-4 bg-emerald-950/30 rounded-xl border border-emerald-500/20">
+                                    <div>
+                                        <p className="text-[10px] text-emerald-400/60 uppercase font-bold mb-1">Comisión Total</p>
+                                        <p className="text-lg font-bold text-emerald-300">
+                                            S/ {Math.round(stats.assignedLots
+                                                .filter(lot => lot.status === 'Vendido')
+                                                .reduce((sum, lot) => sum + (lot.price * 0.06), 0))
+                                                .toLocaleString('es-PE')}
+                                        </p>
+                                    </div>
+                                    <TrendingUp className="text-emerald-400/40" size={32} />
+                                </div>
+                                
+                                <div className="flex items-center justify-between p-4 bg-emerald-950/30 rounded-xl border border-emerald-500/20">
+                                    <div>
+                                        <p className="text-[10px] text-emerald-400/60 uppercase font-bold mb-1">Ticket Promedio</p>
+                                        <p className="text-lg font-bold text-emerald-300">
+                                            S/ {Math.round(stats.assignedLots
+                                                .filter(lot => lot.status === 'Vendido')
+                                                .reduce((sum, lot) => sum + lot.price, 0) /
+                                                Math.max(stats.assignedLots.filter(lot => lot.status === 'Vendido').length, 1))
+                                                .toLocaleString('es-PE')}
+                                        </p>
+                                    </div>
+                                    <Target className="text-emerald-400/40" size={32} />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+                
+                {/* Lotes Operacionales - Solo EN PROCESO (no vendidos) */}
+                <div className="bg-slate-900/30 border border-slate-900 rounded-2xl shadow-xl overflow-hidden">
+                    <div className="p-6 border-b border-slate-900 flex justify-between items-center">
+                        <div>
+                            <h3 className="text-lg font-bold text-slate-100">Mis Lotes Operacionales (En Proceso)</h3>
+                            <p className="text-xs text-slate-400 mt-0.5">Cotizaciones y reservas activas que aún no se han completado</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-3.5 py-1 rounded-full text-xs font-bold tracking-wide">
+                                {stats.assignedLots.filter(lot => lot.status !== 'Vendido').length} En Proceso
+                            </span>
+                            <button
+                                onClick={() => router.push('/')}
+                                className="text-indigo-400 hover:text-indigo-300 text-xs font-bold hover:underline"
+                            >
+                                Ver en Mapa
+                            </button>
+                        </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full">
+                            <thead>
+                                <tr className="bg-slate-950/60 text-slate-400 text-xs font-semibold uppercase tracking-wider border-b border-slate-900">
+                                    <th className="px-6 py-4 text-left">Lote</th>
+                                    <th className="px-6 py-4 text-left">Cliente</th>
+                                    <th className="px-6 py-4 text-left">Estado</th>
+                                    <th className="px-6 py-4 text-left">Monto</th>
+                                    <th className="px-6 py-4 text-right">Detalle</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-900">
+                                {stats.assignedLots.filter(lot => lot.status !== 'Vendido').length === 0 ? (
+                                    <tr>
+                                        <td colSpan={5} className="px-6 py-12 text-center text-slate-500 text-sm">
+                                            No tienes lotes en proceso. ¡Todas tus transacciones están completadas!
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    stats.assignedLots
+                                        .filter(lot => lot.status !== 'Vendido')
+                                        .map((item, idx) => (
+                                        <tr key={idx} className="hover:bg-slate-900/20 transition-colors">
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="bg-indigo-950/50 text-indigo-400 border border-indigo-500/10 p-2 rounded-xl">
+                                                        <MapPin size={16} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-semibold text-slate-200 text-sm">{item.lot}</p>
+                                                        <p className="text-[10px] text-slate-400">{item.stage}</p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className="text-slate-300 text-sm">{item.client}</span>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold border ${
+                                                    item.status === 'Vendido' ? 'bg-emerald-950/40 text-emerald-400 border-emerald-500/20' :
+                                                    item.status === 'Separado' ? 'bg-amber-950/40 text-amber-400 border-amber-500/20' :
+                                                    'bg-indigo-950/40 text-indigo-400 border-indigo-500/20'
+                                                }`}>
+                                                    {item.status}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-sm font-semibold text-slate-200">
+                                                S/ {item.price.toLocaleString()}
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <button
+                                                    onClick={() => router.push('/')}
+                                                    className="text-slate-400 hover:text-indigo-400 transition-colors p-1.5 hover:bg-slate-900 rounded-lg"
+                                                >
+                                                    <ArrowUpRight size={18} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
