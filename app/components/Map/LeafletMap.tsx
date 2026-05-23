@@ -203,6 +203,21 @@ function MeasurementController({ selectedLotId, lots }: { selectedLotId: string 
 export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, userLocation, preferCanvas = true, showMeasurements = true }: LeafletMapProps) {
     const center: [number, number] = [-12.0464, -77.0428];
     const [zoom, setZoom] = useState(17.5);
+    const [isMobile, setIsMobile] = useState(false);
+
+    // Detección adaptativa de dispositivo móvil en cliente
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            setIsMobile(window.innerWidth < 768);
+            const handleResize = () => setIsMobile(window.innerWidth < 768);
+            window.addEventListener('resize', handleResize);
+            return () => window.removeEventListener('resize', handleResize);
+        }
+    }, []);
+
+    // Umbral adaptativo para renderizar etiquetas: 18.2 en móvil (menos densidad), 17.0 en escritorio
+    const labelZoomThreshold = isMobile ? 18.2 : 17.0;
+    const showLabels = zoom >= labelZoomThreshold;
 
     // OPTIMIZACIÓN CRÍTICA: Memoizar todas las posiciones Lat/Lng
     const memoizedPositionsMap = useMemo(() => {
@@ -275,6 +290,8 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors'
                     url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
                     maxNativeZoom={19}
+                    updateWhenZooming={false} // Evita recargar tiles durante la animación de zoom (ahorra CPU en móvil)
+                    updateWhenIdle={true} // Solo carga tiles cuando el mapa está quieto
                 />
             )}
             {mapType === 'satellite' && (
@@ -282,6 +299,8 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
                     attribution='Tiles &copy; Esri'
                     url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
                     maxNativeZoom={19}
+                    updateWhenZooming={false}
+                    updateWhenIdle={true}
                 />
             )}
 
@@ -292,6 +311,7 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
                     bounds={imageBounds}
                     opacity={1}
                     zIndex={10}
+                    interactive={false} // Desactiva la interactividad para evitar consumir eventos de toque en móviles
                 />
             )}
 
@@ -321,6 +341,7 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
                     <Polygon
                         key={`${lot.id}-${lot.default_code}`}
                         positions={positions}
+                        smoothFactor={isMobile ? 1.5 : 1.0} // Simplificación de geometría adaptativa en móvil (Douglas-Peucker)
                         pathOptions={{
                             color: isSelected ? '#2563EB' : (mapType === 'satellite' ? 'white' : '#64748b'),
                             fillColor: getColor(lot.x_statu),
@@ -331,15 +352,17 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
                         eventHandlers={{
                             click: () => onLotSelect(lot),
                             mouseover: (e) => {
+                                if (isMobile) return; // Omitir cálculos de hover en móviles
                                 const layer = e.target;
                                 layer.setStyle({
                                     weight: 3,
                                     fillOpacity: 0.8,
                                     color: '#FFFFFF' // Borde blanco brillante al pasar el mouse
                                 });
-                                layer.bringToFront(); // Traer al frente para que el borde no quede tapado
+                                layer.bringToFront(); // Traer al frente
                             },
                             mouseout: (e) => {
+                                if (isMobile) return; // Omitir en móviles
                                 const layer = e.target;
                                 // Resetear al estilo original
                                 const isSelected = selectedLotId === lot.id;
@@ -351,7 +374,7 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
                             }
                         }}
                     >
-                        {zoom > 16 && (
+                        {showLabels && (
                             <Tooltip
                                 key={`tooltip-${lot.id}`}
                                 permanent={true}
@@ -359,7 +382,8 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
                                 className="!bg-transparent !border-0 !shadow-none p-0"
                                 opacity={1}
                             >
-                                <div className={`flex flex-col items-center justify-center bg-white/95 backdrop-blur-md rounded-md shadow-md border border-white/50 p-1.5 min-w-[50px] cursor-pointer lot-label-container ${areaClass} ${isSelected ? 'label-selected' : ''}`}>
+                                {/* Optimizada: Reemplazada la clase cara de backdrop-blur por bg-white sólida en móviles para máxima suavidad */}
+                                <div className={`flex flex-col items-center justify-center bg-white rounded-md shadow-sm border border-slate-200/80 p-1.5 min-w-[50px] cursor-pointer lot-label-container ${areaClass} ${isSelected ? 'label-selected border-blue-500 shadow-blue-500/10' : ''}`}>
                                     <span className="text-slate-800 font-bold text-[10px] tracking-tight uppercase text-center leading-none">
                                         {lot.x_mz}{lot.x_lote}
                                     </span>
