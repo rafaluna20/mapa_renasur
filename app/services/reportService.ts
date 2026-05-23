@@ -561,6 +561,7 @@ export interface GeneralReportData {
     salesTrend: { name: string; ventas: number }[];
     advisorRanking: { name: string; lotsCount: number; amountTotal: number; commission: number }[];
     recentActivity: { id: number; action: string; lot: string; advisor: string; date: string }[];
+    dateRangeLabel?: string; // Etiqueta de periodo dinámico (ej. "Mayo 2026" o "01/04 - 30/04/2026")
 }
 
 // ─── Reporte General Consolidado (Administrador) ──────────────────────────────
@@ -621,7 +622,10 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
     setFont(doc, 22, BRAND.darkBg, 'bold');
     doc.text('REPORTE GENERAL', margin, 40);
     setFont(doc, 10, BRAND.textMuted);
-    doc.text('Consolidado Ejecutivo de Proyecto Inmobiliario', margin, 47);
+    const subtitleGeneral = data.dateRangeLabel
+        ? `Periodo: ${data.dateRangeLabel} · Consolidado Inmobiliario`
+        : 'Consolidado Ejecutivo de Proyecto Inmobiliario';
+    doc.text(subtitleGeneral, margin, 47);
 
     // — Badge de Reporte Consolidado (derecha con borde y fondo blanco)
     doc.setFillColor(...BRAND.white);
@@ -898,10 +902,8 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
 
         setFont(doc, 6, BRAND.textMuted);
         doc.text('Terra Lima © ' + year + ' · Documento Confidencial Gerencial', margin, H - 10);
-        doc.text(
-            `Reporte de Proyecto generado el ${dateLabel}`,
-            W / 2, H - 10, { align: 'center' }
-        );
+        const footerPeriodLabel = data.dateRangeLabel ? `Periodo: ${data.dateRangeLabel}` : `Reporte de Proyecto generado el ${dateLabel}`;
+        doc.text(footerPeriodLabel, W / 2, H - 10, { align: 'center' });
         doc.text(`Pág. ${p} / ${totalPages}`, W - margin, H - 10, { align: 'right' });
 
         // — Cabecera secundaria en páginas posteriores (p > 1)

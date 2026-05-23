@@ -120,42 +120,7 @@ export function useClientSearch(options: UseClientSearchOptions = {}): UseClient
     const [selectedClient, setSelectedClient] = useState<ClientSearchResult | null>(null);
 
     // ========================================================================
-    // EFECTOS
-    // ========================================================================
-
-    /**
-     * Efecto 1: Cargar clientes recientes al montar el componente
-     */
-    useEffect(() => {
-        if (enableRecent) {
-            loadRecentClients();
-        }
-    }, [vendorId, enableRecent, loadRecentClients]);
-
-    /**
-     * Efecto 2: Búsqueda con debounce
-     */
-    useEffect(() => {
-        // No buscar si:
-        // - El término está vacío
-        // - El término es muy corto
-        // - Ya hay un cliente seleccionado
-        if (!searchTerm || searchTerm.length < minChars || selectedClient) {
-            setResults([]);
-            return;
-        }
-
-        // Crear temporizador de debounce
-        const timer = setTimeout(async () => {
-            await performSearch(searchTerm);
-        }, debounceMs);
-
-        // Limpiar temporizador al desmontar o cuando cambie searchTerm
-        return () => clearTimeout(timer);
-    }, [searchTerm, minChars, debounceMs, selectedClient, performSearch]);
-
-    // ========================================================================
-    // FUNCIONES
+    // FUNCIONES (definidas antes de los efectos para evitar error TS hoisting)
     // ========================================================================
 
     /**
@@ -181,17 +146,26 @@ export function useClientSearch(options: UseClientSearchOptions = {}): UseClient
         setIsSearching(true);
         
         try {
-            // Buscar en Odoo
-            const searchResults = await odooService.searchPartners(normalizedTerm);
-            
+            // Buscar en Odoo — mapear a ClientSearchResult[] (odooService retorna Record<string,unknown>[])
+            const raw = await odooService.searchPartners(normalizedTerm);
+            const searchResults: ClientSearchResult[] = raw.map((r) => ({
+                id: Number(r.id),
+                name: String(r.name ?? ''),
+                vat: r.vat ? String(r.vat) : undefined,
+                phone: r.phone ? String(r.phone) : undefined,
+                email: r.email ? String(r.email) : undefined,
+                street: r.street ? String(r.street) : undefined,
+                city: r.city ? String(r.city) : undefined,
+            }));
+
             // Limitar resultados
             const limitedResults = searchResults.slice(0, maxResults);
-            
+
             // Guardar en caché
             if (cacheResults) {
                 cacheSearchResults(normalizedTerm, limitedResults);
             }
-            
+
             setResults(limitedResults);
         } catch (error) {
             console.error('Error al buscar clientes:', error);
@@ -215,7 +189,7 @@ export function useClientSearch(options: UseClientSearchOptions = {}): UseClient
                 
                 // Filtrar por vendedor si se especificó
                 const filtered = vendorId 
-                    ? parsed.filter(c => (c as Record<string, unknown>).vendorId === vendorId)
+                    ? parsed.filter(c => (c as unknown as Record<string, unknown>).vendorId === vendorId)
                     : parsed;
                 
                 setRecentClients(filtered.slice(0, 5)); // Mostrar solo top 5
@@ -252,6 +226,35 @@ export function useClientSearch(options: UseClientSearchOptions = {}): UseClient
             console.error('Error al guardar cliente reciente:', error);
         }
     }, []);
+
+    // ========================================================================
+    // EFECTOS (después de todas las funciones para evitar error "used before declaration")
+    // ========================================================================
+
+    /**
+     * Efecto 1: Cargar clientes recientes al montar el componente
+     */
+    useEffect(() => {
+        if (enableRecent) {
+            loadRecentClients();
+        }
+    }, [vendorId, enableRecent, loadRecentClients]);
+
+    /**
+     * Efecto 2: Búsqueda con debounce
+     */
+    useEffect(() => {
+        if (!searchTerm || searchTerm.length < minChars || selectedClient) {
+            setResults([]);
+            return;
+        }
+
+        const timer = setTimeout(async () => {
+            await performSearch(searchTerm);
+        }, debounceMs);
+
+        return () => clearTimeout(timer);
+    }, [searchTerm, minChars, debounceMs, selectedClient, performSearch]);
 
     /**
      * Selecciona un cliente

@@ -44,8 +44,8 @@ export default function MapArea({
         const fetchQuotes = async () => {
             if (selectedLot && selectedLot.default_code) {
                 const data = await odooService.getActiveQuotesByLot(selectedLot.default_code);
-                // Type cast para resolver incompatibilidad de tipos
-                setActiveQuotes(data as { count: number; quotes: { orderId: number; clientName: string; vendorName: string; }[] } | null);
+                // Type assertion to resolve type incompatibility
+                setActiveQuotes(data as any);
             } else {
                 setActiveQuotes(null);
             }

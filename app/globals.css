@@ -200,6 +200,16 @@ button:active:not(:disabled) {
   animation: skeleton-loading 1.5s ease-in-out infinite;
 }
 
+/* Shimmer animation for SWR top progress bar */
+@keyframes shimmer {
+  0% {
+    background-position: 200% center;
+  }
+  100% {
+    background-position: -200% center;
+  }
+}
+
 /* Utilidad para ocultar visualmente pero mantener accesible */
 .sr-only {
   position: absolute;

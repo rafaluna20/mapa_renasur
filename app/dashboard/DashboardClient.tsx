@@ -16,6 +16,7 @@ import { useDashboardData } from '@/app/hooks/useDashboardData';
 import { usePersistedState } from '@/app/hooks/usePersistedState';
 import DashboardSkeleton from '@/app/components/Dashboard/DashboardSkeleton';
 import { InfoTooltip } from '@/app/components/UI/InfoTooltip';
+import ReportPeriodModal from '@/app/components/UI/ReportPeriodModal';
 
 // ── CRÍTICO: CustomTooltip DEBE estar fuera del componente padre.
 // Si se define dentro del render, Recharts lo trata como un nuevo tipo en cada
@@ -65,25 +66,31 @@ export default function DashboardClient() {
     );
     const [generatingPdf, setGeneratingPdf] = useState(false);
     const [generatingGeneralPdf, setGeneratingGeneralPdf] = useState(false);
+    const [reportModalType, setReportModalType] = useState<'individual' | 'general' | null>(null);
 
     // Handler para generar reporte PDF empresarial
-    const handleDownloadReport = async () => {
-        if (!stats || !authUser || generatingPdf) return;
+    const handleDownloadReport = async (startDate?: string, endDate?: string, label?: string) => {
+        if (!authUser || generatingPdf) return;
         setGeneratingPdf(true);
         try {
+            // Obtener estadísticas específicas para el rango de fechas seleccionado
+            const detailedStats = await odooService.getDetailedSalesStats(authUser.uid, startDate, endDate);
+
             const reportData: ReportData = {
                 advisor: {
                     name: authUser.name,
                     username: authUser.username,
                 },
-                kpis: stats.kpis,
-                salesTrend: stats.salesTrend,
-                assignedLots: stats.assignedLots,
-                competedLots: stats.competedLots,
-                recentActivity: stats.recentActivity,
-                salesCount,
+                kpis: detailedStats.kpis,
+                salesTrend: detailedStats.salesTrend,
+                assignedLots: detailedStats.assignedLots,
+                competedLots: detailedStats.competedLots,
+                recentActivity: detailedStats.recentActivity,
+                salesCount: detailedStats.assignedLots.filter(l => l.status === 'vendido').length || salesCount,
+                dateRangeLabel: label,
             };
             await generateEnterpriseReport(reportData);
+            setReportModalType(null);
         } catch (err) {
             console.error('Error generating PDF report:', err);
             alert('Error al generar el reporte PDF. Inténtelo de nuevo.');
@@ -93,12 +100,16 @@ export default function DashboardClient() {
     };
 
     // Handler para generar reporte general del proyecto completo
-    const handleDownloadGeneralReport = async () => {
+    const handleDownloadGeneralReport = async (startDate?: string, endDate?: string, label?: string) => {
         if (!authUser || !authUser.is_system || generatingGeneralPdf) return;
         setGeneratingGeneralPdf(true);
         try {
-            const generalStats = await odooService.getGeneralProjectStats(authUser.uid, authUser.is_system);
-            await generateProjectGeneralReport(generalStats);
+            const generalStats = await odooService.getGeneralProjectStats(authUser.uid, authUser.is_system, startDate, endDate);
+            await generateProjectGeneralReport({
+                ...generalStats,
+                dateRangeLabel: label
+            });
+            setReportModalType(null);
         } catch (err) {
             console.error('Error generating general PDF report:', err);
             alert('Error al generar el reporte general del proyecto. Inténtelo de nuevo.');
@@ -221,8 +232,8 @@ export default function DashboardClient() {
                             <MapPin size={18} /> Volver al Mapa
                         </button>
                         <button 
-                            onClick={handleDownloadReport}
-                            disabled={generatingPdf}
+                            onClick={() => setReportModalType('individual')}
+                            disabled={generatingPdf || generatingGeneralPdf}
                             className="bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 disabled:from-indigo-800 disabled:to-indigo-900 disabled:cursor-wait text-white px-5 py-2.5 rounded-xl font-semibold transition-all hover:scale-[1.02] active:scale-95 shadow-lg shadow-indigo-950/50 hover:shadow-indigo-500/10 flex items-center gap-2"
                         >
                             {generatingPdf ? (
@@ -233,8 +244,8 @@ export default function DashboardClient() {
                         </button>
                         {authUser?.is_system && (
                             <button 
-                                onClick={handleDownloadGeneralReport}
-                                disabled={generatingGeneralPdf}
+                                onClick={() => setReportModalType('general')}
+                                disabled={generatingGeneralPdf || generatingPdf}
                                 className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 disabled:from-purple-800 disabled:to-purple-900 disabled:cursor-wait text-white px-5 py-2.5 rounded-xl font-semibold transition-all hover:scale-[1.02] active:scale-95 shadow-lg shadow-purple-950/50 hover:shadow-purple-500/10 flex items-center gap-2"
                             >
                                 {generatingGeneralPdf ? (
@@ -782,6 +793,15 @@ export default function DashboardClient() {
                     )}
                 </div>
             </div>
+
+            {reportModalType && (
+                <ReportPeriodModal
+                    type={reportModalType}
+                    onClose={() => setReportModalType(null)}
+                    onGenerate={reportModalType === 'general' ? handleDownloadGeneralReport : handleDownloadReport}
+                    generating={reportModalType === 'general' ? generatingGeneralPdf : generatingPdf}
+                />
+            )}
         </div>
     );
 }

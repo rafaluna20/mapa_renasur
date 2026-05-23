@@ -214,7 +214,7 @@ export const odooService = {
     },
 
     async getDetailedSalesStats(userId: number, startDate?: string, endDate?: string): Promise<{
-        kpis: { totalSales: number; monthlyGoal: number; commission: number; pendingLeads: number };
+        kpis: { totalSales: number; monthlyGoal: number; commission: number; pendingLeads: number; conversionRate?: number; pipelineValue?: number };
         salesTrend: { name: string; ventas: number }[];
         recentActivity: { id: number; action: string; lot: string; date: string }[];
         competedLots: { lot: string; stage: string; quotes: { client: string; advisor: string; hours: number }[] }[];
@@ -710,12 +710,12 @@ export const odooService = {
         try {
             // 1. If no journalId provided, find the first 'bank' journal
             if (!journalId) {
-                const journals = await this.searchRead('account.journal', [['type', '=', 'bank']], ['id', 'name']);
+                const journals = await this.searchRead<{ id: number; name: string }>('account.journal', [['type', '=', 'bank']], ['id', 'name']);
                 if (journals.length > 0) {
                     journalId = journals[0].id;
                 } else {
                     // Fallback to cash if no bank
-                    const cashJournals = await this.searchRead('account.journal', [['type', '=', 'cash']], ['id', 'name']);
+                    const cashJournals = await this.searchRead<{ id: number; name: string }>('account.journal', [['type', '=', 'cash']], ['id', 'name']);
                     if (cashJournals.length > 0) {
                         journalId = cashJournals[0].id;
                     } else {

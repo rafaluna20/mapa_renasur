@@ -109,14 +109,15 @@ export const paymentService = {
             const resId = String(Array.isArray(v.res_id) ? v.res_id[0] : v.res_id);
 
             // ✅ CORREGIDO: Siempre guardar el más reciente
-            const currentDate = new Date(v.x_voucher_submitted_at || 0);
+            const submittedAt = typeof v.x_voucher_submitted_at === 'string' ? v.x_voucher_submitted_at : '';
+            const currentDate = new Date(submittedAt || 0);
             const existingDate = acc[resId] ? new Date(acc[resId].submitted_at || 0) : new Date(0);
 
             if (!acc[resId] || currentDate > existingDate) {
                 acc[resId] = {
-                    status: v.x_voucher_status || 'pending',
-                    submitted_at: v.x_voucher_submitted_at,
-                    amount: v.x_voucher_amount || 0
+                    status: (v.x_voucher_status as string) || 'pending',
+                    submitted_at: submittedAt,
+                    amount: (v.x_voucher_amount as number) || 0
                 };
             }
             return acc;
@@ -125,8 +126,8 @@ export const paymentService = {
         // Parsear información del lote y adjuntar voucher status
         return invoices.map((inv: Record<string, unknown>) => ({
             ...inv,
-            lot_info: this.parsePaymentReference(inv.payment_reference),
-            voucher_status: voucherMap[inv.id] || null
+            lot_info: this.parsePaymentReference((inv.payment_reference as string) || ''),
+            voucher_status: voucherMap[String(inv.id)] || null
         }));
     },
 

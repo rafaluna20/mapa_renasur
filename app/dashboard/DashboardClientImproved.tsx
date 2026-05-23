@@ -205,6 +205,85 @@ const Insight = ({ type, icon, children }: InsightProps) => {
     );
 };
 
+// Skeletons de alta fidelidad para carga progresiva
+const KPICardSkeleton = () => (
+    <div className="bg-slate-900/40 border border-slate-850 rounded-2xl p-6 relative overflow-hidden animate-pulse">
+        <div className="flex justify-between items-start mb-4">
+            <div className="w-12 h-12 bg-slate-800 rounded-xl" />
+            <div className="w-12 h-5 bg-slate-800 rounded-full" />
+        </div>
+        <div className="w-24 h-3 bg-slate-800 rounded mb-2" />
+        <div className="w-36 h-7 bg-slate-800/60 rounded mb-2" />
+        <div className="w-20 h-2 bg-slate-800 rounded" />
+    </div>
+);
+
+const ChartSkeleton = () => (
+    <div className="bg-slate-900/30 border border-slate-900 rounded-2xl p-6 shadow-xl animate-pulse">
+        <div className="flex justify-between items-center mb-6">
+            <div>
+                <div className="w-36 h-5 bg-slate-800 rounded mb-2" />
+                <div className="w-48 h-3 bg-slate-800 rounded" />
+            </div>
+            <div className="w-24 h-7 bg-slate-800 rounded-lg" />
+        </div>
+        <div className="w-full h-[350px] bg-slate-800/10 rounded-xl flex items-end justify-between p-4 gap-2">
+            {[...Array(12)].map((_, i) => (
+                <div 
+                    key={i} 
+                    className="bg-slate-800/30 rounded-t-lg w-full" 
+                    style={{ height: `${20 + (i * 7) % 70}%` }}
+                />
+            ))}
+        </div>
+    </div>
+);
+
+const RecentActivitySkeleton = () => (
+    <div className="bg-slate-900/30 border border-slate-900 rounded-2xl p-6 flex flex-col animate-pulse">
+        <div className="w-40 h-5 bg-slate-800 rounded mb-6" />
+        <div className="space-y-6 flex-1">
+            {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex gap-4">
+                    <div className="w-3.5 h-3.5 rounded-full bg-slate-800 mt-1" />
+                    <div className="flex-1 space-y-2">
+                        <div className="w-2/3 h-4 bg-slate-800 rounded" />
+                        <div className="w-1/3 h-3 bg-slate-800 rounded" />
+                    </div>
+                </div>
+            ))}
+        </div>
+    </div>
+);
+
+const LotTableSkeleton = ({ title, subtitle }: { title: string, subtitle: string }) => (
+    <div className="bg-slate-900/30 border border-slate-900 rounded-2xl shadow-xl overflow-hidden animate-pulse">
+        <div className="p-6 border-b border-slate-900 flex justify-between items-center">
+            <div>
+                <h3 className="text-lg font-bold text-slate-100">{title}</h3>
+                <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p>
+            </div>
+            <div className="w-24 h-7 bg-slate-800 rounded-full" />
+        </div>
+        <div className="p-6 space-y-4">
+            {[...Array(3)].map((_, i) => (
+                <div key={i} className="flex items-center justify-between py-2 border-b border-slate-900/40 last:border-0">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-slate-800 rounded-xl" />
+                        <div className="space-y-2">
+                            <div className="w-24 h-4 bg-slate-800 rounded" />
+                            <div className="w-16 h-3 bg-slate-800 rounded" />
+                        </div>
+                    </div>
+                    <div className="w-32 h-4 bg-slate-800 rounded" />
+                    <div className="w-20 h-6 bg-slate-800 rounded-full" />
+                    <div className="w-12 h-5 bg-slate-800 rounded" />
+                </div>
+            ))}
+        </div>
+    </div>
+);
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL MEJORADO
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -238,18 +317,62 @@ export default function DashboardClientImproved() {
                 setLoadingStats(true);
                 setError(null);
                 
-                // Aquí se llamaría a una versión mejorada del servicio
-                const data = await odooService.getDetailedSalesStats(authUser.uid);
+                let startDate: string | undefined = undefined;
+                let endDate: string | undefined = undefined;
+
+                const today = new Date();
+                const year = today.getFullYear();
                 
+                const formatDate = (date: Date) => {
+                    const y = date.getFullYear();
+                    const m = String(date.getMonth() + 1).padStart(2, '0');
+                    const d = String(date.getDate()).padStart(2, '0');
+                    return `${y}-${m}-${d}`;
+                };
+
+                if (periodFilter === '30d') {
+                    const date = new Date();
+                    date.setDate(today.getDate() - 30);
+                    startDate = formatDate(date);
+                    endDate = formatDate(today);
+                } else if (periodFilter === '90d') {
+                    const date = new Date();
+                    date.setDate(today.getDate() - 90);
+                    startDate = formatDate(date);
+                    endDate = formatDate(today);
+                } else if (periodFilter === '180d') {
+                    const date = new Date();
+                    date.setDate(today.getDate() - 180);
+                    startDate = formatDate(date);
+                    endDate = formatDate(today);
+                } else if (periodFilter === 'ytd') {
+                    startDate = `${year}-01-01`;
+                    endDate = formatDate(today);
+                }
+
+                // Aquí se llamaría a una versión mejorada del servicio
+                const data = await odooService.getDetailedSalesStats(authUser.uid, startDate, endDate);
+                
+                let monthsDivisor = 1;
+                if (periodFilter === '30d') {
+                    monthsDivisor = 1;
+                } else if (periodFilter === '90d') {
+                    monthsDivisor = 3;
+                } else if (periodFilter === '180d') {
+                    monthsDivisor = 6;
+                } else if (periodFilter === 'ytd') {
+                    monthsDivisor = Math.max(1, new Date().getMonth() + 1);
+                }
+
                 // Simular datos mejorados (en producción vendrían del backend)
                 const enhancedData: EnhancedStats = {
                     ...data,
                     kpis: {
                         ...data.kpis,
                         avgTicket: data.kpis.totalSales / (salesCount || 1),
-                        conversionRate: 45, // Calcular desde backend
-                        pipelineValue: data.kpis.pendingLeads * 85000, // Estimado
-                        salesVelocity: salesCount / 5 // Lotes por mes promedio
+                        conversionRate: data.kpis.conversionRate ?? 45,
+                        pipelineValue: data.kpis.pipelineValue ?? (data.kpis.pendingLeads * 85000),
+                        salesVelocity: salesCount / monthsDivisor
                     },
                     comparison: {
                         totalSales: { value: data.kpis.totalSales, change: 15, trend: 'up' },
@@ -313,15 +436,8 @@ export default function DashboardClientImproved() {
     // Cálculos memoizados
     const displayedSalesTrend = useMemo(() => {
         if (!stats) return [];
-        const currentMonthIndex = new Date().getMonth();
-        const last6Start = Math.max(0, currentMonthIndex - 5);
-        
-        return periodFilter === '30d' 
-            ? stats.salesTrend.slice(currentMonthIndex, currentMonthIndex + 1)
-            : periodFilter === '90d'
-            ? stats.salesTrend.slice(Math.max(0, currentMonthIndex - 2), currentMonthIndex + 1)
-            : stats.salesTrend.slice(0, currentMonthIndex + 1);
-    }, [stats, periodFilter]);
+        return stats.salesTrend;
+    }, [stats]);
 
     const goalPercentage = useMemo(() => {
         if (!stats) return 0;
@@ -367,15 +483,41 @@ export default function DashboardClientImproved() {
         return result;
     }, [stats]);
 
-    // Estados de carga
-    if (authLoading || loadingStats) {
+    // Estados de carga — carga inicial (sin datos): desplegar Skeleton Layout completo
+    if (authLoading || (loadingStats && !stats)) {
         return (
-            <div className="flex h-screen items-center justify-center bg-slate-950 text-slate-100">
-                <div className="absolute top-0 left-1/4 w-96 h-96 bg-indigo-500/5 rounded-full blur-[120px] pointer-events-none" />
-                <div className="absolute bottom-10 right-1/4 w-96 h-96 bg-emerald-500/5 rounded-full blur-[120px] pointer-events-none" />
-                <div className="flex flex-col items-center gap-3 z-10">
-                    <Loader2 className="animate-spin text-indigo-500" size={48} />
-                    <p className="text-sm font-semibold tracking-wide text-slate-400 animate-pulse">Cargando dashboard mejorado...</p>
+            <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8 relative overflow-hidden">
+                <div className="absolute top-[-100px] left-1/4 w-[450px] h-[450px] bg-indigo-500/10 rounded-full blur-[140px] pointer-events-none" />
+                <div className="absolute bottom-[100px] right-1/4 w-[450px] h-[450px] bg-emerald-500/5 rounded-full blur-[140px] pointer-events-none" />
+                <div className="max-w-7xl mx-auto relative z-10 space-y-8">
+                    {/* Header Skeleton */}
+                    <div className="flex justify-between items-center pb-6 border-b border-slate-900 animate-pulse">
+                        <div className="space-y-2">
+                            <div className="w-40 h-3 bg-slate-800 rounded" />
+                            <div className="w-72 h-9 bg-slate-800 rounded-lg" />
+                            <div className="w-56 h-3 bg-slate-800 rounded" />
+                        </div>
+                        <div className="flex gap-3">
+                            <div className="w-24 h-10 bg-slate-800 rounded-xl" />
+                            <div className="w-24 h-10 bg-slate-800 rounded-xl" />
+                            <div className="w-28 h-10 bg-slate-800 rounded-xl" />
+                        </div>
+                    </div>
+                    {/* KPI Skeletons */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                        <KPICardSkeleton />
+                        <KPICardSkeleton />
+                        <KPICardSkeleton />
+                        <KPICardSkeleton />
+                    </div>
+                    {/* Chart + Activity Skeletons */}
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                        <div className="xl:col-span-2"><ChartSkeleton /></div>
+                        <RecentActivitySkeleton />
+                    </div>
+                    {/* Table Skeletons */}
+                    <LotTableSkeleton title="Mis Lotes Vendidos" subtitle="Cargando operaciones..." />
+                    <LotTableSkeleton title="Mis Lotes Operacionales" subtitle="Cargando lotes activos..." />
                 </div>
             </div>
         );
@@ -405,6 +547,12 @@ export default function DashboardClientImproved() {
 
     return (
         <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8 relative overflow-hidden">
+            {/* SWR Revalidation Top Bar — sutil indicador cuando hay datos previos y se recarga */}
+            {loadingStats && stats && (
+                <div className="fixed top-0 left-0 right-0 z-50 h-[3px] overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500 animate-[shimmer_1.5s_ease-in-out_infinite] bg-[length:200%_100%]" />
+                </div>
+            )}
             {/* Background Decorative Blurs */}
             <div className="absolute top-[-100px] left-1/4 w-[450px] h-[450px] bg-indigo-500/10 rounded-full blur-[140px] pointer-events-none" />
             <div className="absolute bottom-[100px] right-1/4 w-[450px] h-[450px] bg-emerald-500/5 rounded-full blur-[140px] pointer-events-none" />
@@ -415,6 +563,12 @@ export default function DashboardClientImproved() {
                     <div>
                         <div className="flex items-center gap-2 text-indigo-400 font-semibold text-sm mb-1">
                             <Award size={18} /> Dashboard Ejecutivo Mejorado
+                            {/* Micro-spinner SWR junto al título durante recarga silenciosa */}
+                            {loadingStats && stats && (
+                                <span className="ml-2 flex items-center gap-1.5 text-xs text-slate-500 font-normal">
+                                    <Loader2 size={12} className="animate-spin" /> Actualizando...
+                                </span>
+                            )}
                         </div>
                         <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-slate-100 to-slate-400 bg-clip-text text-transparent">
                             Hola, {currentUser.name} 👋
@@ -750,7 +904,8 @@ export default function DashboardClientImproved() {
                         </div>
                     </div>
                     
-                    <div className="overflow-x-auto">
+                    {/* Vista Desktop: tabla */}
+                    <div className="hidden sm:block overflow-x-auto">
                         <table className="w-full">
                             <thead>
                                 <tr className="bg-emerald-950/60 text-emerald-300 text-xs font-semibold uppercase tracking-wider border-b border-emerald-500/20">
@@ -825,6 +980,41 @@ export default function DashboardClientImproved() {
                             </tbody>
                         </table>
                     </div>
+
+                    {/* Vista Mobile: tarjetas adaptadas */}
+                    <div className="block sm:hidden divide-y divide-emerald-500/10">
+                        {stats.assignedLots.filter(lot => lot.status === 'Vendido').length === 0 ? (
+                            <p className="p-6 text-center text-slate-500 text-sm">Aún no tienes lotes vendidos registrados.</p>
+                        ) : (
+                            stats.assignedLots.filter(lot => lot.status === 'Vendido').map((item, idx) => (
+                                <div key={idx} className="p-4 hover:bg-emerald-950/10 transition-colors">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-emerald-950/50 text-emerald-300 border border-emerald-500/20 flex items-center justify-center text-xs font-bold shrink-0">
+                                                {item.client.split(' ').map((n: string) => n[0]).slice(0, 2).join('')}
+                                            </div>
+                                            <div>
+                                                <p className="font-bold text-emerald-200 text-sm leading-tight">{item.lot}</p>
+                                                <p className="text-xs text-slate-400 mt-0.5">{item.client}</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                            <p className="text-sm font-bold text-emerald-300">S/ {item.price.toLocaleString('es-PE')}</p>
+                                            <p className="text-[10px] text-emerald-500 mt-0.5">Com. S/ {Math.round(item.price * 0.06).toLocaleString('es-PE')}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-between mt-3">
+                                        <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400/60">
+                                            <MapPin size={10}/> {item.stage}
+                                        </span>
+                                        <button onClick={() => router.push('/')} className="text-[10px] text-emerald-400 font-bold hover:underline flex items-center gap-1">
+                                            Ver en mapa <ArrowUpRight size={11}/>
+                                        </button>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
                     
                     {/* Resumen de ventas */}
                     {stats.assignedLots.filter(lot => lot.status === 'Vendido').length > 0 && (
@@ -893,7 +1083,8 @@ export default function DashboardClientImproved() {
                             </button>
                         </div>
                     </div>
-                    <div className="overflow-x-auto">
+                    {/* Vista Desktop: tabla */}
+                    <div className="hidden sm:block overflow-x-auto">
                         <table className="w-full">
                             <thead>
                                 <tr className="bg-slate-950/60 text-slate-400 text-xs font-semibold uppercase tracking-wider border-b border-slate-900">
@@ -955,6 +1146,42 @@ export default function DashboardClientImproved() {
                                 )}
                             </tbody>
                         </table>
+                    </div>
+
+                    {/* Vista Mobile: tarjetas adaptadas */}
+                    <div className="block sm:hidden divide-y divide-slate-900">
+                        {stats.assignedLots.filter(lot => lot.status !== 'Vendido').length === 0 ? (
+                            <p className="p-6 text-center text-slate-500 text-sm">No tienes lotes en proceso activos.</p>
+                        ) : (
+                            stats.assignedLots.filter(lot => lot.status !== 'Vendido').map((item, idx) => (
+                                <div key={idx} className="p-4 hover:bg-slate-900/20 transition-colors">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className="bg-indigo-950/50 text-indigo-400 border border-indigo-500/20 p-2.5 rounded-xl shrink-0">
+                                                <MapPin size={16}/>
+                                            </div>
+                                            <div>
+                                                <p className="font-semibold text-slate-200 text-sm leading-tight">{item.lot}</p>
+                                                <p className="text-xs text-slate-400 mt-0.5">{item.client}</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                            <p className="text-sm font-bold text-slate-100">S/ {item.price.toLocaleString()}</p>
+                                            <span className={`inline-flex mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                                                item.status === 'Separado' ? 'bg-amber-950/40 text-amber-400 border-amber-500/20' :
+                                                'bg-indigo-950/40 text-indigo-400 border-indigo-500/20'
+                                            }`}>{item.status}</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-between mt-3">
+                                        <span className="text-[10px] text-slate-500">{item.stage}</span>
+                                        <button onClick={() => router.push('/')} className="text-[10px] text-indigo-400 font-bold hover:underline flex items-center gap-1">
+                                            Ver en mapa <ArrowUpRight size={11}/>
+                                        </button>
+                                    </div>
+                                </div>
+                            ))
+                        )}
                     </div>
                 </div>
             </div>

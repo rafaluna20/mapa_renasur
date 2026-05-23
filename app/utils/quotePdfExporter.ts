@@ -254,7 +254,7 @@ export const exportQuoteToPdf = async (
         doc.text(`CRONOGRAMA DE PAGOS - ${calcs.installments.length} CUOTAS`, margin, tableY);
 
         // Preparar datos: fila inicial + cuotas
-        const tableBody: unknown[][] = [
+        const tableBody: any[][] = [
             // Fila de pago inicial
             [
                 { content: '0', styles: { fontStyle: 'bold' as const } },

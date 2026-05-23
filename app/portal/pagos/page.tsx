@@ -1,7 +1,7 @@
 'use client';
 
 import { useSession } from 'next-auth/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { redirect } from 'next/navigation';
 import { CreditCard, Building2, Calendar, DollarSign, Loader2, AlertCircle, CheckCircle2, Clock, FileText, Upload, RefreshCw } from 'lucide-react';
 import type { PendingInvoice } from '@/app/services/paymentService';
@@ -22,17 +22,7 @@ export default function PaymentsPortal() {
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [retryCount, setRetryCount] = useState(0);
 
-    useEffect(() => {
-        if (status === 'unauthenticated') {
-            redirect('/portal/login?callbackUrl=/portal/pagos');
-        }
-
-        if (status === 'authenticated') {
-            loadInvoices();
-            // ✅ Auto-refresh REMOVIDO para reducir consumo de datos
-            // Usuario puede actualizar manualmente con el botón de refresh
-        }
-    }, [status, loadInvoices]);
+    // useEffect moved below loadInvoices to avoid "used before declaration" TS error
 
     // ✅ Función mejorada con retry automático y exponential backoff
     const loadInvoices = useCallback(async (silent = false, attempt = 0) => {
@@ -87,6 +77,19 @@ export default function PaymentsPortal() {
             }
         }
     }, []);
+
+    // ✅ Effect moved here so loadInvoices is declared before use
+    useEffect(() => {
+        if (status === 'unauthenticated') {
+            redirect('/portal/login?callbackUrl=/portal/pagos');
+        }
+
+        if (status === 'authenticated') {
+            loadInvoices();
+            // ✅ Auto-refresh REMOVIDO para reducir consumo de datos
+            // Usuario puede actualizar manualmente con el botón de refresh
+        }
+    }, [status, loadInvoices]);
 
     const handleManualRefresh = () => {
         loadInvoices(false);

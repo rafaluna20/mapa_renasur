@@ -36,7 +36,16 @@ export default function ManagerDashboard() {
 
     const loadReservations = async () => {
         try {
-            const data = await odooService.getPendingReservations();
+            const raw = await odooService.getPendingReservations();
+            const data: Reservation[] = raw.map((r) => ({
+                id: Number(r.id),
+                evidenceUrl: String(r.evidenceUrl ?? r.x_evidence_url ?? ''),
+                lotName: String(r.lotName ?? r.x_lot_name ?? r.name ?? ''),
+                date: String(r.date ?? r.x_date ?? ''),
+                amount: Number(r.amount ?? r.x_amount ?? 0),
+                customer: String(r.customer ?? r.x_customer ?? r.partner_name ?? ''),
+                advisor: String(r.advisor ?? r.x_advisor ?? r.user_name ?? ''),
+            }));
             setPendingReservations(data);
         } catch (error) {
             console.error("Error loading pending reservations:", error);

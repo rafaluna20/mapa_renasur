@@ -141,9 +141,9 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                     
                     const validInvoices = Array.isArray(invoicesData) ? invoicesData : [];
                     console.log(`✅ [REQUEST #${thisRequestId}] Facturas recibidas: ${validInvoices.length} para lote ${lot.name}`);
-                    console.log(`📋 [REQUEST #${thisRequestId}] IDs de facturas:`, validInvoices.map((inv: { id: number; name: string }) => inv.id || inv.name).join(', '));
+                    console.log(`📋 [REQUEST #${thisRequestId}] IDs de facturas:`, validInvoices.map((inv: any) => inv.id || inv.name).join(', '));
                     
-                    setInvoices(validInvoices);
+                    setInvoices(validInvoices as any);
                     setLoadingInvoices(false);
                     
                     console.log(`🎉 [REQUEST #${thisRequestId}] COMPLETADO EXITOSAMENTE`);

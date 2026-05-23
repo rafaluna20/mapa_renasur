@@ -37,7 +37,11 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
                 setIsSearching(true);
                 try {
                     const results = await odooService.searchPartners(searchTerm);
-                    setSearchResults(results);
+                    const formatted = results.map((r:any) => ({
+                      id: Number(r.id),
+                      name: String(r.name),
+                    }));
+                    setSearchResults(formatted);
                 } catch (e) {
                     console.error(e);
                 } finally {

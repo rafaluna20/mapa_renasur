@@ -44,7 +44,7 @@ export default function QuotePage({ params }: QuotePageProps) {
                 if (data.success && data.product) {
                     const p = data.product;
                     const code = (p.default_code || '').toString();
-                    const geometry = (geometriesJson as Record<string, { coordinates: [number, number][], measurements: { area: number } }>)[code];
+                    const geometry = (geometriesJson as unknown as Record<string, { coordinates: [number, number][], measurements: { area: number } }>)[code];
 
                     setDynamicLot({
                         id: p.id.toString(),
@@ -58,6 +58,13 @@ export default function QuotePage({ params }: QuotePageProps) {
                         default_code: code,
                         points: geometry?.coordinates || [],
                         measurements: geometry?.measurements
+                            ? {
+                                area: geometry.measurements.area,
+                                sides: [],
+                                perimeter: 0,
+                                centroid: [0, 0] as [number, number],
+                            }
+                            : undefined,
                     });
                 }
             } catch (error) {
@@ -126,8 +133,8 @@ export default function QuotePage({ params }: QuotePageProps) {
         const timer = setTimeout(async () => {
             setIsSearching(true);
             try {
-                const results = await odooService.searchPartners(searchTerm);
-                setSearchResults(results || []);
+                const raw = await odooService.searchPartners(searchTerm);
+                setSearchResults(raw.map(r => ({ id: Number(r.id), name: String(r.name ?? '') })));
             } catch (error) {
                 console.error('Error searching partners:', error);
                 setSearchResults([]);
