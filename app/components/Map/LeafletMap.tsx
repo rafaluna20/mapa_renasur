@@ -113,6 +113,30 @@ function MapController({ lots, selectedLotId, onZoomChange }: { lots: Lot[], sel
     return null;
 }
 
+// Controlador para monitorear el viewport y límites geográficos en tiempo real (Optimización Viewport Culling)
+function MapBoundsController({ onBoundsChange }: { onBoundsChange: (bounds: L.LatLngBounds) => void }) {
+    const map = useMap();
+
+    useEffect(() => {
+        // Enviar límites iniciales
+        onBoundsChange(map.getBounds());
+
+        const updateBounds = () => {
+            onBoundsChange(map.getBounds());
+        };
+
+        map.on('moveend', updateBounds);
+        map.on('zoomend', updateBounds);
+
+        return () => {
+            map.off('moveend', updateBounds);
+            map.off('zoomend', updateBounds);
+        };
+    }, [map, onBoundsChange]);
+
+    return null;
+}
+
 // Component to render side measurements for selected lot
 function SideMeasurementTooltips({ lot, map }: { lot: Lot; map: L.Map }) {
     useEffect(() => {
@@ -215,8 +239,10 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
         }
     }, []);
 
-    // Umbral adaptativo para renderizar etiquetas: 18.2 en móvil (menos densidad), 17.0 en escritorio
-    const labelZoomThreshold = isMobile ? 18.2 : 17.0;
+    const [mapBounds, setMapBounds] = useState<L.LatLngBounds | null>(null);
+
+    // Umbral adaptativo para renderizar etiquetas: 17.3 en móvil (se ven en zoom inicial 17.5), 17.0 en escritorio
+    const labelZoomThreshold = isMobile ? 17.3 : 17.0;
     const showLabels = zoom >= labelZoomThreshold;
 
     // OPTIMIZACIÓN CRÍTICA: Memoizar todas las posiciones Lat/Lng
@@ -337,6 +363,11 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
                 const isSelected = selectedLotId === lot.id;
                 const areaClass = lot.x_area < 200 ? 'label-area-small' : (lot.x_area < 1200 ? 'label-area-medium' : 'label-area-large');
 
+                // Viewport Culling: Solo renderizar etiquetas de lotes que están visibles en la pantalla actual
+                const isInsideViewport = mapBounds
+                    ? mapBounds.contains(positions[0] as [number, number])
+                    : true;
+
                 return (
                     <Polygon
                         key={`${lot.id}-${lot.default_code}`}
@@ -374,7 +405,7 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
                             }
                         }}
                     >
-                        {showLabels && (
+                        {showLabels && (isInsideViewport || isSelected) && (
                             <Tooltip
                                 key={`tooltip-${lot.id}`}
                                 permanent={true}
@@ -399,6 +430,7 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
             })}
 
             <MapController lots={lots} selectedLotId={selectedLotId} onZoomChange={setZoom} />
+            <MapBoundsController onBoundsChange={setMapBounds} />
             {showMeasurements && <MeasurementController selectedLotId={selectedLotId} lots={lots} />}
         </MapContainer>
     );
