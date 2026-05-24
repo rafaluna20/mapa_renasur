@@ -356,13 +356,13 @@ export const odooService = {
         }
     },
 
-    // Get active quotations (draft orders) for a specific lot
-    async getActiveQuotesByLot(defaultCode: string): Promise<{ count: number; quotes: Record<string, unknown>[] }> {
+    // Get active quotes (draft sales orders) for a specific lot
+    async getActiveQuotesByLot(defaultCode: string, userId?: number): Promise<{ count: number; quotes: Record<string, unknown>[] }> {
         try {
             const response = await fetch('/api/odoo/get_active_quotes', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ defaultCode })
+                body: JSON.stringify({ defaultCode, userId })
             });
             const result = await response.json();
             if (!result.success) throw new Error(result.error);
@@ -378,21 +378,23 @@ export const odooService = {
 
     // Refactored Reserve Method to use the new flow
     // This is the "Orchestrator" function called by the UI
-    async processReservationLevel2(defaultCode: string, partnerId: number, price: number, file: File, notes: string) {
+    async processReservationLevel2(lotDefaultCode: string, partnerId: number, price: number, files: File[], notes: string, separationAmount?: number) {
         try {
             // Step A: Create the Order in Odoo (Draft state)
-            const orderId = await this.createSaleOrder(partnerId, defaultCode, price, notes);
+            const orderId = await this.createSaleOrder(partnerId, lotDefaultCode, price, notes);
             console.log("✅ Sale Order Created:", orderId);
 
-            // Step B: Upload Payment Evidence
-            await this.addAttachmentToOrder(orderId, file);
-            console.log("✅ Payment proof attached");
+            // Step B: Upload Payment Evidence for each file
+            for (const f of files) {
+                await this.addAttachmentToOrder(orderId, f);
+            }
+            console.log("✅ All payment proofs attached to order");
 
             // Step C: Confirm Order (Draft -> Sale)
             const confirmRes = await fetch('/api/odoo/confirm_order', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ orderId })
+                body: JSON.stringify({ orderId, separationAmount })
             });
             const confirmResult = await confirmRes.json();
             if (!confirmResult.success) {
@@ -501,31 +503,34 @@ export const odooService = {
     },
 
     // Reserve a lot that already has a confirmed quote (draft order)
-    async reserveQuotedLot(defaultCode: string, file: File, notes: string, userId?: number) {
+    async reserveQuotedLot(orderId: number, file: File | File[], notes: string, userId?: number, separationAmount?: number) {
         try {
-            // 1. Find the existing draft order
+            // 1. Fetch the existing draft order details using the new API feature
             const searchRes = await fetch('/api/odoo/find_draft_order', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ defaultCode, userId })
+                body: JSON.stringify({ orderId, userId })
             }).then(r => r.json());
 
             if (!searchRes.success || !searchRes.order) {
-                throw new Error("No se encontró una cotización activa para este lote en Odoo.");
+                throw new Error("No se pudo encontrar los detalles de la cotización en Odoo.");
             }
 
-            const { id: orderId, productId, productTmplId, partnerName } = searchRes.order;
+            const { productId, productTmplId, partnerName } = searchRes.order;
             console.log(`✅ Found existing draft order: ${orderId} for product ${productId}, Client: ${partnerName}`);
 
             // 2. Upload Payment Evidence
-            await this.addAttachmentToOrder(orderId, file);
-            console.log("✅ Payment proof attached to existing order");
+            const filesArray = Array.isArray(file) ? file : [file];
+            for (const f of filesArray) {
+                await this.addAttachmentToOrder(orderId, f);
+            }
+            console.log("✅ All payment proofs attached to existing order");
 
             // 3. CONFIRM ORDER (Draft -> Sale) - FIRST RESERVE WINS!
             const confirmRes = await fetch('/api/odoo/confirm_order', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ orderId })
+                body: JSON.stringify({ orderId, separationAmount })
             });
             const confirmResult = await confirmRes.json();
             if (!confirmResult.success) {
@@ -553,17 +558,6 @@ export const odooService = {
                 console.log(`✅ Lot status updated to 'reservado' with Client '${partnerName}' (Variant: ${productId})`);
             }
 
-            // 5. Check for competing quotations and simulate notifications
-            const activeQuotes = await this.getActiveQuotesByLot(defaultCode);
-            if (activeQuotes.count > 1) {
-                console.log(`ℹ️ NOTIFICACIÓN: ${activeQuotes.count - 1} cotización(es) competitiva(s) ahora son obsoletas para el lote ${defaultCode}`);
-                activeQuotes.quotes.forEach((quote: Record<string, unknown>) => {
-                    if (quote.orderId !== orderId) {
-                        console.log(`📧 [MOCK] Notifying vendor ${quote.vendorName}: Client ${quote.clientName}'s quote is no longer valid.`);
-                    }
-                });
-            }
-
             return { success: true, orderId };
         } catch (error) {
             console.error("❌ Reserve Quoted Lot Failed:", error);
@@ -574,7 +568,24 @@ export const odooService = {
 
 
     // Get the owner of a reserved lot (Salesperson who confirmed the order)
-    async getReservationOwner(defaultCode: string): Promise<{ ownerId: number; ownerName: string; partnerId: number; clientName: string; totalInstallments: number } | null> {
+    // Process a refund: creates credit note if invoice exists, otherwise cancels the order
+    async processRefund(orderId: number, refundAmount: number, reason: string): Promise<{ success: boolean; action?: string; newLotStatus?: string; error?: string }> {
+        try {
+            const response = await fetch('/api/odoo/process_refund', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderId, refundAmount, reason })
+            });
+            const result = await response.json();
+            return result;
+        } catch (error) {
+            console.error("Error processing refund:", error);
+            return { success: false, error: error instanceof Error ? error.message : 'Error desconocido' };
+        }
+    },
+
+    // Get the owner of a reserved lot (Salesperson who confirmed the order)
+    async getReservationOwner(defaultCode: string): Promise<{ ownerId: number; ownerName: string; partnerId: number; clientName: string; totalInstallments: number; orderId: number; separationAmount?: number | null } | null> {
         try {
             const response = await fetch('/api/odoo/get_reservation_owner', {
                 method: 'POST',
@@ -588,7 +599,9 @@ export const odooService = {
                 ownerName: result.ownerName,
                 partnerId: result.partnerId,
                 clientName: result.clientName,
-                totalInstallments: result.totalInstallments || 72
+                totalInstallments: result.totalInstallments || 72,
+                orderId: result.orderId,
+                separationAmount: result.separationAmount
             };
         } catch (error) {
             console.error("Error fetching reservation owner:", error);

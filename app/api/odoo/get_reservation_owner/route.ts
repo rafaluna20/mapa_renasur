@@ -41,7 +41,7 @@ export async function POST(request: Request) {
                 ['order_line.product_id', '=', effectiveProductId]
             ]],
             {
-                fields: ['user_id', 'partner_id', 'date_order', 'x_plazo_meses'],
+                fields: ['user_id', 'partner_id', 'date_order', 'x_plazo_meses', 'x_separacion'],
                 limit: 1,
                 order: 'date_order desc' // Latest one
             }
@@ -59,15 +59,18 @@ export async function POST(request: Request) {
         const clientName = order.partner_id ? order.partner_id[1] : 'Unknown';
         // Parse custom field, default to 72 if missing or 0
         const totalInstallments = order.x_plazo_meses ? parseInt(order.x_plazo_meses) : 72;
+        const separationAmount = order.x_separacion ? parseFloat(order.x_separacion) : null;
 
         return NextResponse.json({
             success: true,
-            ownerId,
+            ownerId, // Salesperson User ID
             ownerName,
             partnerId,
             clientName,
             totalInstallments,
-            orderDate: order.date_order
+            orderDate: order.date_order,
+            orderId: order.id, // Actual Sale Order ID
+            separationAmount // Saved separation amount
         });
 
     } catch (error: unknown) {

@@ -1,7 +1,8 @@
 import { Lot } from '@/app/data/lotsData';
-import { X, User, FileText, Users, Receipt, Calendar } from 'lucide-react';
+import { X, User, FileText, Users, Receipt, Calendar, RotateCcw } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import ReservationModal from './ReservationModal';
+import RefundModal from './RefundModal';
 import { odooService, OdooUser } from '@/app/services/odooService';
 
 interface StatusConfigItem {
@@ -33,7 +34,8 @@ const STATUS_CONFIG: Record<string, StatusConfigItem> = {
 
 export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotation, activeQuotes, currentUser }: LotDetailModalProps) {
     const [showReservationModal, setShowReservationModal] = useState(false);
-    const [reservationOwner, setReservationOwner] = useState<{ id: number; name: string; partnerId?: number; totalInstallments?: number } | null>(null);
+    const [showRefundModal, setShowRefundModal] = useState(false);
+    const [reservationOwner, setReservationOwner] = useState<{ id: number; name: string; partnerId?: number; clientName?: string; totalInstallments?: number; orderId?: number; separationAmount?: number | null } | null>(null);
     const [activeTab, setActiveTab] = useState<'info' | 'pagos'>('info');
     const [invoices, setInvoices] = useState<{ id: number; name: string; ref?: string; invoice_date: string; invoice_date_due: string; amount_total: number; amount_residual: number; payment_state: string }[]>([]);
     const [loadingInvoices, setLoadingInvoices] = useState(false);
@@ -112,7 +114,10 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                     id: ownerData.ownerId,
                     name: ownerData.ownerName,
                     partnerId: ownerData.partnerId,
-                    totalInstallments: ownerData.totalInstallments
+                    clientName: ownerData.clientName,
+                    totalInstallments: ownerData.totalInstallments,
+                    orderId: ownerData.orderId,
+                    separationAmount: ownerData.separationAmount
                 });
 
                 // 2. Si hay partnerId, obtener facturas FILTRADAS POR ESTE LOTE
@@ -180,6 +185,11 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
     const assignedClient = lot.x_cliente || "Sin asignar";
 
     const paidInvoices = invoices.filter(i => i.payment_state === 'paid').length;
+
+    // Calculate total amount invoiced (sum of all paid invoices)
+    const totalInvoiced = invoices
+        .filter(i => i.payment_state === 'paid')
+        .reduce((sum, inv) => sum + (inv.amount_total || 0), 0);
 
     // Total Installments from Odoo (Contract) or Default 72
     const totalPlan = reservationOwner?.totalInstallments || 72;
@@ -405,10 +415,11 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                                 </button>
                                 <button
                                     disabled={!isReservationOwner}
-                                    onClick={() => isReservationOwner && onUpdateStatus(lot.id, 'libre')}
-                                    className={`border border-slate-300 text-slate-600 py-2 rounded-lg font-medium text-sm transition-colors ${!isReservationOwner ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-50'}`}
+                                    onClick={() => isReservationOwner && setShowRefundModal(true)}
+                                    className={`border border-orange-300 text-orange-600 py-2 rounded-lg font-medium text-sm transition-colors flex items-center justify-center gap-1.5 ${!isReservationOwner ? 'opacity-50 cursor-not-allowed' : 'hover:bg-orange-50'}`}
                                 >
-                                    Liberar
+                                    <RotateCcw size={14} />
+                                    Devolución
                                 </button>
                             </>
                         )}
@@ -429,6 +440,28 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                     onSuccess={() => { if (onUpdateStatus) onUpdateStatus(lot.id, 'separado'); }}
                 />
             )}
+
+            {showRefundModal && reservationOwner && (() => {
+                // Calculate actual separation amount:
+                // 1. Try Odoo custom field x_separacion
+                // 2. Try sum of posted invoices
+                // 3. Fallback to 1000
+                const separationAmount = reservationOwner.separationAmount && reservationOwner.separationAmount > 0
+                    ? reservationOwner.separationAmount
+                    : (totalInvoiced > 0 ? totalInvoiced : 1000);
+
+                return (
+                    <RefundModal
+                        lot={lot}
+                        orderId={reservationOwner.orderId || reservationOwner.id}
+                        reservedAmount={separationAmount}
+                        listPrice={lot.list_price || 0}
+                        clientName={reservationOwner.clientName || lot.x_cliente as string || 'Cliente'}
+                        onClose={() => setShowRefundModal(false)}
+                        onSuccess={(newStatus) => { if (onUpdateStatus) onUpdateStatus(lot.id, newStatus); }}
+                    />
+                );
+            })()}
         </div>
     );
 }

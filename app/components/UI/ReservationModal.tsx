@@ -1,4 +1,4 @@
-import { X, Upload, FileText, AlertCircle, Check, Search, User, Loader2, Plus } from 'lucide-react';
+import { X, Upload, FileText, AlertCircle, Check, Search, User, Loader2, Plus, DollarSign } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { Lot } from '@/app/data/lotsData';
 import { odooService } from '@/app/services/odooService';
@@ -12,8 +12,9 @@ interface ReservationModalProps {
 
 export default function ReservationModal({ lot, onClose, onSuccess }: ReservationModalProps) {
     const { user } = useAuth();
-    const [file, setFile] = useState<File | null>(null);
+    const [files, setFiles] = useState<File[]>([]);
     const [notes, setNotes] = useState('');
+    const [separationAmount, setSeparationAmount] = useState<number>(1000);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -26,6 +27,35 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
     const [showCreateClient, setShowCreateClient] = useState(false);
     const [newClientData, setNewClientData] = useState({ name: '', vat: '', phone: '', email: '' });
     const [isCreatingClient, setIsCreatingClient] = useState(false);
+
+    // Active Quotes State (for lot.x_statu === 'cotizacion')
+    const [activeQuotes, setActiveQuotes] = useState<any[]>([]);
+    const [selectedQuoteId, setSelectedQuoteId] = useState<number | null>(null);
+    const [isLoadingQuotes, setIsLoadingQuotes] = useState(false);
+
+    // Fetch active quotes if lot is in cotizacion
+    useEffect(() => {
+        if (lot.x_statu === 'cotizacion') {
+            const fetchQuotes = async () => {
+                setIsLoadingQuotes(true);
+                try {
+                    // Pass user.uid to filter only THIS vendor's quotes
+                    const data = await odooService.getActiveQuotesByLot(lot.default_code, user?.uid);
+                    if (data && data.quotes) {
+                        setActiveQuotes(data.quotes);
+                        if (data.quotes.length === 1) {
+                            setSelectedQuoteId(Number(data.quotes[0].orderId) || null);
+                        }
+                    }
+                } catch (e) {
+                    console.error("Error fetching quotes:", e);
+                } finally {
+                    setIsLoadingQuotes(false);
+                }
+            };
+            fetchQuotes();
+        }
+    }, [lot.default_code, lot.x_statu, user?.uid]);
 
     // Debounce search
     useEffect(() => {
@@ -56,15 +86,35 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
     }, [searchTerm, selectedClient, showCreateClient]);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            setFile(e.target.files[0]);
+        if (e.target.files) {
+            const newFiles = Array.from(e.target.files);
+            setFiles(prev => {
+                const combined = [...prev, ...newFiles];
+                if (combined.length > 3) {
+                    alert("Solo puedes subir un máximo de 3 archivos.");
+                    return combined.slice(0, 3);
+                }
+                return combined;
+            });
+        }
+    };
+
+    const removeFile = (indexToRemove: number, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setFiles(prev => prev.filter((_, index) => index !== indexToRemove));
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
         }
     };
 
     const handleSubmit = async () => {
-        // Validation: If NOT in cotizacion, we need a client. If in cotizacion, we assume client exists in order.
-        if (!file) {
-            alert("Por favor suba un comprobante de pago");
+        if (files.length === 0) {
+            alert("Por favor suba al menos un comprobante de pago");
+            return;
+        }
+
+        if (lot.x_statu === 'cotizacion' && !selectedQuoteId) {
+            alert("Por favor seleccione una cotización activa para asociar la reserva");
             return;
         }
 
@@ -76,17 +126,18 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
         setIsSubmitting(true);
         try {
             if (lot.x_statu === 'cotizacion') {
-                // Flow for already quoted lots: Find order, attach file, update status
-                await odooService.reserveQuotedLot(lot.default_code, file, notes, user?.uid);
+                // Flow for already quoted lots: Confirm the selected specific order
+                await odooService.reserveQuotedLot(selectedQuoteId!, files, notes, user?.uid, separationAmount);
             } else {
                 // Flow for direct reservation (legacy or admin override): Create Order -> Attach -> Status
-                if (!selectedClient) return; // Should be caught above
+                if (!selectedClient) return; 
                 await odooService.processReservationLevel2(
                     lot.default_code,
                     selectedClient.id,
                     lot.list_price,
-                    file,
-                    notes
+                    files,
+                    notes,
+                    separationAmount
                 );
             }
 
@@ -129,11 +180,9 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
         }
     };
 
-
-
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1100] animate-in fade-in duration-200">
-            <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[65vh] animate-in zoom-in-95 duration-200">
+            <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[75vh] animate-in zoom-in-95 duration-200">
                 {/* Header */}
                 <div className="bg-blue-600 px-4 py-3 flex justify-between items-center text-white shrink-0">
                     <h2 className="font-bold text-[15px] flex items-center gap-2">
@@ -146,14 +195,52 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
                 </div>
 
                 {/* Content */}
-                <div className="p-4 space-y-3 overflow-y-auto flex-1">
+                <div className="p-4 space-y-4 overflow-y-auto flex-1 bg-white">
                     <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-[13px] text-blue-800 flex gap-2">
                         <AlertCircle size={16} className="shrink-0 mt-0.5" />
                         <p>Para reservar el lote <strong>{lot.name}</strong>, es necesario crear una orden y adjuntar el pago.</p>
                     </div>
 
-                    {/* Client Selection (Level 2) - Only if NOT already quoted */}
-                    {lot.x_statu !== 'cotizacion' ? (
+                    {/* Client Selection (Level 2) OR Quote Selection */}
+                    {lot.x_statu === 'cotizacion' ? (
+                        <div className="space-y-2">
+                            <label className="block text-[13px] font-bold text-slate-700 flex items-center gap-2">
+                                <FileText size={14} className="text-slate-400" />
+                                Seleccionar Cotización ({activeQuotes.length})
+                            </label>
+                            
+                            {isLoadingQuotes ? (
+                                <div className="p-4 text-center bg-slate-50 border border-slate-200 rounded-lg animate-pulse text-xs text-slate-500">
+                                    Cargando cotizaciones...
+                                </div>
+                            ) : activeQuotes.length === 0 ? (
+                                <div className="p-4 text-center bg-red-50 border border-red-200 text-red-600 rounded-lg text-xs">
+                                    Error: Lote en cotización pero no se encontraron órdenes activas.
+                                </div>
+                            ) : (
+                                <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                                    {activeQuotes.map(quote => (
+                                        <button
+                                            key={quote.orderId}
+                                            onClick={() => setSelectedQuoteId(quote.orderId)}
+                                            className={`w-full text-left p-3 border rounded-lg transition-all flex items-center gap-3 ${selectedQuoteId === quote.orderId ? 'border-amber-500 bg-amber-50 ring-1 ring-amber-500 shadow-sm' : 'border-slate-200 hover:border-amber-300 hover:bg-slate-50'}`}
+                                        >
+                                            <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${selectedQuoteId === quote.orderId ? 'border-amber-500' : 'border-slate-300'}`}>
+                                                {selectedQuoteId === quote.orderId && <div className="w-2 h-2 rounded-full bg-amber-500" />}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-bold text-slate-800 truncate">{quote.clientName}</p>
+                                                <div className="flex justify-between items-center mt-1">
+                                                    <p className="text-[10px] text-slate-500 flex items-center gap-1"><User size={10}/> {quote.vendorName}</p>
+                                                    <p className="text-[11px] font-bold text-slate-700">{new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(quote.amount)}</p>
+                                                </div>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ) : (
                         <div>
                             <label className="block text-[13px] font-bold text-slate-700 mb-1.5 flex items-center gap-2">
                                 <User size={14} className="text-slate-400" />
@@ -273,56 +360,85 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
                                 </div>
                             )}
                         </div>
-                    ) : (
-                        <div className="bg-amber-50 border border-amber-100 rounded-lg p-3 flex items-start gap-3">
-                            <User className="text-amber-600 shrink-0 mt-0.5" size={16} />
-                            <div>
-                                <h4 className="text-xs font-bold text-amber-800">Cliente Pre-asignado</h4>
-                                <p className="text-[11px] text-amber-600 mt-1 leading-relaxed">
-                                    Este lote ya tiene una cotización activa. La reserva se asociará automáticamente a la orden existente.
-                                </p>
+                    )}
+
+                    {/* Separation Amount */}
+                    <div className="space-y-2">
+                        <label className="block text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                            <DollarSign size={14} className="text-slate-400" />
+                            Monto de Separación (S/)
+                        </label>
+                        <div className="flex gap-2 items-center">
+                            {[1000, 2500].map(amt => (
+                                <button
+                                    key={amt}
+                                    type="button"
+                                    onClick={() => setSeparationAmount(amt)}
+                                    className={`flex-1 py-2 text-xs rounded-lg border font-bold transition-all ${separationAmount === amt ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-slate-200 text-slate-600 hover:border-blue-300 hover:bg-slate-50'}`}
+                                >
+                                    S/ {amt.toLocaleString('es-PE')}
+                                </button>
+                            ))}
+                            <div className="relative flex-1">
+                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">S/</span>
+                                <input
+                                    type="number"
+                                    min={1}
+                                    value={separationAmount || ''}
+                                    onChange={e => setSeparationAmount(parseFloat(e.target.value) || 0)}
+                                    className="w-full pl-6 pr-2 py-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-bold text-slate-700"
+                                    placeholder="Otro"
+                                />
                             </div>
                         </div>
-                    )}
+                    </div>
 
                     {/* File Upload */}
                     <div className="space-y-2">
                         <div className="flex justify-between items-center text-[10px] text-slate-400 uppercase font-bold tracking-wider">
                             <span>Evidencia de Pago</span>
-                            {file && <span className="text-blue-500">Archivo listo</span>}
+                            <span className={files.length > 0 ? "text-blue-500" : ""}>{files.length}/3 archivos</span>
                         </div>
-                        <div
-                            onClick={() => fileInputRef.current?.click()}
-                            className={`border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors ${file ? 'border-blue-500 bg-blue-50' : 'border-slate-300 hover:border-indigo-400 hover:bg-slate-50'
-                                }`}
-                        >
-                            <input
-                                type="file"
-                                ref={fileInputRef}
-                                className="hidden"
-                                accept="image/*,.pdf"
-                                onChange={handleFileChange}
-                            />
-                            {file ? (
-                                <>
-                                    <div className="bg-blue-100 p-2 rounded-full text-blue-600 mb-2">
-                                        <FileText size={24} />
+                        
+                        {files.length > 0 && (
+                            <div className="space-y-2 mb-3">
+                                {files.map((f, i) => (
+                                    <div key={i} className="flex items-center justify-between bg-blue-50 border border-blue-100 p-2 rounded-lg">
+                                        <div className="flex items-center gap-2 overflow-hidden">
+                                            <FileText size={16} className="text-blue-600 shrink-0" />
+                                            <span className="text-xs font-medium text-blue-800 truncate">{f.name}</span>
+                                        </div>
+                                        <button 
+                                            onClick={(e) => removeFile(i, e)}
+                                            className="text-blue-400 hover:text-red-500 hover:bg-white rounded-full p-1 transition-colors shrink-0"
+                                        >
+                                            <X size={14} />
+                                        </button>
                                     </div>
-                                    <p className="text-[13px] font-medium text-blue-700 truncate max-w-full text-center px-4">
-                                        {file.name}
-                                    </p>
-                                    <p className="text-[11px] text-blue-600 mt-1">Clic para cambiar archivo</p>
-                                </>
-                            ) : (
-                                <>
-                                    <div className="bg-slate-100 p-3 rounded-full text-slate-400 mb-2">
-                                        <Upload size={24} />
-                                    </div>
-                                    <p className="text-[13px] font-medium text-slate-600">Haz clic para subir imagen o PDF</p>
-                                    <p className="text-[11px] text-slate-400 mt-1">Máximo 5MB</p>
-                                </>
-                            )}
-                        </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {files.length < 3 && (
+                            <div
+                                onClick={() => fileInputRef.current?.click()}
+                                className="border-2 border-dashed border-slate-300 hover:border-indigo-400 hover:bg-slate-50 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-colors"
+                            >
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    className="hidden"
+                                    accept="image/*,.pdf"
+                                    multiple
+                                    onChange={handleFileChange}
+                                />
+                                <div className="bg-slate-100 p-3 rounded-full text-slate-400 mb-2">
+                                    <Upload size={24} />
+                                </div>
+                                <p className="text-[13px] font-medium text-slate-600">Haz clic para añadir archivo</p>
+                                <p className="text-[11px] text-slate-400 mt-1">Imágenes o PDF (Máx 5MB)</p>
+                            </div>
+                        )}
                     </div>
 
                     {/* Notes */}
@@ -349,7 +465,7 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
                     </button>
                     <button
                         onClick={handleSubmit}
-                        disabled={isSubmitting || !file || (lot.x_statu !== 'cotizacion' && !selectedClient)}
+                        disabled={isSubmitting || files.length === 0 || (lot.x_statu === 'cotizacion' && !selectedQuoteId) || (lot.x_statu !== 'cotizacion' && !selectedClient)}
                         className="flex-1 py-2.5 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm shadow-blue-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-[13px]"
                     >
                         {isSubmitting ? (

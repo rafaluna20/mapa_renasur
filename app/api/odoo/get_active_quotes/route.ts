@@ -3,7 +3,7 @@ import { fetchOdoo } from '@/app/services/odooService';
 
 export async function POST(request: Request) {
     try {
-        const { defaultCode } = await request.json();
+        const { defaultCode, userId } = await request.json();
 
         if (!defaultCode) {
             return NextResponse.json(
@@ -50,14 +50,20 @@ export async function POST(request: Request) {
             Array.isArray(line.order_id) ? (line.order_id as unknown[])[0] : line.order_id
         ))];
 
-        // 3. Get order details for draft orders only
+        // 3. Get order details for draft orders only, filtered by user if provided
+        const domain: unknown[] = [
+            ['id', 'in', orderIds],
+            ['state', '=', 'draft']
+        ];
+        
+        if (userId) {
+            domain.push(['user_id', '=', parseInt(userId)]);
+        }
+
         const orders = await fetchOdoo(
             'sale.order',
             'search_read',
-            [[
-                ['id', 'in', orderIds],
-                ['state', '=', 'draft']
-            ]],
+            [domain],
             { fields: ['id', 'name', 'partner_id', 'user_id', 'create_date', 'amount_total'] }
         );
 

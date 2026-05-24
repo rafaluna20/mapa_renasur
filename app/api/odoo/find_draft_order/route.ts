@@ -2,17 +2,56 @@ import { NextResponse } from 'next/server';
 import { fetchOdoo } from '@/app/services/odooService';
 
 /**
- * Find the latest DRAFT sale order for a specific product (lot)
+ * Find the latest DRAFT sale order for a specific product (lot), or a specific order by ID
  */
 export async function POST(request: Request) {
     try {
-        const { defaultCode, userId } = await request.json();
+        const { defaultCode, userId, orderId } = await request.json();
 
-        if (!defaultCode) {
+        if (!defaultCode && !orderId) {
             return NextResponse.json(
-                { success: false, error: 'Missing defaultCode' },
+                { success: false, error: 'Missing defaultCode or orderId' },
                 { status: 400 }
             );
+        }
+
+        if (orderId) {
+            console.log(`🔍 Finding specific draft order: ${orderId}`);
+            const orders = await fetchOdoo(
+                'sale.order',
+                'search_read',
+                [[['id', '=', orderId]]],
+                { fields: ['id', 'partner_id', 'amount_total', 'date_order', 'order_line'] }
+            );
+
+            if (!orders || orders.length === 0) {
+                return NextResponse.json({ success: true, order: null });
+            }
+
+            const order = orders[0];
+            const orderLineIds = order.order_line as number[];
+            let productId = null;
+            let productTmplId = null;
+
+            if (orderLineIds && orderLineIds.length > 0) {
+                const lines = await fetchOdoo('sale.order.line', 'read', [orderLineIds], { fields: ['product_id', 'product_template_id'] });
+                if (lines && lines.length > 0) {
+                    productId = Array.isArray(lines[0].product_id) ? lines[0].product_id[0] : lines[0].product_id;
+                    productTmplId = Array.isArray(lines[0].product_template_id) ? lines[0].product_template_id[0] : lines[0].product_template_id;
+                }
+            }
+
+            return NextResponse.json({
+                success: true,
+                order: {
+                    id: order.id,
+                    partnerId: Array.isArray(order.partner_id) ? order.partner_id[0] : order.partner_id,
+                    partnerName: Array.isArray(order.partner_id) ? order.partner_id[1] : 'Desconocido',
+                    amount: order.amount_total,
+                    productId: productId,
+                    productTmplId: productTmplId
+                }
+            });
         }
 
         console.log(`🔍 Finding draft order for lot: ${defaultCode} (User: ${userId || 'Any'})`);
@@ -39,10 +78,6 @@ export async function POST(request: Request) {
             : products[0].product_tmpl_id;
 
         // 2. Search for Sale Orders in 'draft' or 'sent' state containing this product
-        // Domain explanation: 
-        // - state in ['draft', 'sent'] (Quotations)
-        // - order_line.product_id = productId
-
         const domain: unknown[] = [
             ['state', 'in', ['draft', 'sent']],
             ['order_line.product_id', '=', productId]
