@@ -306,6 +306,8 @@ export default function DashboardClientImproved() {
     // Filtro de fechas personalizadas
     const [customStartDate, setCustomStartDate] = useState<string>('');
     const [customEndDate, setCustomEndDate] = useState<string>('');
+    // Estado separado para evitar re-fetches en cada tecla
+    const [appliedCustomDates, setAppliedCustomDates] = useState<{start: string, end: string}>({start: '', end: ''});
     // Almacenamos las fechas calculadas para pasarlas a los reportes PDF
     const [activeDateRange, setActiveDateRange] = useState<{start?: string, end?: string}>({});
 
@@ -361,8 +363,8 @@ export default function DashboardClientImproved() {
                     startDate = `${year}-01-01`;
                     endDate = formatDate(today);
                 } else if (periodFilter === 'custom') {
-                    startDate = customStartDate || undefined;
-                    endDate = customEndDate || undefined;
+                    startDate = appliedCustomDates.start || undefined;
+                    endDate = appliedCustomDates.end || undefined;
                 }
                 
                 setActiveDateRange({ start: startDate, end: endDate });
@@ -408,7 +410,7 @@ export default function DashboardClientImproved() {
         };
 
         fetchDashboardData();
-    }, [authUser, periodFilter, customStartDate, customEndDate, salesCount]);
+    }, [authUser, periodFilter, appliedCustomDates, salesCount]);
 
     // Manejadores de eventos
     const handleDownloadReport = useCallback(async () => {
@@ -757,6 +759,12 @@ export default function DashboardClientImproved() {
                                             className="bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-indigo-500"
                                         />
                                     </div>
+                                    <button
+                                        onClick={() => setAppliedCustomDates({ start: customStartDate, end: customEndDate })}
+                                        className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-1.5 rounded-lg text-sm font-semibold transition-all shadow-md"
+                                    >
+                                        Aplicar
+                                    </button>
                                 </div>
                             )}
                         </div>
