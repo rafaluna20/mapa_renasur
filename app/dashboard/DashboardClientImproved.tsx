@@ -747,7 +747,8 @@ export default function DashboardClientImproved() {
                                             type="date" 
                                             value={customStartDate}
                                             onChange={(e) => setCustomStartDate(e.target.value)}
-                                            className="bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-indigo-500"
+                                            style={{ colorScheme: 'dark' }}
+                                            className="bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-indigo-500 w-36 cursor-pointer"
                                         />
                                     </div>
                                     <div className="flex items-center gap-2">
@@ -756,7 +757,8 @@ export default function DashboardClientImproved() {
                                             type="date" 
                                             value={customEndDate}
                                             onChange={(e) => setCustomEndDate(e.target.value)}
-                                            className="bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-indigo-500"
+                                            style={{ colorScheme: 'dark' }}
+                                            className="bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-indigo-500 w-36 cursor-pointer"
                                         />
                                     </div>
                                     <button
