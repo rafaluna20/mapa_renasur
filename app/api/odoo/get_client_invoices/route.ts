@@ -67,17 +67,17 @@ export async function POST(request: Request) {
             ];
         }
 
-        // Safest field list for Odoo 17/18 compatibility
-        // Excluding potentially problematic fields to debug the 500 error
+        // Campos de factura — incluye 'ref' para parsear el número de cuota
         const fields = [
             'id',
             'name',
+            'ref',                 // Ej: CONTRATOMANUAL-E01MZD148P-C013
+            'payment_reference',   // Referencia de pago (alternativa a ref)
             'invoice_date',
-            'invoice_date_due', // Standard in v17+, was date_due in old versions
+            'invoice_date_due',
             'payment_state',
             'amount_total',
             'amount_residual'
-            // 'ref' and 'payment_reference' removed temporarily for debugging
         ];
 
         const invoices = await fetchOdoo(
@@ -86,8 +86,8 @@ export async function POST(request: Request) {
             [domain],
             {
                 fields: fields,
-                limit: 100,
-                order: 'invoice_date desc'
+                limit: 200,
+                order: 'invoice_date asc'  // Orden cronológico: cuota inicial primero
             }
         );
 

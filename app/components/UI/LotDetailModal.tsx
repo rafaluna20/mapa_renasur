@@ -1,5 +1,5 @@
 import { Lot } from '@/app/data/lotsData';
-import { X, User, FileText, Users, Receipt, Calendar, RotateCcw } from 'lucide-react';
+import { X, User, FileText, Users, Receipt, Calendar, RotateCcw, AlertTriangle, CheckCircle, TrendingUp, DollarSign } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import ReservationModal from './ReservationModal';
 import RefundModal from './RefundModal';
@@ -37,7 +37,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
     const [showRefundModal, setShowRefundModal] = useState(false);
     const [reservationOwner, setReservationOwner] = useState<{ id: number; name: string; partnerId?: number; clientName?: string; totalInstallments?: number; orderId?: number; separationAmount?: number | null } | null>(null);
     const [activeTab, setActiveTab] = useState<'info' | 'pagos'>('info');
-    const [invoices, setInvoices] = useState<{ id: number; name: string; ref?: string; invoice_date: string; invoice_date_due: string; amount_total: number; amount_residual: number; payment_state: string }[]>([]);
+    const [invoices, setInvoices] = useState<{ id: number; name: string; ref?: string; payment_reference?: string; invoice_date: string; invoice_date_due: string; amount_total: number; amount_residual: number; payment_state: string }[]>([]);
     const [loadingInvoices, setLoadingInvoices] = useState(false);
 
     // 🎯 ENTERPRISE SOLUTION: Use refs to track current lot and prevent stale updates
@@ -191,13 +191,38 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
         .filter(i => i.payment_state === 'paid')
         .reduce((sum, inv) => sum + (inv.amount_total || 0), 0);
 
-    // Total Installments from Odoo (Contract) or Default 72
-    const totalPlan = reservationOwner?.totalInstallments || 72;
-
-    const progress = Math.min(100, Math.round((paidInvoices / totalPlan) * 100));
-
     // Formatter - Soles Peruanos
     const formatMoney = (amount: number) => `S/ ${amount.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    // ─── Parser de referencia de factura (CONTRATOMANUAL-E01MZD148P-C013 / INIT) ────
+    const parseCuotaLabel = (inv: { name: string; ref?: string; payment_reference?: string }): { label: string; isInitial: boolean; cuotaNum: number | null } => {
+        // Buscar en ref primero, luego en payment_reference, luego en name
+        const ref = inv.ref || inv.payment_reference || inv.name || '';
+        // Detectar cuota inicial: -INIT
+        if (/[-_]INIT(\b|$|-)/i.test(ref)) {
+            return { label: 'Cuota Inicial', isInitial: true, cuotaNum: 0 };
+        }
+        // Detectar cuota numerada: -C013, -C13, -C001, etc.
+        const cuotaMatch = ref.match(/[-_]C(\d+)(?:\b|$|-)/i);
+        if (cuotaMatch) {
+            const num = parseInt(cuotaMatch[1], 10);
+            return { label: `Cuota N° ${num}`, isInitial: false, cuotaNum: num };
+        }
+        // Sin referencia reconocida — usar el nombre de la factura
+        return { label: inv.name || 'Factura', isInitial: false, cuotaNum: null };
+    };
+
+    // ─── KPIs Financieros y Morosidad (Estado de Cuenta) ─────────────────────────
+    const listPrice = lot.list_price || 0;
+    const realTotalPaid = totalInvoiced;
+    const pendingBalance = Math.max(0, listPrice - realTotalPaid);
+    const financialProgress = listPrice > 0 ? Math.min(100, Math.round((realTotalPaid / listPrice) * 100)) : 0;
+
+    const overdueInvoices = invoices.filter(inv => inv.payment_state !== 'paid' && inv.invoice_date_due && new Date(inv.invoice_date_due) < new Date());
+    const isOverdue = overdueInvoices.length > 0;
+    const totalOverdueAmount = overdueInvoices.reduce((sum, inv) => sum + (inv.amount_residual || 0), 0);
+
+    const sortedInvoices = [...invoices].sort((a, b) => new Date(a.invoice_date).getTime() - new Date(b.invoice_date).getTime());
 
     return (
         <div className="fixed md:absolute bottom-6 left-1/2 -translate-x-1/2 md:translate-x-0 md:left-auto md:bottom-auto md:top-4 md:right-4 w-[90%] md:w-96 bg-white rounded-2xl md:rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] md:shadow-2xl border border-slate-200 overflow-hidden z-[1000] animate-in slide-in-from-bottom-12 md:slide-in-from-right-8 fade-in duration-300 origin-bottom md:origin-top-right scale-[0.95] md:scale-[0.85] flex flex-col max-h-[95vh]">
@@ -307,69 +332,131 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                 {activeTab === 'pagos' && (
                     <div className="space-y-4 animate-in slide-in-from-right-4 fade-in duration-300">
 
-                        {/* Summary Card */}
-                        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                            <div className="flex justify-between items-end mb-2">
+                        {/* Summary Card - Financial Progress */}
+                        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl"></div>
+                            
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Resumen Financiero</p>
+                            
+                            <div className="grid grid-cols-2 gap-4 mb-4">
                                 <div>
-                                    <p className="text-xs font-bold text-slate-400 uppercase">Progreso de Pago</p>
-                                    <p className="text-xl font-bold text-slate-800">{paidInvoices} <span className="text-sm font-normal text-slate-400">/ {totalPlan} Cuotas</span></p>
+                                    <p className="text-[10px] text-slate-500 font-semibold">Valor Total (Precio)</p>
+                                    <p className="text-sm font-bold text-slate-800">{formatMoney(listPrice)}</p>
                                 </div>
                                 <div className="text-right">
-                                    <p className="text-xs font-bold text-emerald-600">{progress}% Pagado</p>
+                                    <p className="text-[10px] text-slate-500 font-semibold">Saldo Deudor Pendiente</p>
+                                    <p className="text-sm font-bold text-red-600">{formatMoney(pendingBalance)}</p>
                                 </div>
                             </div>
-                            <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                                <div className="bg-emerald-500 h-2.5 rounded-full" style={{ width: `${progress}%` }}></div>
+
+                            <div className="flex justify-between items-end mb-1.5">
+                                <div className="flex items-center gap-1.5">
+                                    <DollarSign size={14} className="text-emerald-500" />
+                                    <span className="text-xs font-bold text-emerald-700">Total Pagado: {formatMoney(realTotalPaid)}</span>
+                                </div>
+                                <div className="text-xs font-bold text-emerald-600">{financialProgress}%</div>
+                            </div>
+                            <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                                <div className="bg-emerald-500 h-full rounded-full transition-all duration-500" style={{ width: `${financialProgress}%` }}></div>
                             </div>
                         </div>
 
-                        {/* Invoice List */}
-                        <div className="space-y-2">
-                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Historial de Facturas</p>
+                        {/* Estado de Morosidad */}
+                        {isOverdue ? (
+                            <div className="bg-red-50 border border-red-200 p-3 rounded-lg flex items-start gap-3">
+                                <AlertTriangle size={18} className="text-red-500 shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="text-xs font-bold text-red-700 uppercase">Atraso Detectado ({overdueInvoices.length} facturas)</p>
+                                    <p className="text-sm font-bold text-red-800 mt-0.5">Deuda Exigible: {formatMoney(totalOverdueAmount)}</p>
+                                    <p className="text-[10px] text-red-600 mt-1">El cliente presenta pagos vencidos. Priorizar cobranza.</p>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-lg flex items-center gap-3">
+                                <CheckCircle size={18} className="text-emerald-500 shrink-0" />
+                                <div>
+                                    <p className="text-xs font-bold text-emerald-700 uppercase">Financiamiento Al Día</p>
+                                    <p className="text-[10px] text-emerald-600">No hay facturas vencidas registradas.</p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Invoice List (Timeline) */}
+                        <div className="space-y-3">
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-1 mt-2">Historial de Cuotas y Pagos</p>
 
                             {loadingInvoices ? (
-                                <div className="p-4 text-center text-slate-400 text-xs">Cargando facturas...</div>
-                            ) : invoices.length === 0 ? (
-                                <div className="p-4 text-center bg-slate-100 rounded-lg text-slate-400 text-xs italic">
-                                    No se encontraron facturas registradas.
+                                <div className="p-6 text-center text-slate-400 text-xs bg-white rounded-xl border border-slate-100">Cargando estado de cuenta...</div>
+                            ) : sortedInvoices.length === 0 ? (
+                                <div className="p-6 text-center bg-white rounded-xl border border-slate-100 shadow-sm text-slate-400 text-xs italic flex flex-col items-center">
+                                    <Receipt size={24} className="mb-2 opacity-50" />
+                                    Aún no hay cuotas facturadas.
                                 </div>
                             ) : (
-                                invoices.map((inv) => {
-                                    const isPaid = inv.payment_state === 'paid';
-                                    const isOverdue = !isPaid && new Date(inv.invoice_date_due) < new Date();
-                                    return (
-                                        <div key={inv.id} className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex justify-between items-center group hover:border-blue-300 transition-colors">
-                                            <div>
-                                                <div className="flex items-center gap-2">
-                                                    <p className="font-bold text-slate-700 text-xs">{inv.name || inv.ref || 'Factura'}</p>
-                                                    {isPaid ?
-                                                        <span className="bg-emerald-100 text-emerald-700 text-[10px] px-1.5 py-0.5 rounded font-bold">PAGADO</span> :
-                                                        isOverdue ?
-                                                            <span className="bg-red-100 text-red-700 text-[10px] px-1.5 py-0.5 rounded font-bold animate-pulse">VENCIDO</span> :
-                                                            <span className="bg-yellow-100 text-yellow-700 text-[10px] px-1.5 py-0.5 rounded font-bold">PENDIENTE</span>
-                                                    }
-                                                </div>
-                                                <div className="flex items-center gap-2 mt-1">
-                                                    <Calendar size={10} className="text-slate-400" />
-                                                    <p className="text-[10px] text-slate-500">{inv.invoice_date}</p>
+                                <div className="relative border-l-2 border-slate-200 ml-3 pl-4 space-y-4">
+                                    {sortedInvoices.map((inv) => {
+                                        const isPaid = inv.payment_state === 'paid';
+                                        const isOverdueItem = !isPaid && inv.invoice_date_due && new Date(inv.invoice_date_due) < new Date();
+                                        
+                                        // Parsear referencia de la factura para etiquetar la cuota correctamente
+                                        const { label: cuotaLabel, isInitial } = parseCuotaLabel(inv);
+
+                                        return (
+                                            <div key={inv.id} className="relative">
+                                                {/* Timeline dot */}
+                                                <div className={`absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full border-2 border-white ${isPaid ? 'bg-emerald-500' : isOverdueItem ? 'bg-red-500 animate-pulse' : 'bg-amber-400'}`}></div>
+                                                
+                                                <div className={`bg-white p-3 rounded-lg border ${isOverdueItem ? 'border-red-200 shadow-red-50' : 'border-slate-200 hover:border-blue-300'} shadow-sm transition-colors`}>
+                                                    <div className="flex justify-between items-start mb-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-bold text-slate-700 text-xs">{cuotaLabel}</span>
+                                                            {isPaid ?
+                                                                <span className="bg-emerald-100 text-emerald-700 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">Pagado</span> :
+                                                                isOverdueItem ?
+                                                                    <span className="bg-red-100 text-red-700 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase animate-pulse">Mora</span> :
+                                                                    <span className="bg-yellow-100 text-yellow-700 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">Pendiente</span>
+                                                            }
+                                                        </div>
+                                                        <p className="font-bold text-slate-800 text-sm">{formatMoney(inv.amount_total)}</p>
+                                                    </div>
+                                                    
+                                                    <div className="flex justify-between items-end mt-2">
+                                                        <div className="space-y-0.5">
+                                                            <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                                                                <FileText size={10} />
+                                                                <span>{inv.name || inv.ref || 'S/N'}</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                                                                <Calendar size={10} />
+                                                                <span>Vencimiento: {inv.invoice_date_due || inv.invoice_date}</span>
+                                                            </div>
+                                                        </div>
+                                                        {!isPaid && (
+                                                            <p className="text-[11px] text-red-600 font-bold bg-red-50 px-2 py-0.5 rounded-md">
+                                                                Saldo: {formatMoney(inv.amount_residual)}
+                                                            </p>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
-                                            <div className="text-right">
-                                                <p className="font-bold text-slate-800 text-sm">{formatMoney(inv.amount_total)}</p>
-                                                {!isPaid && (
-                                                    <p className="text-[10px] text-red-500 font-medium">Saldo: {formatMoney(inv.amount_residual)}</p>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })
+                                        );
+                                    })}
+                                </div>
                             )}
                         </div>
 
-                        {/* Action: Contact for Collection */}
-                        <button className="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-transform active:scale-95">
-                            Enviar Recordatorio de Pago (WhatsApp)
-                        </button>
+                        {/* Action Buttons Contextuales */}
+                        {isOverdue ? (
+                            <button className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-sm shadow-lg shadow-red-200 flex items-center justify-center gap-2 transition-transform active:scale-95">
+                                <AlertTriangle size={16} />
+                                Reclamar Mora (WhatsApp)
+                            </button>
+                        ) : (
+                            <button className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-transform active:scale-95">
+                                <FileText size={16} />
+                                Enviar Estado de Cuenta al Cliente
+                            </button>
+                        )}
                     </div>
                 )}
 

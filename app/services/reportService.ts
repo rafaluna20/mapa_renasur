@@ -557,8 +557,10 @@ export interface GeneralReportData {
         soldLots: number;
         reservedLots: number;
         availableLots: number;
+        otherProducts?: number;
     };
     salesTrend: { name: string; ventas: number }[];
+    manzanasDistribution?: { mz: string; total: number; sold: number; reserved: number; available: number }[];
     advisorRanking: { name: string; lotsCount: number; amountTotal: number; commission: number }[];
     recentActivity: { id: number; action: string; lot: string; advisor: string; date: string }[];
     dateRangeLabel?: string; // Etiqueta de periodo dinámico (ej. "Mayo 2026" o "01/04 - 30/04/2026")
@@ -739,6 +741,57 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
     });
     y += barAreaH + 10;
 
+    // ── Sección: Inventario por Manzana ───────────────────────────────────────
+    if (data.manzanasDistribution && data.manzanasDistribution.length > 0) {
+        drawSectionHeader(doc, 'DISTRIBUCIÓN DE INVENTARIO POR MANZANA', margin, y, BRAND.purple);
+        drawLine(doc, margin, y + 2.5, W - margin, y + 2.5, BRAND.borderLight, 0.15);
+        y += 4;
+
+        const mzRows = data.manzanasDistribution.map(mz => [
+            `Manzana ${mz.mz}`,
+            `${mz.sold} (${pct(mz.sold, mz.total)})`,
+            `${mz.reserved} (${pct(mz.reserved, mz.total)})`,
+            `${mz.available} (${pct(mz.available, mz.total)})`,
+            `${mz.total}`
+        ]);
+
+        autoTable(doc, {
+            startY: y,
+            head: [['MANZANA', 'VENDIDOS', 'SEPARADOS', 'DISPONIBLES', 'TOTAL LOTES']],
+            body: mzRows,
+        theme: 'plain',
+        styles: {
+            font: 'helvetica',
+            fontSize: 7.5,
+            cellPadding: { top: 3.5, bottom: 3.5, left: 4, right: 4 },
+            textColor: BRAND.textLight,
+            fillColor: BRAND.white,
+            lineColor: BRAND.borderLight,
+            lineWidth: 0.1,
+        },
+        headStyles: {
+            fillColor: BRAND.panelBg,
+            textColor: BRAND.darkBg,
+            fontStyle: 'bold',
+            fontSize: 6.5,
+            halign: 'center',
+        },
+        alternateRowStyles: {
+            fillColor: [250, 252, 254] as [number, number, number],
+        },
+        columnStyles: {
+            0: { fontStyle: 'bold', textColor: BRAND.darkBg, halign: 'left' },
+            1: { textColor: BRAND.greenLight, halign: 'center', fontStyle: 'bold' },
+            2: { textColor: BRAND.amber, halign: 'center', fontStyle: 'bold' },
+            3: { textColor: BRAND.indigo, halign: 'center', fontStyle: 'bold' },
+            4: { textColor: BRAND.darkBg, halign: 'center', fontStyle: 'bold' },
+        },
+        margin: { left: margin, right: margin },
+    });
+
+        y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+    }
+
     // ── Sección: Inventario Físico del Proyecto ──────────────────────────────
     drawSectionHeader(doc, 'DISTRIBUCIÓN GENERAL DE INVENTARIO', margin, y, BRAND.green);
     drawLine(doc, margin, y + 2.5, W - margin, y + 2.5, BRAND.borderLight, 0.15);
@@ -750,6 +803,15 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
         ['Lotes Disponibles', `${data.kpis.availableLots} unidades`, pct(data.kpis.availableLots, data.kpis.totalLots), 'Disposición libre inmediata para cotización'],
         ['Lotes Totales del Proyecto', `${data.kpis.totalLots} unidades`, '100%', 'Inventario catastral GIS integrado'],
     ];
+
+    if (data.kpis.otherProducts !== undefined && data.kpis.otherProducts > 0) {
+        inventoryRows.push([
+            'Otros Productos', 
+            `${data.kpis.otherProducts} unidades`, 
+            '—', 
+            'Materiales, servicios, etc. (Excluidos de KPIs de lotes)'
+        ]);
+    }
 
     autoTable(doc, {
         startY: y,
@@ -799,16 +861,16 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
 
     if (data.advisorRanking.length === 0) {
         setFont(doc, 7, BRAND.textMuted);
-        doc.text('No hay transacciones registradas de asesores.', margin, y + 6);
+        doc.text('No hay datos suficientes de asesores.', margin, y + 6);
         y += 12;
     } else {
         autoTable(doc, {
             startY: y,
-            head: [['RANGO', 'ASESOR DE VENTAS', 'LOTES TRASPASADOS', 'FACTURACIÓN REAL', 'COMISIÓN DEVENGADA (6%)']],
-            body: data.advisorRanking.map((adv, idx) => [
-                `#${idx + 1}`,
+            head: [['RANGO', 'ASESOR COMERCIAL', 'LOTES VENDIDOS', 'FACTURACIÓN', 'COMISIÓN ESTIMADA']],
+            body: data.advisorRanking.map((adv, i) => [
+                `#${i + 1}`,
                 adv.name,
-                `${adv.lotsCount} lotes`,
+                `${adv.lotsCount} unidades`,
                 currency(adv.amountTotal),
                 currency(adv.commission)
             ]),
@@ -827,38 +889,38 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
                 textColor: BRAND.darkBg,
                 fontStyle: 'bold',
                 fontSize: 6.5,
+                halign: 'left',
             },
             alternateRowStyles: { fillColor: [250, 252, 254] as [number, number, number] },
             columnStyles: {
-                0: { fontStyle: 'bold', textColor: BRAND.amber, halign: 'center' },
+                0: { fontStyle: 'bold', textColor: BRAND.purple },
                 1: { fontStyle: 'bold', textColor: BRAND.darkBg },
-                2: { halign: 'center' },
-                3: { fontStyle: 'bold', textColor: BRAND.darkBg, halign: 'right' },
-                4: { fontStyle: 'bold', textColor: BRAND.greenLight, halign: 'right' },
+                3: { fontStyle: 'bold', textColor: BRAND.greenLight, halign: 'right' },
+                4: { textColor: BRAND.indigo, halign: 'right' },
             },
             margin: { left: margin, right: margin },
         });
         y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
     }
 
-    // ── Historial Operacional del Proyecto ──────────────────────────────────
-    drawSectionHeader(doc, 'HISTORIAL OPERACIONAL DEL PROYECTO (CONSOLIDADO)', margin, y, BRAND.indigo);
+    // ── Actividad Reciente Global ─────────────────────────────────────────────
+    drawSectionHeader(doc, 'ÚLTIMAS TRANSACCIONES COMERCIALES (GLOBAL)', margin, y, BRAND.indigo);
     drawLine(doc, margin, y + 2.5, W - margin, y + 2.5, BRAND.borderLight, 0.15);
     y += 4;
 
     if (data.recentActivity.length === 0) {
         setFont(doc, 7, BRAND.textMuted);
-        doc.text('Sin actividad reciente registrada en el proyecto.', margin, y + 6);
+        doc.text('Sin actividad reciente.', margin, y + 6);
     } else {
         autoTable(doc, {
             startY: y,
-            head: [['TIPO', 'LOTE / PROPIEDAD', 'ASESOR ASOCIADO', 'FECHA DE REGISTRO']],
+            head: [['TIPO', 'PROPIEDAD / LOTE', 'ASESOR ASIGNADO', 'FECHA']],
             body: data.recentActivity.map(act => [act.action, act.lot, act.advisor, act.date]),
             theme: 'plain',
             styles: {
                 font: 'helvetica',
                 fontSize: 7.5,
-                cellPadding: { top: 3.5, bottom: 3.5, left: 4, right: 4 },
+                cellPadding: { top: 3, bottom: 3, left: 4, right: 4 },
                 textColor: BRAND.textLight,
                 fillColor: BRAND.white,
                 lineColor: BRAND.borderLight,
@@ -872,9 +934,8 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
             },
             alternateRowStyles: { fillColor: [250, 252, 254] as [number, number, number] },
             columnStyles: {
-                0: { fontStyle: 'bold', textColor: BRAND.indigo },
+                0: { fontStyle: 'bold' },
                 1: { fontStyle: 'bold', textColor: BRAND.darkBg },
-                2: { textColor: BRAND.textLight },
                 3: { textColor: BRAND.textMuted, halign: 'right' },
             },
             didParseCell: (hookData) => {
@@ -889,24 +950,20 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
         });
     }
 
-    // ── Post-procesamiento: Cabeceras y Pies de Página ───────────────────────
-    const totalPages = doc.getNumberOfPages();
-    for (let p = 1; p <= totalPages; p++) {
+    // ── Pies de Página Globales ───────────────────────────────────────────────
+    const totalGeneralPages = doc.getNumberOfPages();
+    for (let p = 1; p <= totalGeneralPages; p++) {
         doc.setPage(p);
-        
-        // — Franja divisoria inferior elegante (sin sólido oscuro para ahorrar tinta)
         drawLine(doc, margin, H - 15, W - margin, H - 15, BRAND.borderLight, 0.3);
         drawLine(doc, margin, H - 15, margin + (contentW / 3), H - 15, BRAND.green, 0.8);
         drawLine(doc, margin + (contentW / 3), H - 15, margin + (contentW / 3) * 2, H - 15, BRAND.purple, 0.8);
         drawLine(doc, margin + (contentW / 3) * 2, H - 15, W - margin, H - 15, BRAND.green, 0.8);
 
         setFont(doc, 6, BRAND.textMuted);
-        doc.text('Terra Lima © ' + year + ' · Documento Confidencial Gerencial', margin, H - 10);
-        const footerPeriodLabel = data.dateRangeLabel ? `Periodo: ${data.dateRangeLabel}` : `Reporte de Proyecto generado el ${dateLabel}`;
-        doc.text(footerPeriodLabel, W / 2, H - 10, { align: 'center' });
-        doc.text(`Pág. ${p} / ${totalPages}`, W - margin, H - 10, { align: 'right' });
+        doc.text('Terra Lima © ' + year + ' · Documento Corporativo Confidencial', margin, H - 10);
+        doc.text(`Reporte generado el ${dateLabel}`, W / 2, H - 10, { align: 'center' });
+        doc.text(`Pág. ${p} / ${totalGeneralPages}`, W - margin, H - 10, { align: 'right' });
 
-        // — Cabecera secundaria en páginas posteriores (p > 1)
         if (p > 1) {
             drawRect(doc, 0, 0, W, 16, BRAND.panelBg);
             drawLine(doc, 0, 16, W, 16, BRAND.borderLight, 0.3);
@@ -914,12 +971,159 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
             drawRect(doc, W / 2, 0, W / 2, 1.5, BRAND.purple);
 
             setFont(doc, 7, BRAND.textMuted);
-            doc.text(`Terra Lima · Reporte de Proyecto Consolidado ${year}`, margin, 10);
+            doc.text(`Terra Lima · Reporte General Consolidado ${year}`, margin, 10);
             doc.text(`Pág. ${p}`, W - margin, 10, { align: 'right' });
         }
     }
 
-    // ── Descargar ──────────────────────────────────────────────────────────────
-    const filename = `TerraLima_Reporte_General_Proyecto_${year}_${now.getMonth() + 1 < 10 ? '0' : ''}${now.getMonth() + 1}.pdf`;
-    doc.save(filename);
+    const genFilename = `TerraLima_ReporteGlobal_${year}_${now.getMonth() + 1 < 10 ? '0' : ''}${now.getMonth() + 1}.pdf`;
+    doc.save(genFilename);
+}
+
+// ─── Interfaces del Reporte de Facturas Pagadas (Recaudación) ──────────────────────────────
+export interface PaidInvoicesReportData {
+    totalCollected: number;
+    blocks: { mz: string; etapa?: string; totalAmount: number; invoicesCount: number; uniqueLotsCount: number }[];
+    recentPayments: { invoice: string; cuotaLabel?: string; date: string; client: string; lot: string; etapa?: string; mz: string; paidAmount: number }[];
+    dateRangeLabel?: string;
+}
+
+export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): Promise<void> {
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const W = 210; 
+    const H = 297; 
+    const margin = 14;
+    const contentW = W - margin * 2;
+
+    const now = new Date();
+    const dateLabel = now.toLocaleDateString('es-PE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    const timeLabel = now.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+    const year = now.getFullYear();
+
+    // Fondo y cabecera principal
+    drawRect(doc, 0, 0, W, H, BRAND.pageBg);
+    drawRect(doc, 0, 0, W, 52, BRAND.panelBg);
+    drawLine(doc, 0, 52, W, 52, BRAND.borderLight, 0.3);
+    drawRect(doc, 0, 0, W, 2, BRAND.greenLight); // Línea verde acentuada superior
+
+    try {
+        const logoResponse = await fetch('/terra-lima-logo.png');
+        const logoBlob = await logoResponse.blob();
+        const logoBase64: string = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(logoBlob);
+        });
+        doc.addImage(logoBase64, 'PNG', margin, 8, 44, 14);
+    } catch {
+        setFont(doc, 14, BRAND.darkBg, 'bold');
+        doc.text('TERRA LIMA', margin, 18);
+    }
+
+    setFont(doc, 7, BRAND.textMuted);
+    doc.text('Sistema Financiero y Contable', W - margin, 11, { align: 'right' });
+    doc.text(`Generado: ${dateLabel} · ${timeLabel}`, W - margin, 16, { align: 'right' });
+
+    setFont(doc, 22, BRAND.darkBg, 'bold');
+    doc.text('REPORTE DE RECAUDACIÓN', margin, 40);
+    setFont(doc, 10, BRAND.textMuted);
+    
+    // Si hay un rango de fechas, mostrarlo en el subtítulo
+    if (data.dateRangeLabel) {
+        doc.text(`Flujo de Caja Real: Facturas Pagadas | ${data.dateRangeLabel}`, margin, 47);
+    } else {
+        doc.text('Flujo de Caja Real: Facturas Pagadas por Manzana y Lote', margin, 47);
+    }
+
+    // Kpi Recaudación Total
+    doc.setFillColor(...BRAND.white);
+    doc.setDrawColor(...BRAND.greenLight);
+    doc.setLineWidth(0.5);
+    doc.roundedRect(W - margin - 75, 28, 75, 20, 2, 2, 'FD');
+    setFont(doc, 8, BRAND.greenLight, 'bold');
+    doc.text('TOTAL RECAUDADO EFECTIVO', W - margin - 4, 34, { align: 'right' });
+    setFont(doc, 14, BRAND.darkBg, 'bold');
+    doc.text(currency(data.totalCollected), W - margin - 4, 43, { align: 'right' });
+
+    let y = 62;
+
+    // ── Resumen de Recaudación por Manzanas
+    drawSectionHeader(doc, 'RESUMEN FINANCIERO POR MANZANA (CASH FLOW REAL)', margin, y, BRAND.green);
+    drawLine(doc, margin, y + 2.5, W - margin, y + 2.5, BRAND.borderLight, 0.15);
+    y += 5;
+
+    const blockRows = data.blocks.map(b => [
+        `${b.etapa || ''} – Mz ${b.mz}`.trim(),
+        `${b.uniqueLotsCount} lotes`,
+        `${b.invoicesCount} facturas`,
+        currency(b.totalAmount),
+        pct(b.totalAmount, data.totalCollected)
+    ]);
+
+    autoTable(doc, {
+        startY: y,
+        head: [['ETAPA / MANZANA', 'LOTES CON PAGOS', 'FACTURAS PAGADAS', 'MONTO RECAUDADO', 'PARTICIPACIÓN']],
+        body: blockRows,
+        theme: 'plain',
+        styles: { font: 'helvetica', fontSize: 7.5, cellPadding: { top: 4, bottom: 4, left: 4, right: 4 }, textColor: BRAND.textLight, lineColor: BRAND.borderLight, lineWidth: 0.1 },
+        headStyles: { fillColor: BRAND.panelBg, textColor: BRAND.darkBg, fontStyle: 'bold', fontSize: 6.5 },
+        alternateRowStyles: { fillColor: [250, 252, 254] as [number, number, number] },
+        columnStyles: {
+            0: { fontStyle: 'bold', textColor: BRAND.darkBg },
+            3: { fontStyle: 'bold', textColor: BRAND.greenLight, halign: 'right' },
+            4: { textColor: BRAND.textMuted, halign: 'center' }
+        },
+        margin: { left: margin, right: margin },
+    });
+    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
+
+    // ── Listado Detallado
+    drawSectionHeader(doc, 'DESGLOSE DE FACTURAS PAGADAS POR LOTE', margin, y, BRAND.purple);
+    drawLine(doc, margin, y + 2.5, W - margin, y + 2.5, BRAND.borderLight, 0.15);
+    y += 5;
+
+    const detailRows = data.recentPayments.map(p => [
+        p.cuotaLabel || p.invoice,       // Cuota N° 13 / Cuota Inicial
+        p.date,
+        `${p.etapa} – Mz ${p.mz} – ${p.lot}`,  // E01 – Mz D – E01MZD148P
+        p.client,
+        currency(p.paidAmount)
+    ]);
+
+    autoTable(doc, {
+        startY: y,
+        head: [['TIPO DE CUOTA', 'FECHA DE PAGO', 'LOTE / PROPIEDAD', 'CLIENTE', 'MONTO PAGADO']],
+        body: detailRows,
+        theme: 'plain',
+        styles: { font: 'helvetica', fontSize: 7.5, cellPadding: { top: 3, bottom: 3, left: 4, right: 4 }, textColor: BRAND.textLight, lineColor: BRAND.borderLight, lineWidth: 0.1 },
+        headStyles: { fillColor: BRAND.panelBg, textColor: BRAND.darkBg, fontStyle: 'bold', fontSize: 6.5 },
+        alternateRowStyles: { fillColor: [250, 252, 254] as [number, number, number] },
+        columnStyles: {
+            0: { fontStyle: 'bold', textColor: BRAND.purple },
+            2: { fontStyle: 'bold', textColor: BRAND.darkBg },
+            4: { fontStyle: 'bold', textColor: BRAND.greenLight, halign: 'right' }
+        },
+        margin: { left: margin, right: margin },
+    });
+
+    // ── Post Procesamiento
+    const totalPages = doc.getNumberOfPages();
+    for (let p = 1; p <= totalPages; p++) {
+        doc.setPage(p);
+        drawLine(doc, margin, H - 15, W - margin, H - 15, BRAND.borderLight, 0.3);
+        setFont(doc, 6, BRAND.textMuted);
+        doc.text('Terra Lima © ' + year + ' · Documento Contable Confidencial', margin, H - 10);
+        doc.text(`Pág. ${p} / ${totalPages}`, W - margin, H - 10, { align: 'right' });
+
+        if (p > 1) {
+            drawRect(doc, 0, 0, W, 16, BRAND.panelBg);
+            drawLine(doc, 0, 16, W, 16, BRAND.borderLight, 0.3);
+            drawRect(doc, 0, 0, W, 1.5, BRAND.greenLight);
+            setFont(doc, 7, BRAND.textMuted);
+            doc.text(`Terra Lima · Reporte de Recaudación (Facturas Pagadas)`, margin, 10);
+            doc.text(`Pág. ${p}`, W - margin, 10, { align: 'right' });
+        }
+    }
+
+    doc.save(`TerraLima_Recaudacion_Global_${year}${now.getMonth()+1}.pdf`);
 }

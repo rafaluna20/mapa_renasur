@@ -176,10 +176,10 @@ export default function QuotePage({ params }: QuotePageProps) {
     };
 
     // Sincronizar entradas de descuento - porcentaje con 6 decimales
-    // 🔒 LÍMITE: Máximo 3% de descuento
+    // 🔒 LÍMITE: Máximo 4% de descuento
     const handleDiscountPercentChange = (val: number) => {
-        // Limitar a máximo 3%
-        const cappedVal = Math.min(val, 3);
+        // Limitar a máximo 4%
+        const cappedVal = Math.min(val, 4);
         // Redondear a 6 decimales para máxima precisión en el porcentaje
         const roundedPercent = Math.round(cappedVal * 1000000) / 1000000;
         setDiscountPercent(roundedPercent);
@@ -672,11 +672,11 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                     type="number"
                                                     step="0.000001"
                                                     min="0"
-                                                    max="3"
+                                                    max="4"
                                                     value={discountPercent}
                                                     onChange={(e) => handleDiscountPercentChange(parseFloat(e.target.value) || 0)}
                                                     className="w-full pl-3 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800 transition-all text-sm"
-                                                    placeholder="% (máx 3%)"
+                                                    placeholder="% (máx 4%)"
                                                 />
                                             </div>
                                             <div className="relative">
@@ -693,7 +693,7 @@ export default function QuotePage({ params }: QuotePageProps) {
                                         </div>
                                         <input
                                             type="range"
-                                            min="0" max="3" step="0.1"
+                                            min="0" max="4" step="0.1"
                                             value={discountPercent}
                                             onChange={(e) => handleDiscountPercentChange(parseFloat(e.target.value))}
                                             className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"

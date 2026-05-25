@@ -89,8 +89,10 @@ setSearchResults(formatted);
     const monthlyPayment = installments > 0 ? financedAmount / installments : 0;
 
     // Validation
+    const maxDiscount = listPrice * 0.03;
     const isValidFinancials = (downPayment + discount) <= listPrice;
-    const isFormValid = selectedClient && isValidFinancials && installments > 0;
+    const isValidDiscount = discount <= maxDiscount;
+    const isFormValid = selectedClient && isValidFinancials && isValidDiscount && installments > 0;
 
     const handleSubmit = async () => {
         if (!isFormValid || !selectedClient) return;
@@ -276,6 +278,7 @@ setSearchResults(formatted);
                                     <input
                                         type="number"
                                         min="0"
+                                        max={maxDiscount}
                                         step="100"
                                         value={discount || ''}
                                         onChange={(e) => setDiscount(Number(e.target.value))}
@@ -316,6 +319,12 @@ setSearchResults(formatted);
                                 <div className="mt-2 text-[10px] text-red-500 font-bold flex items-center gap-1">
                                     <X size={10} />
                                     El descuento + inicial no pueden superar el precio total.
+                                </div>
+                            )}
+                            {!isValidDiscount && discount > 0 && (
+                                <div className="mt-2 text-[10px] text-red-500 font-bold flex items-center gap-1">
+                                    <X size={10} />
+                                    El descuento máximo permitido es del 3% ({formatMoney(maxDiscount)}).
                                 </div>
                             )}
                         </div>

@@ -17,6 +17,29 @@ interface OdooProduct {
     id: number;
     x_statu?: string;
     list_price?: number;
+    default_code?: string | false;
+    x_mz?: string | false;
+}
+
+/**
+ * Parser del código de lote Terra Lima
+ * Formato: E01MZD148P
+ *   E01  = Etapa 01
+ *   MZ   = Literal
+ *   D    = Manzana D
+ *   148  = Número de lote
+ *   P    = Sufijo (P=entero, 1=parte A, 2=parte B, etc.)
+ */
+function parseLotCode(code: string | false | null | undefined): { etapa: string; manzana: string; lotNum: string; suffix: string } | null {
+    if (!code || typeof code !== 'string') return null;
+    const m = code.trim().match(/^E(\d+)MZ([A-Z]+)(\d+)([A-Z0-9]+)$/i);
+    if (!m) return null;
+    return {
+        etapa: m[1].padStart(2, '0'),      // '01'
+        manzana: m[2].toUpperCase(),        // 'D'
+        lotNum: m[3],                        // '148'
+        suffix: m[4].toUpperCase()           // 'P', '1', '2'
+    };
 }
 
 interface OdooOrderLine {
@@ -49,9 +72,9 @@ export async function GET(request: NextRequest) {
         const products = await fetchOdoo(
             "product.product",
             "search_read",
-            [[]], // Empty domain fetches all lots
+            [[]], // Empty domain fetches all products
             {
-                fields: ["id", "x_statu", "list_price"]
+                fields: ["id", "x_statu", "list_price", "default_code", "x_mz"]
             }
         ) as OdooProduct[];
 
@@ -59,22 +82,50 @@ export async function GET(request: NextRequest) {
         let soldLots = 0;
         let reservedLots = 0;
         let availableLots = 0;
+        let otherProductsCount = 0;
         let projectValue = 0;
 
+        const mzMap: Record<string, { total: number; sold: number; reserved: number; available: number }> = {};
+
         if (products && Array.isArray(products)) {
-            totalLots = products.length;
             for (const prod of products) {
-                const status = (prod.x_statu || 'libre').toLowerCase();
-                if (status === 'vendido') {
-                    soldLots++;
-                } else if (status === 'separado' || status === 'reservado') {
-                    reservedLots++;
+                // Filtro experto: Los lotes tienen una referencia exacta de 10 caracteres (ej. E01MZD148P)
+                const isLot = prod.default_code && typeof prod.default_code === 'string' && prod.default_code.trim().length === 10;
+                
+                if (isLot) {
+                    totalLots++;
+                    const status = (prod.x_statu || 'libre').toLowerCase();
+
+                    // Extraer manzana desde el código del lote (E01MZD148P → Manzana D)
+                    // Más preciso que x_mz. Fallback a x_mz si el parseo falla.
+                    const parsed = parseLotCode(prod.default_code);
+                    const mz = parsed?.manzana
+                        || (prod.x_mz && typeof prod.x_mz === 'string' ? prod.x_mz.trim() : null)
+                        || 'S/M';
+
+                    if (!mzMap[mz]) mzMap[mz] = { total: 0, sold: 0, reserved: 0, available: 0 };
+                    mzMap[mz].total++;
+
+                    if (status === 'vendido') {
+                        soldLots++;
+                        mzMap[mz].sold++;
+                    } else if (status === 'separado' || status === 'reservado') {
+                        reservedLots++;
+                        mzMap[mz].reserved++;
+                    } else {
+                        availableLots++;
+                        mzMap[mz].available++;
+                    }
+                    projectValue += (prod.list_price || 0);
                 } else {
-                    availableLots++;
+                    otherProductsCount++;
                 }
-                projectValue += (prod.list_price || 0);
             }
         }
+
+        const manzanasDistribution = Object.entries(mzMap)
+            .map(([mz, stats]) => ({ mz, ...stats }))
+            .sort((a, b) => a.mz.localeCompare(b.mz));
 
         // 2. QUERY SALES TREND & TOTAL SALES (GLOBAL) — filtrado por rango dinámico
         const globalOrders = await fetchOdoo(
@@ -225,8 +276,10 @@ export async function GET(request: NextRequest) {
                     totalLots,
                     soldLots,
                     reservedLots,
-                    availableLots
+                    availableLots,
+                    otherProducts: otherProductsCount
                 },
+                manzanasDistribution,
                 salesTrend,
                 advisorRanking,
                 recentActivity

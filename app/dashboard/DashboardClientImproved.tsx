@@ -43,7 +43,7 @@ interface EnhancedStats {
     };
 }
 
-type PeriodFilter = '30d' | '90d' | '180d' | 'ytd' | 'custom';
+type PeriodFilter = '7d' | '30d' | '90d' | '180d' | 'ytd' | 'custom';
 type ChartView = 'simple' | 'detailed';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -301,6 +301,13 @@ export default function DashboardClientImproved() {
     const [showFilters, setShowFilters] = useState(false);
     const [generatingPdf, setGeneratingPdf] = useState(false);
     const [generatingGeneralPdf, setGeneratingGeneralPdf] = useState(false);
+    const [generatingInvoicesPdf, setGeneratingInvoicesPdf] = useState(false);
+    
+    // Filtro de fechas personalizadas
+    const [customStartDate, setCustomStartDate] = useState<string>('');
+    const [customEndDate, setCustomEndDate] = useState<string>('');
+    // Almacenamos las fechas calculadas para pasarlas a los reportes PDF
+    const [activeDateRange, setActiveDateRange] = useState<{start?: string, end?: string}>({});
 
     // Verificar sesión
     useEffect(() => {
@@ -330,7 +337,12 @@ export default function DashboardClientImproved() {
                     return `${y}-${m}-${d}`;
                 };
 
-                if (periodFilter === '30d') {
+                if (periodFilter === '7d') {
+                    const date = new Date();
+                    date.setDate(today.getDate() - 7);
+                    startDate = formatDate(date);
+                    endDate = formatDate(today);
+                } else if (periodFilter === '30d') {
                     const date = new Date();
                     date.setDate(today.getDate() - 30);
                     startDate = formatDate(date);
@@ -348,7 +360,12 @@ export default function DashboardClientImproved() {
                 } else if (periodFilter === 'ytd') {
                     startDate = `${year}-01-01`;
                     endDate = formatDate(today);
+                } else if (periodFilter === 'custom') {
+                    startDate = customStartDate || undefined;
+                    endDate = customEndDate || undefined;
                 }
+                
+                setActiveDateRange({ start: startDate, end: endDate });
 
                 // Aquí se llamaría a una versión mejorada del servicio
                 const data = await odooService.getDetailedSalesStats(authUser.uid, startDate, endDate);
@@ -391,7 +408,7 @@ export default function DashboardClientImproved() {
         };
 
         fetchDashboardData();
-    }, [authUser, periodFilter, salesCount]);
+    }, [authUser, periodFilter, customStartDate, customEndDate, salesCount]);
 
     // Manejadores de eventos
     const handleDownloadReport = useCallback(async () => {
@@ -423,15 +440,72 @@ export default function DashboardClientImproved() {
         if (!authUser || !authUser.is_system || generatingGeneralPdf) return;
         setGeneratingGeneralPdf(true);
         try {
-            const generalStats = await odooService.getGeneralProjectStats(authUser.uid, authUser.is_system);
-            await generateProjectGeneralReport(generalStats);
+            let url = '/api/odoo/stats/general';
+            if (activeDateRange.start || activeDateRange.end) {
+                const params = new URLSearchParams();
+                if (activeDateRange.start) params.append('startDate', activeDateRange.start);
+                if (activeDateRange.end) params.append('endDate', activeDateRange.end);
+                url += `?${params.toString()}`;
+            }
+
+            const response = await fetch(url, {
+                headers: {
+                    'x-user-id': authUser.uid.toString(),
+                    'x-is-system': authUser.is_system ? 'true' : 'false'
+                }
+            });
+            const data = await response.json();
+            
+            if (data.success && data.data) {
+                // Agregar etiqueta de fecha si existe filtro
+                if (activeDateRange.start || activeDateRange.end) {
+                    data.data.dateRangeLabel = `${activeDateRange.start || 'Inicio'} al ${activeDateRange.end || 'Hoy'}`;
+                }
+                const { generateProjectGeneralReport } = await import('@/app/services/reportService');
+                await generateProjectGeneralReport(data.data);
+            } else {
+                throw new Error(data.error || 'Failed to fetch general stats');
+            }
         } catch (err) {
             console.error('Error generating general PDF report:', err);
             alert('Error al generar el reporte general del proyecto. Inténtelo de nuevo.');
         } finally {
             setGeneratingGeneralPdf(false);
         }
-    }, [authUser, generatingGeneralPdf]);
+    }, [authUser, generatingGeneralPdf, activeDateRange]);
+
+    const handleDownloadInvoicesReport = useCallback(async () => {
+        if (!authUser || !authUser.is_system || generatingInvoicesPdf) return;
+        setGeneratingInvoicesPdf(true);
+        try {
+            let url = '/api/odoo/stats/invoices';
+            if (activeDateRange.start || activeDateRange.end) {
+                const params = new URLSearchParams();
+                if (activeDateRange.start) params.append('startDate', activeDateRange.start);
+                if (activeDateRange.end) params.append('endDate', activeDateRange.end);
+                url += `?${params.toString()}`;
+            }
+
+            const response = await fetch(url, {
+                headers: {
+                    'x-user-id': authUser.uid.toString(),
+                    'x-is-system': authUser.is_system ? 'true' : 'false'
+                }
+            });
+            const data = await response.json();
+            if (data.success && data.data) {
+                const { generatePaidInvoicesReport } = await import('@/app/services/reportService');
+                await generatePaidInvoicesReport(data.data);
+            } else {
+                throw new Error(data.error || 'Failed to fetch invoices');
+            }
+        } catch (err) {
+            console.error('Error generating invoices PDF report:', err);
+            alert('Error al generar el reporte de recaudación. Inténtelo de nuevo.');
+        } finally {
+            setGeneratingInvoicesPdf(false);
+        }
+    }, [authUser, generatingInvoicesPdf, activeDateRange]);
 
     // Cálculos memoizados
     const displayedSalesTrend = useMemo(() => {
@@ -604,17 +678,30 @@ export default function DashboardClientImproved() {
                         </button>
 
                         {authUser?.is_system && (
-                            <button 
-                                onClick={handleDownloadGeneralReport}
-                                disabled={generatingGeneralPdf}
-                                className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 disabled:from-purple-800 disabled:to-purple-900 text-white px-5 py-2.5 rounded-xl font-semibold transition-all flex items-center gap-2"
-                            >
-                                {generatingGeneralPdf ? (
-                                    <><Loader2 size={16} className="animate-spin" /> Generando...</>
-                                ) : (
-                                    <><Award size={16} /> Proyecto</>
-                                )}
-                            </button>
+                            <>
+                                <button 
+                                    onClick={handleDownloadGeneralReport}
+                                    disabled={generatingGeneralPdf}
+                                    className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 disabled:from-purple-800 disabled:to-purple-900 text-white px-5 py-2.5 rounded-xl font-semibold transition-all flex items-center gap-2"
+                                >
+                                    {generatingGeneralPdf ? (
+                                        <><Loader2 size={16} className="animate-spin" /> Generando...</>
+                                    ) : (
+                                        <><Award size={16} /> Proyecto</>
+                                    )}
+                                </button>
+                                <button 
+                                    onClick={handleDownloadInvoicesReport}
+                                    disabled={generatingInvoicesPdf}
+                                    className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 disabled:from-emerald-800 disabled:to-emerald-900 text-white px-5 py-2.5 rounded-xl font-semibold transition-all flex items-center gap-2"
+                                >
+                                    {generatingInvoicesPdf ? (
+                                        <><Loader2 size={16} className="animate-spin" /> Generando...</>
+                                    ) : (
+                                        <><DollarSign size={16} /> Recaudación</>
+                                    )}
+                                </button>
+                            </>
                         )}
                     </div>
                 </div>
@@ -626,25 +713,52 @@ export default function DashboardClientImproved() {
                             <Calendar size={16} className="text-indigo-400" />
                             Período de Análisis
                         </h3>
-                        <div className="flex flex-wrap gap-2">
-                            {[
-                                { value: '30d' as PeriodFilter, label: 'Último Mes' },
-                                { value: '90d' as PeriodFilter, label: 'Último Trimestre' },
-                                { value: '180d' as PeriodFilter, label: 'Últimos 6 Meses' },
-                                { value: 'ytd' as PeriodFilter, label: 'Año Actual' },
-                            ].map((period) => (
-                                <button
-                                    key={period.value}
-                                    onClick={() => setPeriodFilter(period.value)}
-                                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                                        periodFilter === period.value
-                                            ? 'bg-indigo-600 text-white shadow-lg'
-                                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                                    }`}
-                                >
-                                    {period.label}
-                                </button>
-                            ))}
+                        <div className="flex flex-wrap items-center gap-4">
+                            <div className="flex flex-wrap gap-2">
+                                {[
+                                    { value: '7d' as PeriodFilter, label: 'Últimos 7 Días' },
+                                    { value: '30d' as PeriodFilter, label: 'Último Mes' },
+                                    { value: '90d' as PeriodFilter, label: 'Último Trimestre' },
+                                    { value: '180d' as PeriodFilter, label: 'Últimos 6 Meses' },
+                                    { value: 'ytd' as PeriodFilter, label: 'Año Actual' },
+                                    { value: 'custom' as PeriodFilter, label: 'Rango Personalizado' },
+                                ].map((period) => (
+                                    <button
+                                        key={period.value}
+                                        onClick={() => setPeriodFilter(period.value)}
+                                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                                            periodFilter === period.value
+                                                ? 'bg-indigo-600 text-white shadow-lg'
+                                                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                                        }`}
+                                    >
+                                        {period.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {periodFilter === 'custom' && (
+                                <div className="flex items-center gap-3 bg-slate-800/50 p-2 rounded-xl border border-slate-700/50">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-slate-400 font-medium">Desde:</span>
+                                        <input 
+                                            type="date" 
+                                            value={customStartDate}
+                                            onChange={(e) => setCustomStartDate(e.target.value)}
+                                            className="bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-indigo-500"
+                                        />
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-slate-400 font-medium">Hasta:</span>
+                                        <input 
+                                            type="date" 
+                                            value={customEndDate}
+                                            onChange={(e) => setCustomEndDate(e.target.value)}
+                                            className="bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-indigo-500"
+                                        />
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
