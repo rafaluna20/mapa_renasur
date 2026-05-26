@@ -467,15 +467,15 @@ export default function DashboardClientImproved() {
             });
             const data = await response.json();
             
-            if (data.success && data.data) {
+            if (data.success && data.stats) {
                 // Agregar etiqueta de fecha si existe filtro usando formato dd/mm/yy
                 if (activeDateRange.start || activeDateRange.end) {
                     const startLabel = formatToDDMMYY(activeDateRange.start) || 'Inicio';
                     const endLabel = formatToDDMMYY(activeDateRange.end) || 'Hoy';
-                    data.data.dateRangeLabel = `${startLabel} al ${endLabel}`;
+                    data.stats.dateRangeLabel = `${startLabel} al ${endLabel}`;
                 }
                 const { generateProjectGeneralReport } = await import('@/app/services/reportService');
-                await generateProjectGeneralReport(data.data);
+                await generateProjectGeneralReport(data.stats);
             } else {
                 throw new Error(data.error || 'Failed to fetch general stats');
             }
