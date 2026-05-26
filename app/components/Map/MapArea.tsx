@@ -153,16 +153,16 @@ export default function MapArea({
                 <h4 className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Leyenda</h4>
                 <div className="space-y-1">
                     <div className="flex items-center gap-2 text-xs">
+                        <div className="w-3 h-3 rounded-sm bg-slate-400"></div>
+                        <span className="text-slate-700">No Vender</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
                         <div className="w-3 h-3 rounded-sm bg-emerald-400"></div>
                         <span className="text-slate-700">Disponible</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
                         <div className="w-3 h-3 rounded-sm bg-yellow-300"></div>
                         <span className="text-slate-700">En Cotización</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs">
-                        <div className="w-3 h-3 rounded-sm bg-slate-400"></div>
-                        <span className="text-slate-700">No Vender</span>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
                         <div className="w-3 h-3 rounded-sm bg-purple-400"></div>
