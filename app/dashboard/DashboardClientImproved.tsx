@@ -35,13 +35,22 @@ interface EnhancedStats {
     recentActivity: { id: number; action: string; lot: string; date: string }[];
     competedLots: { lot: string; stage: string; quotes: { client: string; advisor: string; hours: number }[] }[];
     assignedLots: { lot: string; stage: string; client: string; status: string; price: number; daysOpen?: number }[];
-    // Nuevas métricas comparativas
     comparison: {
         totalSales: { value: number; change: number; trend: 'up' | 'down' | 'stable' };
         commission: { value: number; change: number; trend: 'up' | 'down' | 'stable' };
         salesCount: { value: number; change: number; trend: 'up' | 'down' | 'stable' };
     };
 }
+
+const formatToDDMMYY = (dateStr?: string) => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+        const [y, m, d] = parts;
+        return `${d}/${m}/${y.slice(-2)}`;
+    }
+    return dateStr;
+};
 
 type PeriodFilter = '7d' | '30d' | '90d' | '180d' | 'ytd' | 'custom';
 type ChartView = 'simple' | 'detailed';
@@ -459,9 +468,11 @@ export default function DashboardClientImproved() {
             const data = await response.json();
             
             if (data.success && data.data) {
-                // Agregar etiqueta de fecha si existe filtro
+                // Agregar etiqueta de fecha si existe filtro usando formato dd/mm/yy
                 if (activeDateRange.start || activeDateRange.end) {
-                    data.data.dateRangeLabel = `${activeDateRange.start || 'Inicio'} al ${activeDateRange.end || 'Hoy'}`;
+                    const startLabel = formatToDDMMYY(activeDateRange.start) || 'Inicio';
+                    const endLabel = formatToDDMMYY(activeDateRange.end) || 'Hoy';
+                    data.data.dateRangeLabel = `${startLabel} al ${endLabel}`;
                 }
                 const { generateProjectGeneralReport } = await import('@/app/services/reportService');
                 await generateProjectGeneralReport(data.data);
@@ -496,6 +507,12 @@ export default function DashboardClientImproved() {
             });
             const data = await response.json();
             if (data.success && data.data) {
+                // Forzar la etiqueta de fecha también para facturas
+                if (activeDateRange.start || activeDateRange.end) {
+                    const startLabel = formatToDDMMYY(activeDateRange.start) || 'Inicio';
+                    const endLabel = formatToDDMMYY(activeDateRange.end) || 'Hoy';
+                    data.data.dateRangeLabel = `${startLabel} al ${endLabel}`;
+                }
                 const { generatePaidInvoicesReport } = await import('@/app/services/reportService');
                 await generatePaidInvoicesReport(data.data);
             } else {
