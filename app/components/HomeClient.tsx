@@ -100,8 +100,15 @@ export default function HomeClient({ odooProducts, hasConnectionError = false }:
     const [areaMax, setAreaMax] = useState<number | null>(savedFilters?.areaMax || null);
 
     // Estado de UI
-    const [isSidebarOpen, setSidebarOpen] = useState(true); // Controla si la barra lateral está visible
+    const [isSidebarOpen, setSidebarOpen] = useState(false); // Controla si la barra lateral está visible (oculto por defecto para móvil)
     const [mapType, setMapType] = useState<'street' | 'satellite' | 'blank'>('street'); // Tipo de mapa base
+
+    // Inicialización del sidebar según el dispositivo
+    useEffect(() => {
+        if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+            setSidebarOpen(true); // Abierto por defecto solo en escritorio
+        }
+    }, []);
 
     // Ubicación del usuario (Geolocalización)
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
@@ -333,8 +340,20 @@ export default function HomeClient({ odooProducts, hasConnectionError = false }:
                 <div className={`
                   absolute inset-y-0 left-0 z-[500] w-80 max-w-[85vw] bg-white shadow-2xl transform transition-transform duration-300 ease-in-out border-r border-slate-200 flex flex-col
                   ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} // Animación de entrada/salida
-                  md:relative md:translate-x-0 md:z-10 md:shadow-xl     // Siempre visible en desktop
+                  md:absolute md:z-[500] md:shadow-xl     // Ahora es colapsable también en desktop
                 `}>
+                    
+                    {/* Header del Sidebar con botón de cerrar */}
+                    <div className="flex items-center justify-between p-3 border-b border-stone-200 bg-white">
+                        <span className="font-bold text-slate-800 text-sm">Explorador</span>
+                        <button 
+                            onClick={() => setSidebarOpen(false)}
+                            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                            aria-label="Cerrar panel lateral"
+                        >
+                            ✕
+                        </button>
+                    </div>
 
                     {/* Componente: Barra de Filtros con búsqueda mejorada */}
                     <FilterBar
@@ -426,11 +445,12 @@ export default function HomeClient({ odooProducts, hasConnectionError = false }:
                     <ProductDashboard stats={stats} />
                 </div>
 
-                {/* Botón flotante para abrir menú en móvil (solo visible cuando sidebar está cerrado) */}
+                {/* Botón flotante para abrir menú (visible en móvil y escritorio cuando está cerrado) */}
                 {!isSidebarOpen && (
                     <button
                         onClick={() => setSidebarOpen(true)}
-                        className="absolute top-4 left-4 z-20 bg-white p-2 rounded-lg shadow-lg text-slate-600 md:hidden"
+                        className="absolute top-4 left-4 z-[400] bg-white p-2.5 rounded-xl shadow-lg text-slate-700 hover:text-indigo-600 transition-colors border border-slate-200"
+                        title="Abrir filtros"
                     >
                         <Menu size={20} />
                     </button>
