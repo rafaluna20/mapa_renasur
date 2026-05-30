@@ -182,7 +182,7 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1100] animate-in fade-in duration-200">
-            <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[75vh] animate-in zoom-in-95 duration-200">
+            <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
                 {/* Header */}
                 <div className="bg-blue-600 px-4 py-3 flex justify-between items-center text-white shrink-0">
                     <h2 className="font-bold text-[15px] flex items-center gap-2">
@@ -195,7 +195,7 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
                 </div>
 
                 {/* Content */}
-                <div className="p-4 space-y-4 overflow-y-auto flex-1 bg-white">
+                <div className="p-4 space-y-4 overflow-y-auto flex-1 bg-white max-h-[calc(90vh-140px)]">
                     <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-[13px] text-blue-800 flex gap-2">
                         <AlertCircle size={16} className="shrink-0 mt-0.5" />
                         <p>Para reservar el lote <strong>{lot.name}</strong>, es necesario crear una orden y adjuntar el pago.</p>
