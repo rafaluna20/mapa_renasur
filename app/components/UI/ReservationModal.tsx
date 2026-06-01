@@ -14,7 +14,7 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
     const { user } = useAuth();
     const [files, setFiles] = useState<File[]>([]);
     const [notes, setNotes] = useState('');
-    const [separationAmount, setSeparationAmount] = useState<number>(1000);
+    const [separationAmount, setSeparationAmount] = useState<number | ''>('');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -127,7 +127,7 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
         try {
             if (lot.x_statu === 'cotizacion') {
                 // Flow for already quoted lots: Confirm the selected specific order
-                await odooService.reserveQuotedLot(selectedQuoteId!, files, notes, user?.uid, separationAmount);
+                await odooService.reserveQuotedLot(selectedQuoteId!, files, notes, user?.uid, separationAmount === '' ? 0 : separationAmount);
             } else {
                 // Flow for direct reservation (legacy or admin override): Create Order -> Attach -> Status
                 if (!selectedClient) return; 
@@ -137,7 +137,7 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
                     lot.list_price,
                     files,
                     notes,
-                    separationAmount
+                    separationAmount === '' ? 0 : separationAmount
                 );
             }
 
@@ -181,10 +181,10 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1100] animate-in fade-in duration-200">
-            <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-white rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
-                {/* Header */}
-                <div className="bg-blue-600 px-4 py-3 flex justify-between items-center text-white shrink-0">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1100] animate-in fade-in duration-200 flex items-center justify-center p-4">
+            <div className="w-full max-w-sm bg-white rounded-xl shadow-2xl flex flex-col animate-in zoom-in-95 duration-200" style={{ maxHeight: 'min(90dvh, 640px)' }}>
+                {/* Header — never shrinks */}
+                <div className="bg-blue-600 px-4 py-3 flex justify-between items-center text-white shrink-0 rounded-t-xl">
                     <h2 className="font-bold text-[15px] flex items-center gap-2">
                         <FileText size={18} />
                         Confirmar Reserva
@@ -194,8 +194,8 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
                     </button>
                 </div>
 
-                {/* Content */}
-                <div className="p-4 space-y-4 overflow-y-auto flex-1 bg-white max-h-[calc(90vh-140px)]">
+                {/* Content — scrolls, takes remaining space */}
+                <div className="p-4 space-y-4 overflow-y-auto flex-1 min-h-0 bg-white">
                     <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-[13px] text-blue-800 flex gap-2">
                         <AlertCircle size={16} className="shrink-0 mt-0.5" />
                         <p>Para reservar el lote <strong>{lot.name}</strong>, es necesario crear una orden y adjuntar el pago.</p>
@@ -369,7 +369,7 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
                             Monto de Separación (S/)
                         </label>
                         <div className="flex gap-2 items-center">
-                            {[1000, 2500].map(amt => (
+                            {[1000, 2000].map(amt => (
                                 <button
                                     key={amt}
                                     type="button"
@@ -384,10 +384,10 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
                                 <input
                                     type="number"
                                     min={1}
-                                    value={separationAmount || ''}
-                                    onChange={e => setSeparationAmount(parseFloat(e.target.value) || 0)}
+                                    value={separationAmount}
+                                    onChange={e => setSeparationAmount(e.target.value ? parseFloat(e.target.value) : '')}
                                     className="w-full pl-6 pr-2 py-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none font-bold text-slate-700"
-                                    placeholder="Otro"
+                                    placeholder="Otros"
                                 />
                             </div>
                         </div>
@@ -455,8 +455,8 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
                     </div>
                 </div>
 
-                {/* Footer Actions - Pinned */}
-                <div className="px-4 py-3 border-t border-slate-100 bg-slate-50 flex gap-3 shrink-0">
+                {/* Footer — never shrinks, always visible */}
+                <div className="px-4 py-3 border-t border-slate-100 bg-slate-50 flex gap-3 shrink-0 rounded-b-xl">
                     <button
                         onClick={onClose}
                         className="flex-1 py-2.5 border border-slate-200 text-slate-600 font-medium rounded-lg text-[13px] hover:bg-white transition-colors"
