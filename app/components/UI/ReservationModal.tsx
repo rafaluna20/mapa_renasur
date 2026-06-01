@@ -181,8 +181,8 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1100] animate-in fade-in duration-200 flex items-center justify-center p-4">
-            <div className="w-full max-w-sm bg-white rounded-xl shadow-2xl flex flex-col animate-in zoom-in-95 duration-200" style={{ maxHeight: 'min(90dvh, 640px)' }}>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1100] animate-in fade-in duration-200 flex items-center justify-center px-3 pt-10 pb-4">
+            <div className="w-full max-w-sm bg-white rounded-xl shadow-2xl flex flex-col animate-in zoom-in-95 duration-200" style={{ maxHeight: 'min(85dvh, 590px)' }}>
                 {/* Header — never shrinks */}
                 <div className="bg-blue-600 px-4 py-3 flex justify-between items-center text-white shrink-0 rounded-t-xl">
                     <h2 className="font-bold text-[15px] flex items-center gap-2">
