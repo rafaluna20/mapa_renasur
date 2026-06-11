@@ -786,8 +786,19 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                 )}
                                                 placeholder="dd/mm/aa"
                                                 maxLength={8}
-                                                className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-slate-800 tracking-widest"
+                                                className="w-full pl-9 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-slate-800 tracking-widest"
                                             />
+                                            {/* Date picker trigger */}
+                                            <input
+                                                type="date"
+                                                value={initialPaymentDate}
+                                                onChange={(e) => {
+                                                    setInitialPaymentDate(e.target.value);
+                                                    setInitialPaymentDateDisplay(isoToDisplay(e.target.value));
+                                                }}
+                                                className="absolute right-0 top-0 bottom-0 w-10 opacity-0 cursor-pointer"
+                                            />
+                                            <Calendar size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500 pointer-events-none" />
                                         </div>
                                     </div>
 
@@ -808,8 +819,20 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                 )}
                                                 placeholder="dd/mm/aa"
                                                 maxLength={8}
-                                                className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-slate-800 tracking-widest"
+                                                className="w-full pl-9 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-slate-800 tracking-widest"
                                             />
+                                            {/* Date picker trigger */}
+                                            <input
+                                                type="date"
+                                                value={firstInstallmentDate}
+                                                min={initialPaymentDate}
+                                                onChange={(e) => {
+                                                    setFirstInstallmentDate(e.target.value);
+                                                    setFirstInstallmentDateDisplay(isoToDisplay(e.target.value));
+                                                }}
+                                                className="absolute right-0 top-0 bottom-0 w-10 opacity-0 cursor-pointer"
+                                            />
+                                            <Calendar size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500 pointer-events-none" />
                                         </div>
                                     </div>
 
