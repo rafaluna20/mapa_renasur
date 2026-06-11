@@ -85,19 +85,59 @@ export default function QuotePage({ params }: QuotePageProps) {
     const [initialPayment, setInitialPayment] = useState<number>(0);
     const [numInstallments, setNumInstallments] = useState<number>(72);
     
-    // 🆕 Fechas separadas para cuota inicial y primera cuota
+    // 🆕 Fechas separadas para cuota inicial y primera cuota (ISO interno)
     const [initialPaymentDate, setInitialPaymentDate] = useState<string>(
         new Date().toISOString().split('T')[0]
     );
     const [firstInstallmentDate, setFirstInstallmentDate] = useState<string>(() => {
-        // Calcular automáticamente 1 mes después (último día del mes)
         const today = new Date();
         const lastDay = financeService.getLastDayOfMonth(
             today.getFullYear(),
-            today.getMonth() + 1  // Siguiente mes
+            today.getMonth() + 1
         );
         return lastDay.toISOString().split('T')[0];
     });
+
+    // 🗓️ Display states en formato dd/mm/yy
+    const isoToDisplay = (iso: string) => {
+        if (!iso) return '';
+        const [y, m, d] = iso.split('-');
+        return `${d}/${m}/${y.slice(2)}`;
+    };
+    const [initialPaymentDateDisplay, setInitialPaymentDateDisplay] = useState<string>(
+        () => isoToDisplay(new Date().toISOString().split('T')[0])
+    );
+    const [firstInstallmentDateDisplay, setFirstInstallmentDateDisplay] = useState<string>(() => {
+        const today = new Date();
+        const lastDay = financeService.getLastDayOfMonth(today.getFullYear(), today.getMonth() + 1);
+        return isoToDisplay(lastDay.toISOString().split('T')[0]);
+    });
+
+    // Formatea mientras el usuario tipea y parsea a ISO cuando está completo
+    const handleDateDisplayChange = (
+        raw: string,
+        setDisplay: (v: string) => void,
+        setIso: (v: string) => void
+    ) => {
+        // Permitir solo dígitos y /
+        let digits = raw.replace(/[^\d]/g, '');
+        if (digits.length > 6) digits = digits.slice(0, 6);
+        // Auto-insertar barras
+        let formatted = digits;
+        if (digits.length > 2) formatted = digits.slice(0, 2) + '/' + digits.slice(2);
+        if (digits.length > 4) formatted = digits.slice(0, 2) + '/' + digits.slice(2, 4) + '/' + digits.slice(4);
+        setDisplay(formatted);
+        // Parsear a ISO cuando esté completo (dd/mm/yy)
+        if (digits.length === 6) {
+            const dd = digits.slice(0, 2);
+            const mm = digits.slice(2, 4);
+            const yy = digits.slice(4, 6);
+            const fullYear = `20${yy}`;
+            const iso = `${fullYear}-${mm}-${dd}`;
+            const date = new Date(`${fullYear}-${mm}-${dd}`);
+            if (!isNaN(date.getTime())) setIso(iso);
+        }
+    };
     
     // 🆕 Tipo de Cronograma
     const [scheduleType, setScheduleType] = useState<'end_of_month' | 'fixed_day'>('end_of_month');
@@ -737,15 +777,18 @@ export default function QuotePage({ params }: QuotePageProps) {
                                         <div className="relative">
                                             <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                                             <input
-                                                type="date"
-                                                value={initialPaymentDate}
-                                                onChange={(e) => setInitialPaymentDate(e.target.value)}
-                                                className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-slate-800"
+                                                type="text"
+                                                value={initialPaymentDateDisplay}
+                                                onChange={(e) => handleDateDisplayChange(
+                                                    e.target.value,
+                                                    setInitialPaymentDateDisplay,
+                                                    setInitialPaymentDate
+                                                )}
+                                                placeholder="dd/mm/aa"
+                                                maxLength={8}
+                                                className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-slate-800 tracking-widest"
                                             />
                                         </div>
-                                        <p className="text-xs text-slate-500 mt-1.5">
-                                            📅 {initialPaymentDate ? (() => { const [y,m,d] = initialPaymentDate.split('-'); return `${d}/${m}/${y.slice(2)}`; })() : ''}
-                                        </p>
                                     </div>
 
                                     {/* 🆕 Fecha Primera Cuota (Cuota 1) */}
@@ -756,16 +799,18 @@ export default function QuotePage({ params }: QuotePageProps) {
                                         <div className="relative">
                                             <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                                             <input
-                                                type="date"
-                                                value={firstInstallmentDate}
-                                                min={initialPaymentDate}
-                                                onChange={(e) => setFirstInstallmentDate(e.target.value)}
-                                                className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-slate-800"
+                                                type="text"
+                                                value={firstInstallmentDateDisplay}
+                                                onChange={(e) => handleDateDisplayChange(
+                                                    e.target.value,
+                                                    setFirstInstallmentDateDisplay,
+                                                    setFirstInstallmentDate
+                                                )}
+                                                placeholder="dd/mm/aa"
+                                                maxLength={8}
+                                                className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-slate-800 tracking-widest"
                                             />
                                         </div>
-                                        <p className="text-xs text-slate-500 mt-1.5">
-                                            📆 {firstInstallmentDate ? (() => { const [y,m,d] = firstInstallmentDate.split('-'); return `${d}/${m}/${y.slice(2)}`; })() : ''}
-                                        </p>
                                     </div>
 
                                     {/* 🆕 Tipo de Cronograma */}
