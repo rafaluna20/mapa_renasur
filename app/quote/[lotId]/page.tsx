@@ -178,8 +178,8 @@ export default function QuotePage({ params }: QuotePageProps) {
     // Sincronizar entradas de descuento - porcentaje con 6 decimales
     // 🔒 LÍMITE: Máximo 7% de descuento
     const handleDiscountPercentChange = (val: number) => {
-        // Limitar a máximo 7%
-        const cappedVal = Math.min(val, 7);
+        // Limitar a máximo 8%
+        const cappedVal = Math.min(val, 8);
         // Redondear a 6 decimales para máxima precisión en el porcentaje
         const roundedPercent = Math.round(cappedVal * 1000000) / 1000000;
         setDiscountPercent(roundedPercent);
@@ -672,11 +672,11 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                     type="number"
                                                     step="0.000001"
                                                     min="0"
-                                                    max="7"
+                                                    max="8"
                                                     value={discountPercent}
                                                     onChange={(e) => handleDiscountPercentChange(parseFloat(e.target.value) || 0)}
                                                     className="w-full pl-3 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800 transition-all text-sm"
-                                                    placeholder="% (máx 7%)"
+                                                    placeholder="% (máx 8%)"
                                                 />
                                             </div>
                                             <div className="relative">
@@ -693,7 +693,7 @@ export default function QuotePage({ params }: QuotePageProps) {
                                         </div>
                                         <input
                                             type="range"
-                                            min="0" max="7" step="0.1"
+                                            min="0" max="8" step="0.1"
                                             value={discountPercent}
                                             onChange={(e) => handleDiscountPercentChange(parseFloat(e.target.value))}
                                             className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
@@ -744,7 +744,7 @@ export default function QuotePage({ params }: QuotePageProps) {
                                             />
                                         </div>
                                         <p className="text-xs text-slate-500 mt-1.5">
-                                            📅 Fecha en que el cliente pagará la cuota inicial
+                                            📅 {initialPaymentDate ? (() => { const [y,m,d] = initialPaymentDate.split('-'); return `${d}/${m}/${y.slice(2)}`; })() : ''}
                                         </p>
                                     </div>
 
@@ -764,7 +764,7 @@ export default function QuotePage({ params }: QuotePageProps) {
                                             />
                                         </div>
                                         <p className="text-xs text-slate-500 mt-1.5">
-                                            📆 Puede ser 1 o 2 meses después. Las siguientes cuotas serán el último día de cada mes
+                                            📆 {firstInstallmentDate ? (() => { const [y,m,d] = firstInstallmentDate.split('-'); return `${d}/${m}/${y.slice(2)}`; })() : ''}
                                         </p>
                                     </div>
 
