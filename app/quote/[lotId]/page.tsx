@@ -80,10 +80,10 @@ export default function QuotePage({ params }: QuotePageProps) {
     const lot = dynamicLot;
 
     // 2. Estados del Formulario
-    const [discountPercent, setDiscountPercent] = useState<number>(0);
-    const [discountAmount, setDiscountAmount] = useState<number>(0);
-    const [initialPayment, setInitialPayment] = useState<number>(0);
-    const [numInstallments, setNumInstallments] = useState<number>(72);
+    const [discountPercent, setDiscountPercent] = useState<number | string>(0);
+    const [discountAmount, setDiscountAmount] = useState<number | string>(0);
+    const [initialPayment, setInitialPayment] = useState<number | string>(0);
+    const [numInstallments, setNumInstallments] = useState<number | string>(72);
     
     // 🆕 Fechas separadas para cuota inicial y primera cuota (ISO interno)
     const [initialPaymentDate, setInitialPaymentDate] = useState<string>(
@@ -193,15 +193,29 @@ export default function QuotePage({ params }: QuotePageProps) {
     };
 
     const handleCreateClient = async () => {
-        if (!newClientData.name || !newClientData.vat) return;
+        const { name, vat, phone, email } = newClientData;
+        const trimmedName = name.trim();
+        if (!trimmedName || !vat) return;
+
+        // Validación estricta DNI/RUC (8 o 11 dígitos)
+        if (!/^(?:\d{8}|\d{11})$/.test(vat)) {
+            alert('El DNI debe tener 8 dígitos o el RUC 11 dígitos numéricos.');
+            return;
+        }
+
+        // Validación básica de Email
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            alert('El formato del correo electrónico es inválido.');
+            return;
+        }
 
         setIsCreatingClient(true);
         try {
             const newClient = await odooService.createPartner({
-                name: newClientData.name,
-                vat: newClientData.vat,
-                phone: newClientData.phone,
-                email: newClientData.email
+                name: trimmedName,
+                vat,
+                phone,
+                email
             });
 
             selectClient(newClient);
@@ -215,9 +229,22 @@ export default function QuotePage({ params }: QuotePageProps) {
         }
     };
 
+    // Prevent negative sign keydown
+    const preventNegative = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === '-' || e.key === 'e') {
+            e.preventDefault();
+        }
+    };
+
     // Sincronizar entradas de descuento - porcentaje con 6 decimales
-    // 🔒 LÍMITE: Máximo 7% de descuento
-    const handleDiscountPercentChange = (val: number) => {
+    // 🔒 LÍMITE: Máximo 8% de descuento
+    const handleDiscountPercentChange = (valStr: string) => {
+        if (valStr === '') {
+            setDiscountPercent('');
+            setDiscountAmount('');
+            return;
+        }
+        const val = parseFloat(valStr) || 0;
         // Limitar a máximo 8%
         const cappedVal = Math.min(val, 8);
         // Redondear a 6 decimales para máxima precisión en el porcentaje
@@ -228,6 +255,53 @@ export default function QuotePage({ params }: QuotePageProps) {
             const amount = Math.round(lot.list_price * (roundedPercent / 100) * 10000) / 10000;
             setDiscountAmount(amount);
         }
+    };
+
+    const handleDiscountAmountChange = (valStr: string) => {
+        if (valStr === '') {
+            setDiscountAmount('');
+            setDiscountPercent('');
+            return;
+        }
+        const val = parseFloat(valStr) || 0;
+        // Redondear a 4 decimales para montos (suficiente para soles)
+        const roundedAmount = Math.round(val * 10000) / 10000;
+        setDiscountAmount(roundedAmount);
+        if (lot && lot.list_price > 0) {
+            // Calcular porcentaje con 6 decimales de precisión
+            const percent = (roundedAmount / lot.list_price) * 100;
+            const cappedPercent = Math.min(percent, 8);
+            setDiscountPercent(Math.round(cappedPercent * 1000000) / 1000000);
+            
+            // Re-calcular monto basado en el cap
+            if (percent > 8) {
+                const maxAmount = Math.round(lot.list_price * (8 / 100) * 10000) / 10000;
+                setDiscountAmount(maxAmount);
+            }
+        }
+    };
+
+    const handleInitialPaymentChange = (valStr: string) => {
+        if (valStr === '') {
+            setInitialPayment('');
+            return;
+        }
+        const val = parseFloat(valStr) || 0;
+        // La inicial no puede ser mayor al precio descontado
+        const currentDiscountAmount = Number(discountAmount) || 0;
+        const discountedPrice = lot ? lot.list_price - currentDiscountAmount : 0;
+        const cappedVal = Math.min(val, discountedPrice);
+        setInitialPayment(cappedVal);
+    };
+
+    const handleNumInstallmentsChange = (valStr: string) => {
+        if (valStr === '') {
+            setNumInstallments('');
+            return;
+        }
+        const val = parseInt(valStr) || 0;
+        const cappedVal = Math.min(Math.max(val, 1), 180); // clamp 1-180
+        setNumInstallments(cappedVal);
     };
 
 
@@ -250,11 +324,11 @@ export default function QuotePage({ params }: QuotePageProps) {
                 } : null,
                 terms: {
                     originalPrice: lot.list_price,
-                    discountPercent,
-                    discountAmount,
+                    discountPercent: Number(discountPercent) || 0,
+                    discountAmount: Number(discountAmount) || 0,
                     discountedPrice: calculations.discountedPrice,
-                    initialPayment,
-                    numInstallments,
+                    initialPayment: Number(initialPayment) || 0,
+                    numInstallments: Number(numInstallments) || 0,
                     monthlyInstallment: calculations.monthlyInstallment,
                     remainingBalance: calculations.remainingBalance,
                     startDate,
@@ -335,9 +409,9 @@ export default function QuotePage({ params }: QuotePageProps) {
                 lot.list_price, // Use full list price
                 `Cotización para ${lot.name}. Inicial: ${initialPayment}. Plazo: ${numInstallments} meses.`,
                 {
-                    installments: numInstallments,
-                    downPayment: initialPayment,
-                    discount: discountAmount,
+                    installments: Number(numInstallments) || 0,
+                    downPayment: Number(initialPayment) || 0,
+                    discount: Number(discountAmount) || 0,
                     firstInstallmentDate: startDate
                 },
                 pdfFile, // Pass the generated PDF file
@@ -359,16 +433,7 @@ export default function QuotePage({ params }: QuotePageProps) {
         }
     };
 
-    const handleDiscountAmountChange = (val: number) => {
-        // Redondear a 4 decimales para montos (suficiente para soles)
-        const roundedAmount = Math.round(val * 10000) / 10000;
-        setDiscountAmount(roundedAmount);
-        if (lot && lot.list_price > 0) {
-            // Calcular porcentaje con 6 decimales de precisión
-            const percent = (roundedAmount / lot.list_price) * 100;
-            setDiscountPercent(Math.round(percent * 1000000) / 1000000);
-        }
-    };
+
 
     // 3. Cálculos en tiempo real - 🆕 ACTUALIZADO con nuevas fechas y validación
     const calculations: QuoteCalculations | null = useMemo(() => {
@@ -407,9 +472,9 @@ export default function QuotePage({ params }: QuotePageProps) {
         try {
             return financeService.calculateQuote(
                 lot.list_price,
-                discountPercent,
-                initialPayment,
-                numInstallments,
+                Number(discountPercent) || 0,
+                Number(initialPayment) || 0,
+                Number(numInstallments) || 0,
                 validInitialDate,    // Usar fechas validadas
                 validFirstDate,      // Usar fechas validadas
                 scheduleType
@@ -420,6 +485,10 @@ export default function QuotePage({ params }: QuotePageProps) {
             return null;
         }
     }, [lot, discountPercent, initialPayment, numInstallments, initialPaymentDate, firstInstallmentDate, scheduleType]);
+
+    // Derived states para validación visual de fechas tipeadas
+    const isInitialDateInvalid = initialPaymentDateDisplay.length === 8 && isoToDisplay(initialPaymentDate) !== initialPaymentDateDisplay;
+    const isFirstDateInvalid = firstInstallmentDateDisplay.length === 8 && isoToDisplay(firstInstallmentDate) !== firstInstallmentDateDisplay;
 
     if (loading) {
         return (
@@ -547,7 +616,7 @@ export default function QuotePage({ params }: QuotePageProps) {
                                             <span className="font-mono">{financeService.formatCurrency(lot.list_price)}</span>
                                         </div>
                                         <div className="flex justify-between text-sm text-emerald-400">
-                                            <span>Descuento ({discountPercent.toFixed(2)}%)</span>
+                                            <span>Descuento ({Number(discountPercent).toFixed(2)}%)</span>
                                             <span className="font-mono">-{financeService.formatCurrency(calculations.discountAmount)}</span>
                                         </div>
                                         <div className="h-[1px] bg-white/10 my-2" />
@@ -594,21 +663,27 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                     type="text"
                                                     placeholder="Buscar cliente por nombre o DNI..."
                                                     value={searchTerm}
-                                                    onChange={(e) => {
-                                                        setSearchTerm(e.target.value);
-                                                        if (selectedClient && e.target.value !== selectedClient.name) {
-                                                            setSelectedClient(null);
-                                                        }
-                                                    }}
-                                                    className={`w-full px-3 py-2 text-sm text-black border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all ${selectedClient ? 'border-blue-500 bg-blue-50 text-blue-900 font-semibold' : 'border-slate-200'}`}
+                                                    readOnly={!!selectedClient}
+                                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                                    className={`w-full px-3 py-2 text-sm text-black border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all pr-10 ${selectedClient ? 'border-emerald-500 bg-emerald-50 text-emerald-900 font-semibold' : 'border-slate-200'}`}
                                                 />
-                                                {selectedClient && (
-                                                    <div className="absolute right-3 top-2.5 text-blue-600">
-                                                        <Check size={16} />
-                                                    </div>
-                                                )}
-                                                {isSearching && (
+                                                {selectedClient ? (
+                                                    <button
+                                                        onClick={() => {
+                                                            setSelectedClient(null);
+                                                            setSearchTerm('');
+                                                            setSearchResults([]);
+                                                        }}
+                                                        className="absolute right-3 top-2.5 text-slate-400 hover:text-red-500 transition-colors"
+                                                    >
+                                                        <X size={16} />
+                                                    </button>
+                                                ) : isSearching ? (
                                                     <div className="absolute right-3 top-2.5 animate-spin">
+                                                        <Search size={16} className="text-slate-400" />
+                                                    </div>
+                                                ) : (
+                                                    <div className="absolute right-3 top-2.5">
                                                         <Search size={16} className="text-slate-400" />
                                                     </div>
                                                 )}
@@ -714,7 +789,8 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                     min="0"
                                                     max="8"
                                                     value={discountPercent}
-                                                    onChange={(e) => handleDiscountPercentChange(parseFloat(e.target.value) || 0)}
+                                                    onChange={(e) => handleDiscountPercentChange(e.target.value)}
+                                                    onKeyDown={preventNegative}
                                                     className="w-full pl-3 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800 transition-all text-sm"
                                                     placeholder="% (máx 8%)"
                                                 />
@@ -725,7 +801,8 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                     type="number"
                                                     step="0.01"
                                                     value={discountAmount}
-                                                    onChange={(e) => handleDiscountAmountChange(parseFloat(e.target.value) || 0)}
+                                                    onChange={(e) => handleDiscountAmountChange(e.target.value)}
+                                                    onKeyDown={preventNegative}
                                                     className="w-full pl-8 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800 transition-all text-sm"
                                                     placeholder="Monto"
                                                 />
@@ -734,8 +811,8 @@ export default function QuotePage({ params }: QuotePageProps) {
                                         <input
                                             type="range"
                                             min="0" max="8" step="0.1"
-                                            value={discountPercent}
-                                            onChange={(e) => handleDiscountPercentChange(parseFloat(e.target.value))}
+                                            value={discountPercent === '' ? 0 : discountPercent}
+                                            onChange={(e) => handleDiscountPercentChange(e.target.value)}
                                             className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
                                         />
                                     </div>
@@ -747,8 +824,10 @@ export default function QuotePage({ params }: QuotePageProps) {
                                             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">S/</div>
                                             <input
                                                 type="number"
+                                                min="0"
                                                 value={initialPayment}
-                                                onChange={(e) => setInitialPayment(parseFloat(e.target.value) || 0)}
+                                                onChange={(e) => handleInitialPaymentChange(e.target.value)}
+                                                onKeyDown={preventNegative}
                                                 className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800 transition-all"
                                             />
                                         </div>
@@ -763,7 +842,8 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                 type="number"
                                                 min="1" max="180"
                                                 value={numInstallments}
-                                                onChange={(e) => setNumInstallments(parseInt(e.target.value) || 0)}
+                                                onChange={(e) => handleNumInstallmentsChange(e.target.value)}
+                                                onKeyDown={preventNegative}
                                                 className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800 transition-all"
                                             />
                                         </div>
@@ -786,7 +866,11 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                 )}
                                                 placeholder="dd/mm/aa"
                                                 maxLength={8}
-                                                className="w-full pl-9 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-slate-800 tracking-widest"
+                                                className={`w-full pl-9 pr-10 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 transition-all font-medium tracking-widest ${
+                                                    isInitialDateInvalid
+                                                        ? 'border-red-400 focus:ring-red-500 text-red-600'
+                                                        : 'border-slate-200 focus:ring-indigo-500 text-slate-800'
+                                                }`}
                                             />
                                             {/* Date picker trigger */}
                                             <input
@@ -819,7 +903,11 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                 )}
                                                 placeholder="dd/mm/aa"
                                                 maxLength={8}
-                                                className="w-full pl-9 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-slate-800 tracking-widest"
+                                                className={`w-full pl-9 pr-10 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 transition-all font-medium tracking-widest ${
+                                                    isFirstDateInvalid || dateValidationError
+                                                        ? 'border-red-400 focus:ring-red-500 text-red-600'
+                                                        : 'border-slate-200 focus:ring-indigo-500 text-slate-800'
+                                                }`}
                                             />
                                             {/* Date picker trigger */}
                                             <input
@@ -832,8 +920,19 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                 }}
                                                 className="absolute right-0 top-0 bottom-0 w-10 opacity-0 cursor-pointer"
                                             />
-                                            <Calendar size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500 pointer-events-none" />
+                                            <Calendar size={16} className={`absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none ${isFirstDateInvalid || dateValidationError ? 'text-red-500' : 'text-indigo-500'}`} />
                                         </div>
+                                        {/* Date Validation Error Message */}
+                                        {dateValidationError && (
+                                            <p className="text-red-500 text-xs mt-2 font-medium flex items-center gap-1">
+                                                {dateValidationError}
+                                            </p>
+                                        )}
+                                        {isFirstDateInvalid && !dateValidationError && (
+                                            <p className="text-red-500 text-xs mt-2 font-medium flex items-center gap-1">
+                                                ⚠️ Fecha inválida. Use un formato real.
+                                            </p>
+                                        )}
                                     </div>
 
                                     {/* 🆕 Tipo de Cronograma */}
