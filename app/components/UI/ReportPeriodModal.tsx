@@ -108,10 +108,10 @@ export default function ReportPeriodModal({ type, onClose, onGenerate, generatin
         <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/70 backdrop-blur-md animate-in fade-in duration-200 p-4">
             <div
                 ref={modalRef}
-                className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-in zoom-in-95 duration-200"
+                className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]"
             >
                 {/* Header */}
-                <div className="bg-gradient-to-b from-slate-950 to-slate-900/60 p-6 relative border-b border-slate-800/80">
+                <div className="bg-gradient-to-b from-slate-950 to-slate-900/60 p-6 relative border-b border-slate-800/80 shrink-0">
                     <button
                         onClick={onClose}
                         disabled={generating}
@@ -141,7 +141,7 @@ export default function ReportPeriodModal({ type, onClose, onGenerate, generatin
                 </div>
 
                 {/* Form */}
-                <form onSubmit={handleSubmit} className="p-6 space-y-5">
+                <form onSubmit={handleSubmit} className="p-6 space-y-5 flex-1 overflow-y-auto min-h-0">
                     {/* Period selection */}
                     <div className="space-y-2">
                         <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">

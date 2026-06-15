@@ -65,9 +65,9 @@ export default function RefundModal({ lot, orderId, reservedAmount, listPrice, c
 
     return (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[1200] flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] animate-in zoom-in-95 duration-200">
                 {/* Header */}
-                <div className="bg-gradient-to-r from-orange-500 to-red-500 px-5 py-4 flex justify-between items-center text-white">
+                <div className="bg-gradient-to-r from-orange-500 to-red-500 px-5 py-4 flex justify-between items-center text-white shrink-0">
                     <div className="flex items-center gap-2">
                         <RotateCcw size={18} />
                         <h2 className="font-bold text-[15px]">Procesar Devolución</h2>
@@ -78,7 +78,7 @@ export default function RefundModal({ lot, orderId, reservedAmount, listPrice, c
                 </div>
 
                 {step === 'form' ? (
-                    <div className="p-5 space-y-4">
+                    <div className="p-5 space-y-4 overflow-y-auto min-h-0">
                         {/* Lot & Client Info */}
                         <div className="bg-orange-50 border border-orange-100 rounded-xl p-3 space-y-1">
                             <div className="flex justify-between text-xs">
@@ -173,7 +173,7 @@ export default function RefundModal({ lot, orderId, reservedAmount, listPrice, c
                     </div>
                 ) : (
                     /* Confirmation Step */
-                    <div className="p-5 space-y-4">
+                    <div className="p-5 space-y-4 overflow-y-auto min-h-0">
                         <div className="flex flex-col items-center text-center py-2">
                             <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mb-3">
                                 <AlertTriangle size={28} className="text-red-500" />

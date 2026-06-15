@@ -47,10 +47,10 @@ export default function UserProfileModal({ user, onClose }: UserProfileModalProp
         <div className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
             <div
                 ref={modalRef}
-                className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-in zoom-in-95 duration-200 m-4"
+                className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-in zoom-in-95 duration-200 m-4 flex flex-col max-h-[90vh]"
             >
                 {/* Header Profile Info */}
-                <div className="bg-slate-900 text-white p-6 text-center relative">
+                <div className="bg-slate-900 text-white p-6 text-center relative shrink-0">
                     <button
                         onClick={onClose}
                         className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors"
@@ -69,7 +69,7 @@ export default function UserProfileModal({ user, onClose }: UserProfileModalProp
                 </div>
 
                 {/* Stats Grid */}
-                <div className="p-6">
+                <div className="p-6 flex-1 overflow-y-auto min-h-0">
                     <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                         Rendimiento
                         {loading && <Loader2 size={14} className="animate-spin text-blue-500" />}
