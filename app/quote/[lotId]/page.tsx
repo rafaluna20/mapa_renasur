@@ -237,7 +237,7 @@ export default function QuotePage({ params }: QuotePageProps) {
     };
 
     // Sincronizar entradas de descuento - porcentaje con 6 decimales
-    // 🔒 LÍMITE: Máximo 8% de descuento
+    // 🔒 LÍMITE: Máximo 40% de descuento
     const handleDiscountPercentChange = (valStr: string) => {
         if (valStr === '') {
             setDiscountPercent('');
@@ -245,8 +245,8 @@ export default function QuotePage({ params }: QuotePageProps) {
             return;
         }
         const val = parseFloat(valStr) || 0;
-        // Limitar a máximo 8%
-        const cappedVal = Math.min(val, 8);
+        // Limitar a máximo 40%
+        const cappedVal = Math.min(val, 40);
         // Redondear a 6 decimales para máxima precisión en el porcentaje
         const roundedPercent = Math.round(cappedVal * 1000000) / 1000000;
         setDiscountPercent(roundedPercent);
@@ -270,12 +270,12 @@ export default function QuotePage({ params }: QuotePageProps) {
         if (lot && lot.list_price > 0) {
             // Calcular porcentaje con 6 decimales de precisión
             const percent = (roundedAmount / lot.list_price) * 100;
-            const cappedPercent = Math.min(percent, 8);
+            const cappedPercent = Math.min(percent, 40);
             setDiscountPercent(Math.round(cappedPercent * 1000000) / 1000000);
             
             // Re-calcular monto basado en el cap
-            if (percent > 8) {
-                const maxAmount = Math.round(lot.list_price * (8 / 100) * 10000) / 10000;
+            if (percent > 40) {
+                const maxAmount = Math.round(lot.list_price * (40 / 100) * 10000) / 10000;
                 setDiscountAmount(maxAmount);
             }
         }
@@ -787,12 +787,12 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                     type="number"
                                                     step="0.000001"
                                                     min="0"
-                                                    max="8"
+                                                    max="40"
                                                     value={discountPercent}
                                                     onChange={(e) => handleDiscountPercentChange(e.target.value)}
                                                     onKeyDown={preventNegative}
                                                     className="w-full pl-3 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800 transition-all text-sm"
-                                                    placeholder="% (máx 8%)"
+                                                    placeholder="% (máx 40%)"
                                                 />
                                             </div>
                                             <div className="relative">
@@ -810,7 +810,7 @@ export default function QuotePage({ params }: QuotePageProps) {
                                         </div>
                                         <input
                                             type="range"
-                                            min="0" max="8" step="0.1"
+                                            min="0" max="40" step="0.1"
                                             value={discountPercent === '' ? 0 : discountPercent}
                                             onChange={(e) => handleDiscountPercentChange(e.target.value)}
                                             className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
