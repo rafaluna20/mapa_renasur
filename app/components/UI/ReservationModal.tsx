@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Lot } from '@/app/data/lotsData';
 import { odooService } from '@/app/services/odooService';
 import { useAuth } from '@/app/context/AuthContext';
+import { useDniRucLookup } from '@/app/hooks/useDniRucLookup';
 
 interface ReservationModalProps {
     lot: Lot;
@@ -27,6 +28,13 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
     const [showCreateClient, setShowCreateClient] = useState(false);
     const [newClientData, setNewClientData] = useState({ name: '', vat: '', phone: '', email: '' });
     const [isCreatingClient, setIsCreatingClient] = useState(false);
+
+    // Autocompletar nombre por DNI/RUC (RENIEC/SUNAT) al crear cliente nuevo
+    const { result: docLookup, isLoading: isLookingUpDoc, error: docLookupError } = useDniRucLookup(newClientData.vat, showCreateClient);
+    useEffect(() => {
+        if (!docLookup) return;
+        setNewClientData(prev => prev.name.trim() ? prev : { ...prev, name: docLookup.name });
+    }, [docLookup]);
 
     // Active Quotes State (for lot.x_statu === 'cotizacion')
     const [activeQuotes, setActiveQuotes] = useState<any[]>([]);
@@ -319,32 +327,45 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
                                         </button>
                                     </div>
                                     <div className="space-y-2">
+                                        <div>
+                                            <input
+                                                type="text"
+                                                inputMode="numeric"
+                                                maxLength={11}
+                                                placeholder="DNI (8) / RUC (11) - Obligatorio"
+                                                className="w-full px-2 py-1.5 text-sm border rounded bg-white text-slate-800 placeholder:text-slate-300"
+                                                value={newClientData.vat}
+                                                onChange={e => setNewClientData({ ...newClientData, vat: e.target.value.replace(/\D/g, '') })}
+                                            />
+                                            {isLookingUpDoc && (
+                                                <p className="text-[11px] text-slate-400 mt-0.5">Buscando en RENIEC/SUNAT...</p>
+                                            )}
+                                            {!isLookingUpDoc && docLookupError && (
+                                                <p className="text-[11px] text-amber-600 mt-0.5">{docLookupError}. Completa el nombre manualmente.</p>
+                                            )}
+                                            {!isLookingUpDoc && docLookup && (
+                                                <p className="text-[11px] text-emerald-600 mt-0.5">✓ {docLookup.name}</p>
+                                            )}
+                                        </div>
                                         <input
                                             type="text"
                                             placeholder="Nombre Completo (Obligatorio)"
-                                            className="w-full px-2 py-1.5 text-sm border rounded placeholder:text-slate-400"
+                                            className="w-full px-2 py-1.5 text-sm border rounded bg-white text-slate-800 placeholder:text-slate-400"
                                             value={newClientData.name}
                                             onChange={e => setNewClientData({ ...newClientData, name: e.target.value })}
-                                        />
-                                        <input
-                                            type="text"
-                                            placeholder="DNI / RUC (Obligatorio)"
-                                            className="w-full px-2 py-1.5 text-sm border rounded placeholder:text-slate-300"
-                                            value={newClientData.vat}
-                                            onChange={e => setNewClientData({ ...newClientData, vat: e.target.value })}
                                         />
                                         <div className="flex gap-2">
                                             <input
                                                 type="tel"
                                                 placeholder="Teléfono"
-                                                className="w-full px-2 py-1.5 text-sm border rounded placeholder:text-slate-300"
+                                                className="w-full px-2 py-1.5 text-sm border rounded bg-white text-slate-800 placeholder:text-slate-300"
                                                 value={newClientData.phone}
                                                 onChange={e => setNewClientData({ ...newClientData, phone: e.target.value })}
                                             />
                                             <input
                                                 type="email"
                                                 placeholder="Email"
-                                                className="w-full px-2 py-1.5 text-sm border rounded placeholder:text-slate-300"
+                                                className="w-full px-2 py-1.5 text-sm border rounded bg-white text-slate-800 placeholder:text-slate-300"
                                                 value={newClientData.email}
                                                 onChange={e => setNewClientData({ ...newClientData, email: e.target.value })}
                                             />

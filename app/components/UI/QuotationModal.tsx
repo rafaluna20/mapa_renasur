@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { Lot } from '@/app/data/lotsData';
 import { odooService } from '@/app/services/odooService';
 import { useAuth } from '@/app/context/AuthContext';
+import { useDniRucLookup } from '@/app/hooks/useDniRucLookup';
 
 interface QuotationModalProps {
     lot: Lot;
@@ -23,6 +24,13 @@ export default function QuotationModal({ lot, onClose, onSuccess }: QuotationMod
     const [showCreateClient, setShowCreateClient] = useState(false);
     const [newClientData, setNewClientData] = useState({ name: '', vat: '', phone: '', email: '' });
     const [isCreatingClient, setIsCreatingClient] = useState(false);
+
+    // Autocompletar nombre por DNI/RUC (RENIEC/SUNAT) al crear cliente nuevo
+    const { result: docLookup, isLoading: isLookingUpDoc, error: docLookupError } = useDniRucLookup(newClientData.vat, showCreateClient);
+    useEffect(() => {
+        if (!docLookup) return;
+        setNewClientData(prev => prev.name.trim() ? prev : { ...prev, name: docLookup.name });
+    }, [docLookup]);
 
     // --- Quotation Details State ---
     const [installments, setInstallments] = useState(72);
@@ -204,8 +212,26 @@ setSearchResults(formatted);
                                     <span>Nuevo Cliente</span>
                                     <button onClick={() => setShowCreateClient(false)}><X size={14} /></button>
                                 </div>
-                                <input className="w-full p-2 text-sm border rounded" placeholder="Nombre Completo" value={newClientData.name} onChange={e => setNewClientData({ ...newClientData, name: e.target.value })} />
-                                <input className="w-full p-2 text-sm border rounded" placeholder="DNI / RUC" value={newClientData.vat} onChange={e => setNewClientData({ ...newClientData, vat: e.target.value })} />
+                                <div>
+                                    <input
+                                        className="w-full p-2 text-sm border rounded bg-white text-slate-800"
+                                        inputMode="numeric"
+                                        maxLength={11}
+                                        placeholder="DNI (8) / RUC (11)"
+                                        value={newClientData.vat}
+                                        onChange={e => setNewClientData({ ...newClientData, vat: e.target.value.replace(/\D/g, '') })}
+                                    />
+                                    {isLookingUpDoc && (
+                                        <p className="text-[11px] text-slate-400 mt-0.5">Buscando en RENIEC/SUNAT...</p>
+                                    )}
+                                    {!isLookingUpDoc && docLookupError && (
+                                        <p className="text-[11px] text-amber-600 mt-0.5">{docLookupError}. Completa el nombre manualmente.</p>
+                                    )}
+                                    {!isLookingUpDoc && docLookup && (
+                                        <p className="text-[11px] text-emerald-600 mt-0.5">✓ {docLookup.name}</p>
+                                    )}
+                                </div>
+                                <input className="w-full p-2 text-sm border rounded bg-white text-slate-800" placeholder="Nombre Completo" value={newClientData.name} onChange={e => setNewClientData({ ...newClientData, name: e.target.value })} />
                                 <button
                                     onClick={handleCreateClient}
                                     disabled={!newClientData.name || !newClientData.vat || isCreatingClient}
