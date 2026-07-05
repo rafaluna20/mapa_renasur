@@ -30,10 +30,10 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
     const [isCreatingClient, setIsCreatingClient] = useState(false);
 
     // Autocompletar nombre por DNI/RUC (RENIEC/SUNAT) al crear cliente nuevo
-    const { result: docLookup, isLoading: isLookingUpDoc, error: docLookupError } = useDniRucLookup(newClientData.vat, showCreateClient);
+    const { lookup: lookupDoc, result: docLookup, isLoading: isLookingUpDoc, error: docLookupError, reset: resetDocLookup } = useDniRucLookup();
     useEffect(() => {
         if (!docLookup) return;
-        setNewClientData(prev => prev.name.trim() ? prev : { ...prev, name: docLookup.name });
+        setNewClientData(prev => ({ ...prev, name: docLookup.name }));
     }, [docLookup]);
 
     // Active Quotes State (for lot.x_statu === 'cotizacion')
@@ -328,15 +328,35 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
                                     </div>
                                     <div className="space-y-2">
                                         <div>
-                                            <input
-                                                type="text"
-                                                inputMode="numeric"
-                                                maxLength={11}
-                                                placeholder="DNI (8) / RUC (11) - Obligatorio"
-                                                className="w-full px-2 py-1.5 text-sm border rounded bg-white text-slate-800 placeholder:text-slate-300"
-                                                value={newClientData.vat}
-                                                onChange={e => setNewClientData({ ...newClientData, vat: e.target.value.replace(/\D/g, '') })}
-                                            />
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    maxLength={11}
+                                                    placeholder="DNI (8) / RUC (11) - Obligatorio"
+                                                    className="w-full px-2 py-1.5 text-sm border rounded bg-white text-slate-800 placeholder:text-slate-300"
+                                                    value={newClientData.vat}
+                                                    onChange={e => {
+                                                        setNewClientData({ ...newClientData, vat: e.target.value.replace(/\D/g, '') });
+                                                        resetDocLookup();
+                                                    }}
+                                                    onKeyDown={e => {
+                                                        if (e.key === 'Enter') {
+                                                            e.preventDefault();
+                                                            lookupDoc(newClientData.vat);
+                                                        }
+                                                    }}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => lookupDoc(newClientData.vat)}
+                                                    disabled={isLookingUpDoc}
+                                                    className="shrink-0 px-2.5 py-1.5 text-xs font-bold bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition-colors disabled:opacity-50 flex items-center gap-1"
+                                                >
+                                                    {isLookingUpDoc ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
+                                                    Buscar
+                                                </button>
+                                            </div>
                                             {isLookingUpDoc && (
                                                 <p className="text-[11px] text-slate-400 mt-0.5">Buscando en RENIEC/SUNAT...</p>
                                             )}
