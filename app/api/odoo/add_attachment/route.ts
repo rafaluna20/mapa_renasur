@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { fetchOdoo } from '@/app/services/odooService';
+import { requireStaffSession } from '@/app/lib/staffAuth';
 
 export async function POST(request: Request) {
+    const auth = await requireStaffSession(request);
+    if (auth.response) return auth.response;
+
     try {
         const formData = await request.formData();
         const orderId = formData.get('orderId');

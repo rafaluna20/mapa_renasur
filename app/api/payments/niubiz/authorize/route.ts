@@ -49,43 +49,53 @@ export async function POST(request: Request) {
 
         // Registrar pago en Odoo
         try {
-            const odooPartnerId = (session.user as unknown as { odooPartnerId: number }).odooPartnerId;
+            const journalId = parseInt(process.env.ODOO_NIUBIZ_JOURNAL_ID || '1');
+            const amountPaid = parseFloat(authorization.order.amount) / 100;
 
-            const paymentId = await fetchOdoo('account.payment', 'create', [{
-                payment_type: 'inbound',
-                partner_id: odooPartnerId,
-                amount: parseFloat(authorization.order.amount) / 100,
-                date: new Date().toISOString().split('T')[0],
-                ref: paymentReference,
-                journal_id: parseInt(process.env.ODOO_NIUBIZ_JOURNAL_ID || '1'),
-                payment_method_id: parseInt(process.env.ODOO_CARD_PAYMENT_METHOD_ID || '1'),
-                // Metadata Niubiz
-                narration: `Niubiz Transaction: ${authorization.order.transactionId}\nCard: ${authorization.dataMap?.CARD}\nBrand: ${authorization.dataMap?.BRAND}`
-            }]);
+            // FIX: account.payment necesita 'payment_method_line_id' (account.payment.method.line),
+            // no 'payment_method_id' (account.payment.method) — el mismo bug de tipo incorrecto
+            // que ya se había corregido en el módulo Odoo (payment_controller.py) reaparecía aquí,
+            // sin corregir, en el flujo de tarjeta.
+            const paymentMethodLines = await fetchOdoo('account.payment.method.line', 'search_read', [
+                [
+                    ['journal_id', '=', journalId],
+                    ['payment_type', '=', 'inbound'],
+                ]
+            ], { fields: ['id'], limit: 1 });
 
-            // Post payment
-            await fetchOdoo('account.payment', 'action_post', [paymentId]);
-
-            // Intentar conciliación automática si existe invoiceId
-            if (invoiceId) {
-                try {
-                    // Nota: Odoo usualmente requiere que el pago esté vinculado a las facturas
-                    // o usar js_assign_outstanding_line en la factura si el pago ya está posteado.
-                    await fetchOdoo(
-                        'account.move',
-                        'js_assign_outstanding_line',
-                        [invoiceId]
-                    );
-                } catch (reconcileError) {
-                    console.error('Auto-reconciliation failed:', reconcileError);
-                    // No fallar si la conciliación falla, se puede hacer manual en Odoo
-                }
+            if (!paymentMethodLines || paymentMethodLines.length === 0) {
+                throw new Error(`No se encontró método de pago inbound para el diario ${journalId}`);
             }
+            const paymentMethodLineId = paymentMethodLines[0].id;
+
+            // FIX: crear el pago vía el wizard nativo account.payment.register (mismo patrón
+            // que createPayment en odooService.ts y que pay_invoice en el módulo Odoo), en vez
+            // de crear account.payment a mano + llamar account.move.js_assign_outstanding_line
+            // (que espera el ID de una línea de conciliación, no el ID de la factura, y por eso
+            // fallaba en silencio dejando la factura marcada como no pagada pese al cobro real
+            // con tarjeta — lo que además dispararía mora indebida sobre esa factura).
+            const wizardId = await fetchOdoo('account.payment.register', 'create', [{
+                amount: amountPaid,
+                journal_id: journalId,
+                payment_date: new Date().toISOString().split('T')[0],
+                payment_method_line_id: paymentMethodLineId,
+                communication: `Niubiz ${authorization.order.transactionId} - ${paymentReference}`,
+            }], {
+                context: {
+                    active_model: 'account.move',
+                    active_ids: [parseInt(invoiceId)],
+                },
+            });
+
+            if (!wizardId) {
+                throw new Error('No se pudo crear el wizard de registro de pago');
+            }
+
+            await fetchOdoo('account.payment.register', 'action_create_payments', [[wizardId]]);
 
             return Response.json({
                 success: true,
                 transactionId: authorization.order.transactionId,
-                paymentId
             });
         } catch (odooError: unknown) {
             console.error('Error registering payment in Odoo:', odooError);

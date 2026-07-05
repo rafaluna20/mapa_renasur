@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import { fetchOdoo } from '@/app/services/odooService';
+import { requireStaffSession } from '@/app/lib/staffAuth';
 
 /**
  * Get the salesperson (user_id) who holds the reservation for a lot
  */
 export async function POST(request: Request) {
+    const auth = await requireStaffSession(request);
+    if (auth.response) return auth.response;
+
     try {
         const { defaultCode, productId } = await request.json();
 

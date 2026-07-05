@@ -1,7 +1,22 @@
 import { NextResponse } from 'next/server';
 import { fetchOdoo } from '@/app/services/odooService';
+import { callContractApi } from '@/app/services/odooModuleApi';
+import { requireStaffSession } from '@/app/lib/staffAuth';
+
+interface ContractCreateResult {
+    status: 'success' | 'error';
+    message?: string;
+    contract_id: number;
+    contract_name?: string;
+    state?: string;
+    final_price?: number;
+    financed_amount?: number;
+}
 
 export async function POST(request: Request) {
+    const auth = await requireStaffSession(request);
+    if (auth.response) return auth.response;
+
     try {
         const { saleOrderId } = await request.json();
 
@@ -54,8 +69,14 @@ export async function POST(request: Request) {
             throw new Error('Sale Order has no products');
         }
 
-        // 2. Verificar que no exista ya un contrato (Por Partner + Producto, ya que no existe sale_order_id)
-        // Necesitamos obtener el product_id primero para verificar duplicados
+        const orderIdNum = parseInt(saleOrderId);
+
+        // Nota: ya no hace falta verificar duplicados acá — el endpoint
+        // /api/contract/create del módulo Odoo resuelve la idempotencia por
+        // sale_order_id internamente (y el unique(sale_order_id) del modelo
+        // es la red de seguridad real ante llamadas concurrentes).
+
+        // 2. Obtener product_id y precio de la línea de la orden
         const productLineIdCheck = order.order_line[0];
         const orderLinesCheck = await fetchOdoo(
             'sale.order.line',
@@ -69,63 +90,41 @@ export async function POST(request: Request) {
         }
 
         const productId = orderLinesCheck[0].product_id[0];
-        const listPrice = orderLinesCheck[0].price_unit; // Ya lo tenemos aquí, optimizamos
+        const listPrice = orderLinesCheck[0].price_unit;
 
-        const existingContracts = await fetchOdoo(
-            'simple.contract',
-            'search_read',
-            [[
-                ['partner_id', '=', order.partner_id[0]],
-                ['product_id', '=', productId]
-            ]],
-            { fields: ['id'], limit: 1 }
-        );
-
-        if (existingContracts && existingContracts.length > 0) {
-            return NextResponse.json({
-                success: false,
-                error: 'Contract already exists for this partner and product',
-                existingContractId: existingContracts[0].id
-            }, { status: 409 });
-        }
-
-        // 3. (Optimizado: ya obtuvimos product_id y listPrice arriba)
-
-        // 4. Calcular mensualidad
+        // 3. Calcular mensualidad (sin interés: mismo comportamiento histórico)
         const discount = order.x_discount_amount || 0;
         const downPayment = order.x_down_payment || 0;
         const netPrice = listPrice - discount;
         const financedAmount = netPrice - downPayment;
         const monthlyAmount = financedAmount / order.x_plazo_meses;
+        const dateFirstInstallment = order.x_date_first_installment || new Date().toISOString().split('T')[0];
 
-        // 5. Preparar datos del contrato
-        const contractData = {
-            name: `Contrato Manual - ${orderLinesCheck[0].name}`, // Referencia manual
+        // 4. Crear el contrato vía el endpoint asegurado del módulo (API key,
+        // rate limit, validadores e idempotencia por sale_order_id ya
+        // resueltos ahí) en vez de un create() directo con la cuenta admin.
+        //
+        // Nota de comportamiento: a diferencia del create() directo anterior,
+        // este endpoint no acepta un 'name' custom — el contrato queda con el
+        // código autogenerado por la secuencia de Odoo (mismo formato que los
+        // contratos creados manualmente), en vez de "Contrato Manual - X".
+        const result = await callContractApi<ContractCreateResult>('/api/contract/create', {
             partner_id: order.partner_id[0],
             product_id: productId,
-            // sale_order_id: parseInt(saleOrderId), // REMOVED: Field does not exist
+            sale_order_id: orderIdNum,
             list_price: listPrice,
             discount_amount: discount,
             down_payment: downPayment,
             total_quotas: order.x_plazo_meses,
             amount: monthlyAmount,
-            date_first_installment: order.x_date_first_installment || new Date().toISOString().split('T')[0],
-            date_next_billing: order.x_date_first_installment || new Date().toISOString().split('T')[0], // ✅ Campo obligatorio del Robot
-            interval_type: 'months'
-        };
+            date_first_installment: dateFirstInstallment,
+            interval_type: 'months',
+        });
 
-        console.log('📋 Payload Enviado a Odoo (Contract):', JSON.stringify(contractData, null, 2));
+        const contractId = result.contract_id;
+        console.log(`✅ Recurring Contract Created: ID ${contractId} (${result.message || 'nuevo'})`);
 
-        // 6. Crear el contrato
-        const contractId = await fetchOdoo(
-            'simple.contract',
-            'create',
-            [contractData]
-        );
-
-        console.log(`✅ Recurring Contract Created: ID ${contractId}`);
-
-        // 7. Agregar mensaje en la orden
+        // 5. Agregar mensaje en la orden
         await fetchOdoo(
             'mail.message',
             'create',

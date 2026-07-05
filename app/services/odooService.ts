@@ -713,69 +713,36 @@ export const odooService = {
     },
 
     // --- LEVEL 3: Payment Registration (In Payment Status) ---
+    // Pasa por el endpoint asegurado del módulo Odoo (/api/simple_contract/pay_invoice:
+    // API key propia, rate limit, y chequeo de que la factura pertenece a un
+    // contrato/compañía accesible) en vez de crear account.payment.register
+    // directo con la cuenta admin compartida. El endpoint ya resuelve el
+    // diario y el payment_method_line_id por su cuenta si no se especifican.
     async createPayment(
         invoiceId: number,
         amount: number,
         paymentDate: string,
         paymentRef: string,
-        journalId?: number
+        journalId?: number,
+        partnerId?: number
     ): Promise<unknown> {
-        try {
-            // 1. If no journalId provided, find the first 'bank' journal
-            if (!journalId) {
-                const journals = await this.searchRead<{ id: number; name: string }>('account.journal', [['type', '=', 'bank']], ['id', 'name']);
-                if (journals.length > 0) {
-                    journalId = journals[0].id;
-                } else {
-                    // Fallback to cash if no bank
-                    const cashJournals = await this.searchRead<{ id: number; name: string }>('account.journal', [['type', '=', 'cash']], ['id', 'name']);
-                    if (cashJournals.length > 0) {
-                        journalId = cashJournals[0].id;
-                    } else {
-                        throw new Error('No se encontró un diario de pago (Banco/Efectivo) configurado en Odoo.');
-                    }
-                }
-            }
+        const response = await fetch('/api/odoo/pay-invoice', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                invoiceId,
+                amount,
+                paymentDate,
+                ref: paymentRef,
+                journalId,
+                partnerId,
+            }),
+        });
 
-            console.log(`Using Journal ID: ${journalId} for payment`);
-
-            // 2. Use 'account.payment.register' wizard to ensure proper reconciliation ("In Payment" status)
-            // This replicates clicking the "Register Payment" button on the invoice.
-
-            // Context needed for the wizard to know which invoice to pay
-            const context = {
-                active_model: 'account.move',
-                active_ids: [invoiceId],
-            };
-
-            // Create the wizard instance
-            const wizardId = await this.call('account.payment.register', 'create', [{
-                journal_id: journalId,
-                amount: amount,
-                payment_date: paymentDate, // YYYY-MM-DD
-                communication: paymentRef,
-                payment_method_line_id: null // Let Odoo pick default
-            }], { context }); // Pass context in kwargs? No, context is usually separate in XML-RPC, but for jsonrpc usually passed in legacy 'kwargs.context' or implicit. 
-            // In typical 'execute_kw', context is the last argument or in kwargs.
-            // Our 'call' helper puts args and kwargs. Let's adjust 'call' usage or rely on how 'execute_kw' handles context.
-            // Usually: model, method, [args], {context: {...}}
-
-            // Wait, our odooService.call signature is (model, method, args, kwargs).
-            // So passing { context } as kwargs is correct for many Odoo APIs.
-
-            if (!wizardId) {
-                throw new Error('Failed to create payment wizard');
-            }
-
-            console.log(`Payment Wizard Created: ${wizardId}`);
-
-            // 3. Confirm payment (Process the wizard)
-            const result = await this.call('account.payment.register', 'action_create_payments', [wizardId]);
-
-            return result;
-        } catch (error) {
-            console.error("Error creating payment:", error);
-            throw error;
+        const result = await response.json();
+        if (!result.success) {
+            throw new Error(result.error || result.message || 'Error al registrar el pago');
         }
+        return result;
     }
 };

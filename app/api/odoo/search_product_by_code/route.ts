@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import { fetchOdoo } from '@/app/services/odooService';
+import { requireStaffSession } from '@/app/lib/staffAuth';
 
 /**
  * Search for a product by default_code and return its product.product ID
  */
 export async function POST(request: Request) {
+    const auth = await requireStaffSession(request);
+    if (auth.response) return auth.response;
+
     try {
         const { defaultCode } = await request.json();
 

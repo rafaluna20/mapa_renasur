@@ -37,7 +37,10 @@ export async function POST(request: Request) {
         }
 
         // Enviar código por email
-        const code = await emailService.sendVerificationCode(
+        // No loguear el código real: esto es lo que terminó filtrado en
+        // auth-debug.log (commiteado a git con códigos OTP reales en texto
+        // plano). El código solo debe viajar por email al usuario.
+        await emailService.sendVerificationCode(
             partner.email,
             dni
         );
@@ -45,7 +48,7 @@ export async function POST(request: Request) {
         // Mask email for display (e.g., ab***@gmail.com)
         const maskedEmail = partner.email.replace(/(.{2}).*(@.*)/, '$1***$2');
 
-        console.log(`[AUTH] Email sent to ${maskedEmail} for DNI ${dni}. Debug Code: ${code}`);
+        console.log(`[AUTH] Verification code sent to ${maskedEmail} for DNI ${dni}`);
 
         return NextResponse.json({
             success: true,

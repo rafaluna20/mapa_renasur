@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import { fetchOdoo } from '@/app/services/odooService';
+import { requireStaffSession } from '@/app/lib/staffAuth';
 
 /**
  * Find the latest DRAFT sale order for a specific product (lot), or a specific order by ID
  */
 export async function POST(request: Request) {
+    const auth = await requireStaffSession(request);
+    if (auth.response) return auth.response;
+
     try {
         const { defaultCode, userId, orderId } = await request.json();
 

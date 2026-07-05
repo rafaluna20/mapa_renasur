@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchOdoo } from '@/app/services/odooService';
+import { requireStaffSession } from '@/app/lib/staffAuth';
 
 interface OdooOrder {
     id: number;
@@ -48,9 +49,16 @@ interface OdooOrderLine {
 }
 
 export async function GET(request: NextRequest) {
+    const auth = await requireStaffSession(request);
+    if (auth.response) return auth.response;
+
     try {
-        const userId = request.headers.get('x-user-id');
-        const isSystem = request.headers.get('x-is-system') === 'true';
+        // Antes esto se verificaba con los headers 'x-user-id'/'x-is-system',
+        // que el propio cliente envía sin ninguna firma: cualquiera podía
+        // mandar 'X-Is-System: true' a mano y pasar el check. Ahora se usa
+        // el valor real de la cookie de sesión firmada del servidor.
+        const userId = auth.session.odooUid;
+        const isSystem = auth.session.isSystem;
 
         if (!userId || !isSystem) {
             console.warn(`[API General Stats] Access denied for user ID ${userId}. Admin privilege required.`);

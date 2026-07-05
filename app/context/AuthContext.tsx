@@ -83,6 +83,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setQuotesCount(0);
         setTotalValue(0);
         localStorage.removeItem('odoo_user');
+        // Limpia también la cookie de sesión de staff que valida el servidor
+        fetch('/api/auth/staff-logout', { method: 'POST' }).catch(() => {});
         router.push('/login');
     };
 

@@ -29,6 +29,14 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+*.log
+lint_output*.txt
+
+# archivos de prueba manual con posibles credenciales/datos reales
+# (encontramos test_odoo_payload.json y auth-debug.log commiteados con un
+# password/API key de Odoo y códigos OTP reales en texto plano)
+test_odoo_payload.json
+*.backup.tsx
 
 # env files (can opt-in for committing if needed)
 .env*

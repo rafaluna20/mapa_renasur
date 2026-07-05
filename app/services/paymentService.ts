@@ -18,6 +18,7 @@ export interface PendingInvoice {
         manzana: string;
         lote: string;
         quota: string;
+        totalQuotas?: number;
     };
     voucher_status?: {
         status: 'pending' | 'approved' | 'rejected' | string;
@@ -62,7 +63,12 @@ export const paymentService = {
             'invoice_date_due',
             'payment_state',
             'state',
-            'partner_id'
+            'partner_id',
+            // Campos estructurados que el módulo ya expone "PARA API/N8N": evitan
+            // tener que adivinar el número de cuota parseando el texto de la
+            // referencia por regex (frágil ante cualquier cambio de formato).
+            'contract_quota_number',
+            'contract_total_quotas'
         ];
 
         const invoices = await fetchOdoo('account.move', 'search_read', [domain], { fields });
@@ -126,7 +132,11 @@ export const paymentService = {
         // Parsear información del lote y adjuntar voucher status
         return invoices.map((inv: Record<string, unknown>) => ({
             ...inv,
-            lot_info: this.parsePaymentReference((inv.payment_reference as string) || ''),
+            lot_info: this.parsePaymentReference(
+                (inv.payment_reference as string) || '',
+                inv.contract_quota_number as number | undefined,
+                inv.contract_total_quotas as number | undefined
+            ),
             voucher_status: voucherMap[String(inv.id)] || null
         }));
     },
@@ -166,23 +176,41 @@ export const paymentService = {
     },
 
     /**
-     * Parsear referencia de pago: E01MZQ102P-C005-20260130
+     * Deriva la info de lote/cuota a mostrar en la UI.
+     *
+     * El número/total de cuota viene de contract_quota_number/contract_total_quotas
+     * en account.move (campos estructurados que el módulo Odoo ya calcula al crear
+     * la factura) en vez de parsearlo del texto de la referencia por regex: son
+     * enteros reales, no dependen del formato exacto de la referencia y no se
+     * rompen si ese formato cambia.
+     *
+     * Etapa/manzana/lote no están expuestos como campos propios en account.move
+     * (viven en el product.template del contrato), así que para esos tres sí se
+     * sigue parseando la referencia — es el mismo dato con el que Odoo generó
+     * esa referencia, y evita una consulta extra por factura solo para mostrar
+     * el código del lote.
      */
-    parsePaymentReference(ref: string): PendingInvoice['lot_info'] | undefined {
-        if (!ref) return undefined;
+    parsePaymentReference(
+        ref: string,
+        quotaNumber?: number,
+        totalQuotas?: number
+    ): PendingInvoice['lot_info'] | undefined {
+        if (!ref) {
+            if (quotaNumber === undefined) return undefined;
+            return { etapa: '', manzana: '', lote: '', quota: String(quotaNumber), totalQuotas };
+        }
 
         const match = ref.match(/E(\d+)(MZ[A-Z]+)(\d+)([A-Z])?-C(\d+)-(\d{8})/);
 
-        if (match) {
-            return {
-                etapa: match[1],
-                manzana: match[2],
-                lote: match[3],
-                quota: match[5]
-            };
-        }
+        if (!match) return undefined;
 
-        return undefined;
+        return {
+            etapa: match[1],
+            manzana: match[2],
+            lote: match[3],
+            quota: quotaNumber !== undefined ? String(quotaNumber) : match[5],
+            totalQuotas
+        };
     },
 
     /**
@@ -197,7 +225,9 @@ export const paymentService = {
             'invoice_date_due',
             'payment_state',
             'state',
-            'partner_id'
+            'partner_id',
+            'contract_quota_number',
+            'contract_total_quotas'
         ];
 
         const invoices = await fetchOdoo('account.move', 'read', [[invoiceId]], { fields });
@@ -207,7 +237,11 @@ export const paymentService = {
 
         return {
             ...invoice,
-            lot_info: this.parsePaymentReference(invoice.payment_reference)
+            lot_info: this.parsePaymentReference(
+                invoice.payment_reference,
+                invoice.contract_quota_number,
+                invoice.contract_total_quotas
+            )
         };
     },
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchOdoo } from '@/app/services/odooService';
+import { requireStaffSession } from '@/app/lib/staffAuth';
 
 /**
  * Parser del código de lote Terra Lima: E01MZD148P
@@ -54,9 +55,15 @@ interface OdooProduct {
 }
 
 export async function GET(request: NextRequest) {
+    const auth = await requireStaffSession(request);
+    if (auth.response) return auth.response;
+
     try {
-        const userId = request.headers.get('x-user-id');
-        const isSystem = request.headers.get('x-is-system') === 'true';
+        // Antes se confiaba en los headers 'x-user-id'/'x-is-system' (enviados
+        // por el propio cliente, sin firma): ahora se usa la cookie de sesión
+        // firmada del servidor.
+        const userId = auth.session.odooUid;
+        const isSystem = auth.session.isSystem;
 
         if (!userId || !isSystem) {
             return NextResponse.json({ success: false, error: "No autorizado. Este reporte es exclusivo para administradores." }, { status: 403 });

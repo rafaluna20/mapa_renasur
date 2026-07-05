@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { fetchOdoo } from '@/app/services/odooService';
+import { requireStaffSession } from '@/app/lib/staffAuth';
 
 /**
  * EXPERT REFUND LOGIC (Odoo 18 Community):
@@ -15,6 +16,9 @@ import { fetchOdoo } from '@/app/services/odooService';
  *   financial trace pollutes the database with no benefit.
  */
 export async function POST(request: Request) {
+    const auth = await requireStaffSession(request);
+    if (auth.response) return auth.response;
+
     try {
         const { orderId, refundAmount, reason } = await request.json();
 
@@ -43,6 +47,28 @@ export async function POST(request: Request) {
         const order = orders[0];
         const invoiceIds = (order.invoice_ids as number[]) || [];
         const pickingIds = (order.picking_ids as number[]) || [];
+
+        // ─── Step 1.5: Detener el contrato recurrente vinculado (si existe) ───
+        // Antes de este fix, reembolsar/cancelar una orden no tocaba el
+        // simple.contract asociado: el cron de facturación recurrente seguía
+        // generando cuotas mensuales de un contrato ya reembolsado, porque
+        // nada aquí llamaba a action_stop().
+        let contractStopped = false;
+        try {
+            const contracts = await fetchOdoo(
+                'simple.contract',
+                'search_read',
+                [[['sale_order_id', '=', orderId]]],
+                { fields: ['id', 'state'], limit: 1 }
+            );
+            if (Array.isArray(contracts) && contracts.length > 0 && contracts[0].state !== 'closed') {
+                await fetchOdoo('simple.contract', 'action_stop', [[contracts[0].id]]);
+                contractStopped = true;
+                console.log(`✅ Contrato recurrente ${contracts[0].id} detenido (action_stop) para orden ${orderId}`);
+            }
+        } catch (contractErr) {
+            console.warn('⚠️ No se pudo detener el contrato recurrente vinculado (puede no existir):', contractErr);
+        }
 
         // Pre-fetch the product ID before any potential order deletion occurs
         let productId: number | null = null;
@@ -136,6 +162,7 @@ export async function POST(request: Request) {
             action,
             creditNoteId,
             orderDeleted,
+            contractStopped,
             orderName: order.name,
             refundAmount: refundAmount ?? order.amount_total,
             newLotStatus,
