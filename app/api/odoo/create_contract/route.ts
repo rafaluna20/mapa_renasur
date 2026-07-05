@@ -1,17 +1,6 @@
 import { NextResponse } from 'next/server';
 import { fetchOdoo } from '@/app/services/odooService';
-import { callContractApi } from '@/app/services/odooModuleApi';
 import { requireStaffSession } from '@/app/lib/staffAuth';
-
-interface ContractCreateResult {
-    status: 'success' | 'error';
-    message?: string;
-    contract_id: number;
-    contract_name?: string;
-    state?: string;
-    final_price?: number;
-    financed_amount?: number;
-}
 
 export async function POST(request: Request) {
     const auth = await requireStaffSession(request);
@@ -71,12 +60,24 @@ export async function POST(request: Request) {
 
         const orderIdNum = parseInt(saleOrderId);
 
-        // Nota: ya no hace falta verificar duplicados acá — el endpoint
-        // /api/contract/create del módulo Odoo resuelve la idempotencia por
-        // sale_order_id internamente (y el unique(sale_order_id) del modelo
-        // es la red de seguridad real ante llamadas concurrentes).
+        // 2. Idempotencia por sale_order_id (más el unique(sale_order_id) del
+        // modelo como red de seguridad real ante llamadas concurrentes).
+        const existingContracts = await fetchOdoo(
+            'simple.contract',
+            'search_read',
+            [[['sale_order_id', '=', orderIdNum]]],
+            { fields: ['id'], limit: 1 }
+        );
 
-        // 2. Obtener product_id y precio de la línea de la orden
+        if (existingContracts && existingContracts.length > 0) {
+            return NextResponse.json({
+                success: true,
+                message: 'Contrato ya existía (idempotencia)',
+                contractId: existingContracts[0].id
+            });
+        }
+
+        // 3. Obtener product_id y precio de la línea de la orden
         const productLineIdCheck = order.order_line[0];
         const orderLinesCheck = await fetchOdoo(
             'sale.order.line',
@@ -92,23 +93,16 @@ export async function POST(request: Request) {
         const productId = orderLinesCheck[0].product_id[0];
         const listPrice = orderLinesCheck[0].price_unit;
 
-        // 3. Calcular mensualidad (sin interés: mismo comportamiento histórico)
+        // 4. Calcular mensualidad (sin interés: mismo comportamiento histórico)
         const discount = order.x_discount_amount || 0;
         const downPayment = order.x_down_payment || 0;
         const netPrice = listPrice - discount;
         const financedAmount = netPrice - downPayment;
         const monthlyAmount = financedAmount / order.x_plazo_meses;
-        const dateFirstInstallment = order.x_date_first_installment || new Date().toISOString().split('T')[0];
 
-        // 4. Crear el contrato vía el endpoint asegurado del módulo (API key,
-        // rate limit, validadores e idempotencia por sale_order_id ya
-        // resueltos ahí) en vez de un create() directo con la cuenta admin.
-        //
-        // Nota de comportamiento: a diferencia del create() directo anterior,
-        // este endpoint no acepta un 'name' custom — el contrato queda con el
-        // código autogenerado por la secuencia de Odoo (mismo formato que los
-        // contratos creados manualmente), en vez de "Contrato Manual - X".
-        const result = await callContractApi<ContractCreateResult>('/api/contract/create', {
+        // 5. Preparar datos del contrato
+        const contractData = {
+            name: `Contrato Manual - ${orderLinesCheck[0].name}`,
             partner_id: order.partner_id[0],
             product_id: productId,
             sale_order_id: orderIdNum,
@@ -117,14 +111,49 @@ export async function POST(request: Request) {
             down_payment: downPayment,
             total_quotas: order.x_plazo_meses,
             amount: monthlyAmount,
-            date_first_installment: dateFirstInstallment,
-            interval_type: 'months',
-        });
+            date_first_installment: order.x_date_first_installment || new Date().toISOString().split('T')[0],
+            date_next_billing: order.x_date_first_installment || new Date().toISOString().split('T')[0],
+            interval_type: 'months'
+        };
 
-        const contractId = result.contract_id;
-        console.log(`✅ Recurring Contract Created: ID ${contractId} (${result.message || 'nuevo'})`);
+        // 6. Crear el contrato
+        // REVERTIDO temporalmente: create_contract llegó a usar el endpoint
+        // asegurado del módulo (/api/contract/create con API key), pero eso
+        // requiere una credencial (ODOO_CONTRACT_API_KEY) que todavía no está
+        // configurada en producción. Sin ella, la llamada fallaba en
+        // silencio (el caller la trata como "no bloqueante") y las reservas
+        // dejaron de generar contrato. Vuelve a create() directo hasta que
+        // se configure esa API key; ver odooModuleApi.ts para retomarlo.
+        let contractId: number;
+        try {
+            contractId = await fetchOdoo(
+                'simple.contract',
+                'create',
+                [contractData]
+            );
+        } catch (createError: unknown) {
+            const message = createError instanceof Error ? createError.message : String(createError);
+            if (message.includes('sale_order_id_unique') || message.includes('contrato de crédito para esta orden')) {
+                const raceContracts = await fetchOdoo(
+                    'simple.contract',
+                    'search_read',
+                    [[['sale_order_id', '=', orderIdNum]]],
+                    { fields: ['id'], limit: 1 }
+                );
+                if (raceContracts && raceContracts.length > 0) {
+                    return NextResponse.json({
+                        success: true,
+                        message: 'Contrato ya existía (idempotencia, creación concurrente)',
+                        contractId: raceContracts[0].id
+                    });
+                }
+            }
+            throw createError;
+        }
 
-        // 5. Agregar mensaje en la orden
+        console.log(`✅ Recurring Contract Created: ID ${contractId}`);
+
+        // 7. Agregar mensaje en la orden
         await fetchOdoo(
             'mail.message',
             'create',
