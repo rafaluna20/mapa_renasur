@@ -1,5 +1,5 @@
 import { Lot } from '@/app/data/lotsData';
-import { X, User, FileText, Users, Receipt, Calendar, RotateCcw, AlertTriangle, CheckCircle, TrendingUp, DollarSign } from 'lucide-react';
+import { X, User, FileText, Users, Receipt, Calendar, RotateCcw, AlertTriangle, CheckCircle, TrendingUp, DollarSign, Map, Download, Loader2 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import ReservationModal from './ReservationModal';
 import RefundModal from './RefundModal';
@@ -40,6 +40,15 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
     const [invoices, setInvoices] = useState<{ id: number; name: string; ref?: string; payment_reference?: string; invoice_date: string; invoice_date_due: string; amount_total: number; amount_residual: number; payment_state: string }[]>([]);
     const [loadingInvoices, setLoadingInvoices] = useState(false);
 
+    // ─── Generación de Plano y Memoria Descriptiva (plan_pro) ───────────────
+    const [planoState, setPlanoState] = useState<{
+        status: 'idle' | 'generando' | 'pending' | 'processing' | 'completed' | 'failed';
+        planoId?: string;
+        pdfUrl?: string;
+        dxfUrl?: string;
+        error?: string;
+    }>({ status: 'idle' });
+
     // 🎯 ENTERPRISE SOLUTION: Use refs to track current lot and prevent stale updates
     const currentLotIdRef = useRef<string | null>(null);
     const requestIdRef = useRef<number>(0);
@@ -67,6 +76,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
         setReservationOwner(null);
         setActiveTab('info');
         setLoadingInvoices(false);
+        setPlanoState({ status: 'idle' });
 
         console.log(`🧹 [REQUEST #${thisRequestId}] Estado reseteado`);
 
@@ -174,6 +184,54 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [lot?.id]); // CRÍTICO: Solo dependencia en lot.id para evitar re-renders innecesarios
+
+    const handleGenerarPlano = async () => {
+        if (!lot?.default_code) return;
+        setPlanoState({ status: 'generando' });
+        try {
+            const res = await fetch('/api/planos/generar', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ defaultCode: lot.default_code }),
+            });
+            const data = await res.json();
+            if (!data.success) {
+                setPlanoState({ status: 'failed', error: data.error?.message || 'No se pudo iniciar la generación' });
+                return;
+            }
+            setPlanoState({ status: 'pending', planoId: data.data.planoId });
+        } catch (error) {
+            setPlanoState({ status: 'failed', error: error instanceof Error ? error.message : 'Error de red' });
+        }
+    };
+
+    // Polling del estado de generación mientras esté pending/processing
+    useEffect(() => {
+        if (planoState.status !== 'pending' && planoState.status !== 'processing') return;
+        if (!planoState.planoId) return;
+
+        const planoId = planoState.planoId;
+        const interval = setInterval(async () => {
+            try {
+                const res = await fetch(`/api/planos/estado/${planoId}`);
+                const data = await res.json();
+                if (!data.success) return;
+
+                const { status, pdfUrl, dxfUrl, errorMessage } = data.data;
+                if (status === 'COMPLETED') {
+                    setPlanoState({ status: 'completed', planoId, pdfUrl, dxfUrl });
+                } else if (status === 'FAILED') {
+                    setPlanoState({ status: 'failed', planoId, error: errorMessage || 'Falló la generación del plano' });
+                } else if (status === 'PROCESSING') {
+                    setPlanoState((prev) => (prev.planoId === planoId ? { ...prev, status: 'processing' } : prev));
+                }
+            } catch {
+                // Error transitorio de red, seguimos intentando en el próximo tick
+            }
+        }, 3000);
+
+        return () => clearInterval(interval);
+    }, [planoState.status, planoState.planoId]);
 
     if (!lot) return null;
     const config = STATUS_CONFIG[lot.x_statu?.toLowerCase()] || STATUS_CONFIG.libre;
@@ -296,6 +354,80 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                                 <p className={`font-bold text-sm leading-tight ${lot.x_statu !== 'libre' ? 'text-indigo-700' : 'text-slate-400 italic'}`}>
                                     {assignedClient}
                                 </p>
+                            </div>
+                        </div>
+
+                        {/* Plano y Memoria Descriptiva */}
+                        <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
+                            <div className="bg-slate-50 px-3 py-2 border-b border-slate-200 flex items-center gap-2">
+                                <Map size={14} className="text-slate-500" />
+                                <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Plano y Memoria</span>
+                            </div>
+                            <div className="p-3">
+                                {planoState.status === 'idle' && (
+                                    <button
+                                        onClick={handleGenerarPlano}
+                                        className="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold text-xs uppercase tracking-wide transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        <FileText size={14} />
+                                        Generar Plano y Memoria
+                                    </button>
+                                )}
+
+                                {(planoState.status === 'generando' || planoState.status === 'pending' || planoState.status === 'processing') && (
+                                    <div className="flex items-center justify-center gap-2 py-2.5 text-slate-500 text-xs font-medium">
+                                        <Loader2 size={14} className="animate-spin" />
+                                        {planoState.status === 'generando' ? 'Iniciando generación...' : 'Generando documentos, puede tardar un momento...'}
+                                    </div>
+                                )}
+
+                                {planoState.status === 'failed' && (
+                                    <div className="space-y-2">
+                                        <div className="flex items-start gap-2 text-red-600 text-xs">
+                                            <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                                            <span>{planoState.error || 'No se pudo generar el plano'}</span>
+                                        </div>
+                                        <button
+                                            onClick={handleGenerarPlano}
+                                            className="w-full py-2 border border-slate-300 hover:bg-slate-50 text-slate-600 rounded-lg font-medium text-xs"
+                                        >
+                                            Reintentar
+                                        </button>
+                                    </div>
+                                )}
+
+                                {planoState.status === 'completed' && (
+                                    <div className="space-y-2">
+                                        {planoState.pdfUrl && (
+                                            <a
+                                                href={planoState.pdfUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs uppercase tracking-wide transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                <Download size={14} />
+                                                Descargar PDF
+                                            </a>
+                                        )}
+                                        {planoState.dxfUrl && (
+                                            <a
+                                                href={planoState.dxfUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="w-full py-2 border border-slate-300 hover:bg-slate-50 text-slate-600 rounded-lg font-medium text-xs flex items-center justify-center gap-2"
+                                            >
+                                                <Download size={12} />
+                                                Descargar DXF (CAD)
+                                            </a>
+                                        )}
+                                        <button
+                                            onClick={handleGenerarPlano}
+                                            className="w-full text-center text-[10px] text-slate-400 hover:text-slate-600 pt-1"
+                                        >
+                                            Volver a generar
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
 

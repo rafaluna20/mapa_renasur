@@ -37,7 +37,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ r
         "search_read",
         [[["active", "=", true]]],
         {
-          fields: ["id", "name", "default_code", "list_price", "qty_available", "x_statu", "x_area", "x_mz", "x_etapa", "x_lote", "x_cliente"],
+          fields: ["id", "name", "default_code", "list_price", "qty_available", "x_statu", "x_area", "x_mz", "x_etapa", "x_lote", "x_cliente", "x_geometry_utm"],
           limit: 1000,
           context: { lang: "es_PE" }
         }

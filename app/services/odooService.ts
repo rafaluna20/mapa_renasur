@@ -21,6 +21,7 @@ export interface OdooProduct {
     x_etapa?: string;
     x_lote?: string;
     x_cliente?: string | false;
+    x_geometry_utm?: [number, number][] | false;
 }
 
 // --- Server-Side Fetch Utility ---

@@ -1,5 +1,6 @@
 import { OdooProduct } from '@/app/services/odooService';
 import { Lot } from '@/app/data/lotsData';
+import { calculateLotMeasurements, LotMeasurements } from '@/app/utils/geometryUtils';
 
 export interface EnrichedGeometry {
     coordinates: [number, number][];
@@ -9,6 +10,29 @@ export interface EnrichedGeometry {
         perimeter: number;
         centroid: [number, number];
     };
+}
+
+interface ResolvedGeometry {
+    points: [number, number][];
+    measurements: LotMeasurements;
+}
+
+/**
+ * Resuelve qué geometría usar para un lote: Odoo (product_lot_geometry) es
+ * la fuente preferida; el JSON estático es el fallback mientras existan
+ * lotes (ej. Etapa 2) que aún no se migraron a Odoo.
+ */
+function resolveGeometry(
+    odooVertices: [number, number][] | false | undefined,
+    registryGeometry: EnrichedGeometry | undefined
+): ResolvedGeometry | null {
+    if (Array.isArray(odooVertices) && odooVertices.length >= 3) {
+        return { points: odooVertices, measurements: calculateLotMeasurements(odooVertices) };
+    }
+    if (registryGeometry?.coordinates?.length) {
+        return { points: registryGeometry.coordinates, measurements: registryGeometry.measurements };
+    }
+    return null;
 }
 
 // Helpers exportados por si se necesitan en otro lado
@@ -78,6 +102,7 @@ export function mergeLotsData(
         }
 
         const registryGeometry = geometriesJson[normCode] || geometriesJson[rawCode];
+        const geometry = resolveGeometry(odooMatch?.x_geometry_utm, registryGeometry);
 
         if (odooMatch) {
             if (odooMatch.default_code) integratedCodes.add(normalizeCode(odooMatch.default_code));
@@ -96,16 +121,16 @@ export function mergeLotsData(
                 x_lote: getOdooVal(odooMatch.x_lote, lot.x_lote),
                 default_code: getOdooVal(odooMatch.default_code, lot.default_code),
                 x_cliente: getOdooVal(odooMatch.x_cliente, ''),
-                points: registryGeometry?.coordinates || lot.points,
-                measurements: registryGeometry?.measurements
+                points: geometry?.points || lot.points,
+                measurements: geometry?.measurements
             } as Lot;
         }
 
         return {
             ...lot,
             id: `local-${lot.id}`,
-            points: registryGeometry?.coordinates || lot.points,
-            measurements: registryGeometry?.measurements
+            points: geometry?.points || lot.points,
+            measurements: geometry?.measurements
         } as Lot;
     });
 
@@ -117,7 +142,8 @@ export function mergeLotsData(
 
         if (code && !integratedCodes.has(code) && !integratedIds.has(odooId)) {
             const registryGeometry = geometriesJson[code];
-            if (registryGeometry?.coordinates && registryGeometry.coordinates.length > 0) {
+            const geometry = resolveGeometry(odooMatch.x_geometry_utm, registryGeometry);
+            if (geometry) {
                 integratedCodes.add(code);
                 integratedIds.add(odooId);
                 dynamicLots.push({
@@ -131,8 +157,8 @@ export function mergeLotsData(
                     x_cliente: getOdooVal(odooMatch.x_cliente, ''),
                     x_lote: getOdooVal(odooMatch.x_lote, ''),
                     default_code: code,
-                    points: registryGeometry.coordinates,
-                    measurements: registryGeometry.measurements,
+                    points: geometry.points,
+                    measurements: geometry.measurements,
                     image: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
                     description: 'Lote detectado dinámicamente desde Odoo.'
                 });
