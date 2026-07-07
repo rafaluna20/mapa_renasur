@@ -6,7 +6,7 @@ import { derivarColindanciasYDimensiones } from '@/app/utils/colindanciasUtils';
 import { calculateCentroid, calculateDistance } from '@/app/utils/geometryUtils';
 import geometriesEnrichedRaw from '@/app/data/geometries-enriched.json';
 
-const RADIO_CONTEXTO_METROS = 120;
+const RADIO_CONTEXTO_METROS = 200;
 
 const geometriesJson = geometriesEnrichedRaw as unknown as Record<string, {
   coordinates: [number, number][];
