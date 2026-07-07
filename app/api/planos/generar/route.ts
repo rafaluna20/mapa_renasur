@@ -4,6 +4,7 @@ import { lotsData, Lot } from '@/app/data/lotsData';
 import { mergeLotsData, normalizeCode } from '@/app/utils/dataMerger';
 import { derivarColindanciasYDimensiones } from '@/app/utils/colindanciasUtils';
 import { calculateCentroid, calculateDistance } from '@/app/utils/geometryUtils';
+import { requireStaffSession } from '@/app/lib/staffAuth';
 import geometriesEnrichedRaw from '@/app/data/geometries-enriched.json';
 
 const RADIO_CONTEXTO_METROS = 200;
@@ -24,6 +25,18 @@ function mapEstadoParaPlanoPro(xStatu: string): 'libre' | 'separado' | 'vendido'
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireStaffSession(request);
+    if (auth.response) return auth.response;
+
+    // Temporal: mientras se termina de afinar el generador de planos, solo
+    // administradores pueden dispararlo. Cuando esté listo, quitar este check.
+    if (!auth.session.isSystem) {
+      return NextResponse.json(
+        { success: false, error: { code: 'FORBIDDEN', message: 'La generación de planos está disponible solo para administradores por ahora.' } },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { defaultCode } = body as { defaultCode?: string };
 

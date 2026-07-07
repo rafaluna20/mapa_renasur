@@ -357,7 +357,9 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                             </div>
                         </div>
 
-                        {/* Plano y Memoria Descriptiva */}
+                        {/* Plano y Memoria Descriptiva — temporalmente solo para administradores
+                            mientras se termina de afinar el generador */}
+                        {currentUser?.is_system && (
                         <div className="bg-white rounded-lg border border-slate-200 overflow-hidden shadow-sm">
                             <div className="bg-slate-50 px-3 py-2 border-b border-slate-200 flex items-center gap-2">
                                 <Map size={14} className="text-slate-500" />
@@ -430,6 +432,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                                 )}
                             </div>
                         </div>
+                        )}
 
                         {/* Reservation Owner Info */}
                         {reservationOwner && currentUser && reservationOwner.id !== currentUser.uid && (
