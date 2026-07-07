@@ -3,7 +3,10 @@ import { fetchOdoo, OdooProduct } from '@/app/services/odooService';
 import { lotsData, Lot } from '@/app/data/lotsData';
 import { mergeLotsData, normalizeCode } from '@/app/utils/dataMerger';
 import { derivarColindanciasYDimensiones } from '@/app/utils/colindanciasUtils';
+import { calculateCentroid, calculateDistance } from '@/app/utils/geometryUtils';
 import geometriesEnrichedRaw from '@/app/data/geometries-enriched.json';
+
+const RADIO_CONTEXTO_METROS = 50;
 
 const geometriesJson = geometriesEnrichedRaw as unknown as Record<string, {
   coordinates: [number, number][];
@@ -77,13 +80,17 @@ export async function POST(request: NextRequest) {
     // 2. Derivar colindancias y dimensiones por geometría (frente/fondo/derecha/izquierda)
     const { colindancias, dimensiones } = derivarColindanciasYDimensiones(lote, allLots);
 
-    // 3. Contexto de vecinos: los mismos lotes detectados como colindancia tipo 'lote',
-    //    más cualquier otro lote geométricamente cercano, para dibujar el entorno real.
-    const vecinosCodigos = new Set(
-      colindancias.filter((c) => c.tipo === 'lote').map((c) => c.nombre)
-    );
+    // 3. Contexto de entorno: todos los lotes cuyo centroide cae dentro de un
+    //    radio fijo del centroide del lote objetivo, para dibujar el entorno
+    //    real (no solo los colindantes directos que comparten borde).
+    const centroidLote = calculateCentroid(lote.points);
     const elementosContexto = allLots
-      .filter((l) => l.default_code !== lote.default_code && vecinosCodigos.has(l.name || l.default_code))
+      .filter((l) => {
+        if (l.default_code === lote.default_code) return false;
+        if (!l.points || l.points.length < 3) return false;
+        const centroidVecino = calculateCentroid(l.points);
+        return calculateDistance(centroidLote, centroidVecino) <= RADIO_CONTEXTO_METROS;
+      })
       .map((l) => ({
         tipo: 'LOTE',
         codigo: l.default_code,
