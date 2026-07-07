@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { encode } from 'next-auth/jwt';
-import { STAFF_COOKIE_NAME, STAFF_SESSION_MAX_AGE } from '@/app/lib/staffAuth';
+import { STAFF_COOKIE_NAME, signStaffSessionToken, getStaffCookieOptions } from '@/app/lib/staffAuth';
 
 export async function POST(request: NextRequest) {
     try {
@@ -80,25 +79,14 @@ export async function POST(request: NextRequest) {
         // Cookie httpOnly firmada: es lo que las rutas /api/odoo/* verifican
         // server-side. El JSON de arriba se mantiene igual para no romper a
         // AuthContext/odooService, que siguen usando ese payload para la UI.
-        const secret = process.env.NEXTAUTH_SECRET;
-        if (secret) {
-            const token = await encode({
-                token: {
-                    odooUid: user.uid,
-                    name: user.name,
-                    companyId: user.company_id,
-                    isSystem: user.is_system,
-                },
-                secret,
-                maxAge: STAFF_SESSION_MAX_AGE,
-            });
-            res.cookies.set(STAFF_COOKIE_NAME, token, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'lax',
-                path: '/',
-                maxAge: STAFF_SESSION_MAX_AGE,
-            });
+        const token = await signStaffSessionToken({
+            odooUid: user.uid,
+            name: user.name,
+            companyId: user.company_id,
+            isSystem: user.is_system,
+        });
+        if (token) {
+            res.cookies.set(STAFF_COOKIE_NAME, token, getStaffCookieOptions());
         } else {
             console.error('[auth/login] NEXTAUTH_SECRET no configurado: no se pudo emitir cookie de staff.');
         }

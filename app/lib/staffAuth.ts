@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { decode } from 'next-auth/jwt';
+import { decode, encode } from 'next-auth/jwt';
 
 /**
  * Sesión de personal interno (vendedores/administradores).
@@ -24,6 +24,41 @@ export interface StaffSessionPayload {
     name: string;
     companyId: number;
     isSystem: boolean;
+}
+
+/**
+ * Opciones de cookie compartidas entre el login (que la crea) y el
+ * middleware de sesión deslizante (que la renueva) — para que ambos
+ * emitan exactamente la misma cookie y no diverjan con el tiempo.
+ */
+export function getStaffCookieOptions() {
+    return {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax' as const,
+        path: '/',
+        maxAge: STAFF_SESSION_MAX_AGE,
+    };
+}
+
+/**
+ * Firma un token de sesión de staff nuevo (mismo formato que emite el
+ * login). La usa el middleware para renovar el vencimiento en cada
+ * request activo, sin tener que re-autenticar contra Odoo.
+ */
+export async function signStaffSessionToken(payload: StaffSessionPayload): Promise<string | null> {
+    const secret = process.env.NEXTAUTH_SECRET;
+    if (!secret) return null;
+    return encode({
+        token: {
+            odooUid: payload.odooUid,
+            name: payload.name,
+            companyId: payload.companyId,
+            isSystem: payload.isSystem,
+        },
+        secret,
+        maxAge: STAFF_SESSION_MAX_AGE,
+    });
 }
 
 function readCookie(request: Request, name: string): string | null {
