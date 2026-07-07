@@ -231,7 +231,12 @@ export default function QuotePage({ params }: QuotePageProps) {
             setNewClientData({ name: '', vat: '', phone: '', email: '' });
         } catch (error) {
             console.error('Error creating client:', error);
-            alert('Error al crear el cliente. Intente nuevamente.');
+            const message = error instanceof Error ? error.message : '';
+            if (message.includes('No autenticado')) {
+                alert('Tu sesión expiró. Cierra sesión (botón "Salir") y vuelve a ingresar para poder registrar clientes.');
+            } else {
+                alert(message || 'Error al crear el cliente. Intente nuevamente.');
+            }
         } finally {
             setIsCreatingClient(false);
         }
