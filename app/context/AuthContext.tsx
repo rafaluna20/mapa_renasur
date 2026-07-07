@@ -1,9 +1,13 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { odooService, type OdooUser } from '@/app/services/odooService';
+import { STAFF_SESSION_EXPIRED_EVENT } from '@/app/lib/apiFetch';
 export type { OdooUser };
+
+const SESSION_FLASH_MESSAGE_KEY = 'session_flash_message';
+const POST_LOGIN_REDIRECT_KEY = 'post_login_redirect_path';
 
 interface AuthContextType {
     user: OdooUser | null;
@@ -26,6 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [totalValue, setTotalValue] = useState(0);
     const [loading, setLoading] = useState(true);
     const router = useRouter();
+    const pathname = usePathname();
 
     const refreshStats = useCallback(async (currentUser: OdooUser) => {
         try {
@@ -59,7 +64,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         init();
     }, [refreshStats]);
 
-
+    // Cierre de sesión automático cuando cualquier llamada a /api/odoo/*
+    // devuelve 401 (cookie terra_staff_session vencida, dura 8h). Guarda un
+    // mensaje amigable y la página actual antes de redirigir, para que el
+    // usuario entienda qué pasó y vuelva justo a donde estaba al reloguearse.
+    useEffect(() => {
+        const handleSessionExpired = () => {
+            sessionStorage.setItem(SESSION_FLASH_MESSAGE_KEY, 'Tu sesión expiró por inactividad. Ingresa nuevamente para continuar.');
+            if (pathname && pathname !== '/login') {
+                sessionStorage.setItem(POST_LOGIN_REDIRECT_KEY, pathname);
+            }
+            logout();
+        };
+        window.addEventListener(STAFF_SESSION_EXPIRED_EVENT, handleSessionExpired);
+        return () => window.removeEventListener(STAFF_SESSION_EXPIRED_EVENT, handleSessionExpired);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pathname]);
 
     const login = async (loginStr: string, pass: string) => {
         try {
@@ -70,7 +90,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // Fetch stats immediately
             await refreshStats(odooUser);
 
-            router.push('/');
+            // Si el login vino de una sesión que expiró en medio de una tarea
+            // (ver evento staff-session-expired más abajo), volvemos a la
+            // misma página en vez de mandar siempre al inicio.
+            const redirectPath = sessionStorage.getItem(POST_LOGIN_REDIRECT_KEY);
+            sessionStorage.removeItem(POST_LOGIN_REDIRECT_KEY);
+            router.push(redirectPath || '/');
         } catch {
             router.push('/login');
         }

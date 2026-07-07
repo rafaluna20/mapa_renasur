@@ -1,3 +1,5 @@
+import { apiFetch } from '@/app/lib/apiFetch';
+
 // --- Type Definitions ---
 export interface OdooUser {
     uid: number;
@@ -117,7 +119,7 @@ export const odooService = {
         domain: (string | [string, string, unknown])[],
         fields: string[] = []
     ): Promise<T[]> {
-        const response = await fetch('/api/odoo/search-read', {
+        const response = await apiFetch('/api/odoo/search-read', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ model, domain, fields })
@@ -140,7 +142,7 @@ export const odooService = {
     ): Promise<T | T[]> {
         const ids = Array.isArray(id) ? id : [id];
 
-        const response = await fetch('/api/odoo/read', {
+        const response = await apiFetch('/api/odoo/read', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ model, ids, fields })
@@ -163,7 +165,7 @@ export const odooService = {
         args: unknown[] = [],
         kwargs: Record<string, unknown> = {}
     ): Promise<unknown> {
-        const response = await fetch('/api/odoo/call', {
+        const response = await apiFetch('/api/odoo/call', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ model, method, args, kwargs })
@@ -185,7 +187,7 @@ export const odooService = {
     },
 
     async getSalesStats(userId: number): Promise<{ sold: number, reserved: number, draft: number, totalValue: number }> {
-        const response = await fetch(`/api/odoo/stats?userId=${userId}`);
+        const response = await apiFetch(`/api/odoo/stats?userId=${userId}`);
         const result = await response.json();
 
         if (!result.success) {
@@ -198,7 +200,7 @@ export const odooService = {
 
     async updateLotStatus(productId: string | number, status: string, clientName?: string): Promise<boolean> {
         try {
-            const response = await fetch('/api/odoo/update_status', {
+            const response = await apiFetch('/api/odoo/update_status', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ productId, newStatus: status, clientName }),
@@ -224,7 +226,7 @@ export const odooService = {
         let url = `/api/odoo/stats/detailed?userId=${userId}`;
         if (startDate) url += `&startDate=${startDate}`;
         if (endDate) url += `&endDate=${endDate}`;
-        const response = await fetch(url);
+        const response = await apiFetch(url);
         const result = await response.json();
 
         if (!result.success) {
@@ -255,7 +257,7 @@ export const odooService = {
         if (endDate) params.set('endDate', endDate);
         if (params.toString()) url += `?${params.toString()}`;
 
-        const response = await fetch(url, {
+        const response = await apiFetch(url, {
             headers: {
                 'X-User-Id': String(userId),
                 'X-Is-System': String(isSystem)
@@ -276,7 +278,7 @@ export const odooService = {
     async searchPartners(query: string): Promise<Record<string, unknown>[]> {
         if (!query) return [];
         try {
-            const response = await fetch('/api/odoo/search_partners', {
+            const response = await apiFetch('/api/odoo/search_partners', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ query }),
@@ -293,7 +295,7 @@ export const odooService = {
     // 1b. Create a new client/partner in Odoo
     async createPartner(data: { name: string; vat: string; phone?: string; email?: string }): Promise<{ id: number; name: string }> {
         try {
-            const response = await fetch('/api/odoo/create_partner', {
+            const response = await apiFetch('/api/odoo/create_partner', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data),
@@ -321,7 +323,7 @@ export const odooService = {
         }
     ): Promise<number> {
         try {
-            const response = await fetch('/api/odoo/create_sale_order', {
+            const response = await apiFetch('/api/odoo/create_sale_order', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ partnerId, defaultCode, price, notes, userId, quoteDetails }),
@@ -343,7 +345,7 @@ export const odooService = {
             formData.append('orderId', orderId.toString());
             formData.append('file', file);
 
-            const response = await fetch('/api/odoo/add_attachment', {
+            const response = await apiFetch('/api/odoo/add_attachment', {
                 method: 'POST',
                 body: formData,
             });
@@ -360,7 +362,7 @@ export const odooService = {
     // Get active quotes (draft sales orders) for a specific lot
     async getActiveQuotesByLot(defaultCode: string, userId?: number): Promise<{ count: number; quotes: Record<string, unknown>[] }> {
         try {
-            const response = await fetch('/api/odoo/get_active_quotes', {
+            const response = await apiFetch('/api/odoo/get_active_quotes', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ defaultCode, userId })
@@ -392,7 +394,7 @@ export const odooService = {
             console.log("✅ All payment proofs attached to order");
 
             // Step C: Confirm Order (Draft -> Sale)
-            const confirmRes = await fetch('/api/odoo/confirm_order', {
+            const confirmRes = await apiFetch('/api/odoo/confirm_order', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ orderId, separationAmount })
@@ -476,7 +478,7 @@ export const odooService = {
 
             // Step 3: Update lot status to 'cotizacion'
             // Note: We need to search for the product by default_code first
-            const products = await fetch('/api/odoo/search_product_by_code', {
+            const products = await apiFetch('/api/odoo/search_product_by_code', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ defaultCode: lotDefaultCode })
@@ -507,7 +509,7 @@ export const odooService = {
     async reserveQuotedLot(orderId: number, file: File | File[], notes: string, userId?: number, separationAmount?: number) {
         try {
             // 1. Fetch the existing draft order details using the new API feature
-            const searchRes = await fetch('/api/odoo/find_draft_order', {
+            const searchRes = await apiFetch('/api/odoo/find_draft_order', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ orderId, userId })
@@ -528,7 +530,7 @@ export const odooService = {
             console.log("✅ All payment proofs attached to existing order");
 
             // 3. CONFIRM ORDER (Draft -> Sale) - FIRST RESERVE WINS!
-            const confirmRes = await fetch('/api/odoo/confirm_order', {
+            const confirmRes = await apiFetch('/api/odoo/confirm_order', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ orderId, separationAmount })
@@ -572,7 +574,7 @@ export const odooService = {
     // Process a refund: creates credit note if invoice exists, otherwise cancels the order
     async processRefund(orderId: number, refundAmount: number, reason: string): Promise<{ success: boolean; action?: string; newLotStatus?: string; error?: string }> {
         try {
-            const response = await fetch('/api/odoo/process_refund', {
+            const response = await apiFetch('/api/odoo/process_refund', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ orderId, refundAmount, reason })
@@ -588,7 +590,7 @@ export const odooService = {
     // Get the owner of a reserved lot (Salesperson who confirmed the order)
     async getReservationOwner(defaultCode: string): Promise<{ ownerId: number; ownerName: string; partnerId: number; clientName: string; totalInstallments: number; orderId: number; separationAmount?: number | null } | null> {
         try {
-            const response = await fetch('/api/odoo/get_reservation_owner', {
+            const response = await apiFetch('/api/odoo/get_reservation_owner', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ defaultCode })
@@ -613,7 +615,7 @@ export const odooService = {
     // Get invoices for a specific client (partner_id) and optionally filter by product (lot)
     async getClientInvoices(partnerId: number, productCode?: string): Promise<Record<string, unknown>[]> {
         try {
-            const response = await fetch('/api/odoo/get_client_invoices', {
+            const response = await apiFetch('/api/odoo/get_client_invoices', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -691,7 +693,7 @@ export const odooService = {
     // Create recurring contract from sale order
     async createRecurringContract(saleOrderId: number): Promise<{ contractId: number; details: unknown }> {
         try {
-            const response = await fetch('/api/odoo/create_contract', {
+            const response = await apiFetch('/api/odoo/create_contract', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ saleOrderId })
@@ -727,7 +729,7 @@ export const odooService = {
         journalId?: number,
         partnerId?: number
     ): Promise<unknown> {
-        const response = await fetch('/api/odoo/pay-invoice', {
+        const response = await apiFetch('/api/odoo/pay-invoice', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

@@ -1,15 +1,28 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/app/context/AuthContext';
-import { Lock, User, AlertCircle, Loader2, Building2 } from 'lucide-react';
+import { Lock, User, AlertCircle, Loader2, Building2, Info } from 'lucide-react';
+
+const SESSION_FLASH_MESSAGE_KEY = 'session_flash_message';
 
 export default function LoginPage() {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
+    const [flashMessage, setFlashMessage] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const { login } = useAuth();
+
+    // Mensaje amigable cuando llegamos aquí por una sesión vencida (ver
+    // AuthContext: evento staff-session-expired), no por un login fallido.
+    useEffect(() => {
+        const message = sessionStorage.getItem(SESSION_FLASH_MESSAGE_KEY);
+        if (message) {
+            setFlashMessage(message);
+            sessionStorage.removeItem(SESSION_FLASH_MESSAGE_KEY);
+        }
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -49,6 +62,12 @@ export default function LoginPage() {
 
                     {/* Form */}
                     <div className="p-8 pt-2">
+                        {flashMessage && !error && (
+                            <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/20 text-blue-200 rounded-xl text-sm flex items-start gap-3 backdrop-blur-sm animate-in slide-in-from-top-2">
+                                <Info size={18} className="mt-0.5 shrink-0 text-blue-400" />
+                                <span className="font-medium">{flashMessage}</span>
+                            </div>
+                        )}
                         {error && (
                             <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 text-red-200 rounded-xl text-sm flex items-start gap-3 backdrop-blur-sm animate-in slide-in-from-top-2">
                                 <AlertCircle size={18} className="mt-0.5 shrink-0 text-red-400" />

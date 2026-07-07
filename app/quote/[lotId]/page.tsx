@@ -13,6 +13,7 @@ import { odooService } from '@/app/services/odooService';
 import { localQuoteService } from '@/app/services/localQuoteService';
 import { LocalQuote } from '@/app/types/localQuote';
 import { useDniRucLookup } from '@/app/hooks/useDniRucLookup';
+import { STAFF_SESSION_EXPIRED_EVENT } from '@/app/lib/apiFetch';
 
 interface QuotePageProps {
     params: Promise<{ lotId: string }>;
@@ -162,6 +163,43 @@ export default function QuotePage({ params }: QuotePageProps) {
         setNewClientData(prev => ({ ...prev, name: docLookup.name }));
     }, [docLookup]);
 
+    // Preservar trabajo en curso si la sesión de staff expira a mitad de la
+    // cotización (ver AuthContext: al recibir staff-session-expired, guarda
+    // esto y redirige a login; al reloguearse, vuelve a esta misma página).
+    const QUOTE_DRAFT_KEY = `quote_draft_${lotId}`;
+
+    useEffect(() => {
+        const saved = sessionStorage.getItem(QUOTE_DRAFT_KEY);
+        if (!saved) return;
+        try {
+            const draft = JSON.parse(saved);
+            if (draft.discountPercent !== undefined) setDiscountPercent(draft.discountPercent);
+            if (draft.discountAmount !== undefined) setDiscountAmount(draft.discountAmount);
+            if (draft.initialPayment !== undefined) setInitialPayment(draft.initialPayment);
+            if (draft.numInstallments !== undefined) setNumInstallments(draft.numInstallments);
+            if (draft.scheduleType) setScheduleType(draft.scheduleType);
+            if (draft.selectedClient) setSelectedClient(draft.selectedClient);
+            if (draft.showCreateClient) setShowCreateClient(draft.showCreateClient);
+            if (draft.newClientData) setNewClientData(draft.newClientData);
+        } catch {
+            // Borrador corrupto, se ignora
+        } finally {
+            sessionStorage.removeItem(QUOTE_DRAFT_KEY);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    useEffect(() => {
+        const handleSessionExpired = () => {
+            sessionStorage.setItem(QUOTE_DRAFT_KEY, JSON.stringify({
+                discountPercent, discountAmount, initialPayment, numInstallments,
+                scheduleType, selectedClient, showCreateClient, newClientData,
+            }));
+        };
+        window.addEventListener(STAFF_SESSION_EXPIRED_EVENT, handleSessionExpired);
+        return () => window.removeEventListener(STAFF_SESSION_EXPIRED_EVENT, handleSessionExpired);
+    }, [QUOTE_DRAFT_KEY, discountPercent, discountAmount, initialPayment, numInstallments, scheduleType, selectedClient, showCreateClient, newClientData]);
+
     // Local Quote State
     const [currentQuoteId, setCurrentQuoteId] = useState<string | null>(null);
     const [isSavingQuote, setIsSavingQuote] = useState(false);
@@ -232,9 +270,11 @@ export default function QuotePage({ params }: QuotePageProps) {
         } catch (error) {
             console.error('Error creating client:', error);
             const message = error instanceof Error ? error.message : '';
-            if (message.includes('No autenticado')) {
-                alert('Tu sesión expiró. Cierra sesión (botón "Salir") y vuelve a ingresar para poder registrar clientes.');
-            } else {
+            // Sesión vencida: apiFetch ya disparó el cierre de sesión y la
+            // redirección a /login con su propio mensaje amigable (ver
+            // AuthContext). Un alert() aquí sería redundante y, al ser
+            // bloqueante, podría interponerse con esa redirección.
+            if (!message.includes('No autenticado')) {
                 alert(message || 'Error al crear el cliente. Intente nuevamente.');
             }
         } finally {
