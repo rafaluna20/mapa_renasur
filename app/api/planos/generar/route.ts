@@ -9,6 +9,53 @@ import geometriesEnrichedRaw from '@/app/data/geometries-enriched.json';
 
 const RADIO_CONTEXTO_METROS = 200;
 
+interface UbicacionProyecto {
+  departamento: string;
+  provincia: string;
+  distrito: string;
+  urbanizacion: string;
+  zonaUTM?: number; // Solo si el proyecto NO cae en zona 18S (default de plan_pro)
+}
+
+/**
+ * Ubicación administrativa por proyecto. La clave debe coincidir EXACTO con
+ * el valor del campo custom x_proyecto en Odoo (product.template) para cada
+ * lote — ese campo hay que crearlo y poblarlo ahí, no es nativo de Odoo.
+ *
+ * Cuando arranque el proyecto nuevo: agrega su entrada acá con la clave que
+ * uses en Odoo, y si NO cae en zona UTM 18S, especifica zonaUTM (17 o 19).
+ */
+const UBICACION_POR_PROYECTO: Record<string, UbicacionProyecto> = {
+  'terra-lima': {
+    departamento: 'Lima',
+    provincia: 'Lima',
+    distrito: 'Pucusana',
+    urbanizacion: 'Terra Lima',
+  },
+  // 'proyecto-nuevo': { departamento: '...', provincia: '...', distrito: '...', urbanizacion: '...', zonaUTM: ... },
+};
+
+// Proyecto asumido para lotes sin x_proyecto poblado todavía en Odoo — hoy
+// es el 100% de los lotes existentes, ya que este campo es nuevo.
+const PROYECTO_DEFAULT = 'terra-lima';
+
+/**
+ * Resuelve la ubicación administrativa de un lote por su x_proyecto.
+ * Si el proyecto no está en el mapa (ej. el proyecto nuevo ya tiene
+ * x_proyecto poblado en Odoo pero todavía no le agregamos su entrada acá),
+ * devuelve undefined en vez de adivinar — plan_pro marca el documento para
+ * revisión manual cuando falta la ubicación, en vez de mostrar una ciudad
+ * incorrecta.
+ */
+function resolverUbicacionProyecto(xProyecto: string | undefined): UbicacionProyecto | undefined {
+  const key = xProyecto?.trim() || PROYECTO_DEFAULT;
+  const ubicacion = UBICACION_POR_PROYECTO[key];
+  if (!ubicacion) {
+    console.warn(`[planos/generar] Proyecto "${key}" no está registrado en UBICACION_POR_PROYECTO — el plano se generará sin ubicación administrativa.`);
+  }
+  return ubicacion;
+}
+
 const geometriesJson = geometriesEnrichedRaw as unknown as Record<string, {
   coordinates: [number, number][];
   measurements: { sides: number[]; area: number; perimeter: number; centroid: [number, number] };
@@ -65,7 +112,7 @@ export async function POST(request: NextRequest) {
       'search_read',
       [[['active', '=', true]]],
       {
-        fields: ['id', 'name', 'default_code', 'list_price', 'qty_available', 'x_statu', 'x_area', 'x_mz', 'x_etapa', 'x_lote', 'x_cliente', 'x_geometry_utm'],
+        fields: ['id', 'name', 'default_code', 'list_price', 'qty_available', 'x_statu', 'x_area', 'x_mz', 'x_etapa', 'x_lote', 'x_cliente', 'x_geometry_utm', 'x_proyecto'],
         limit: 1000,
         context: { lang: 'es_PE' },
       }
@@ -123,6 +170,7 @@ export async function POST(request: NextRequest) {
         etapa: lote.x_etapa,
         numeroLote: lote.x_lote,
         estado: mapEstadoParaPlanoPro(lote.x_statu),
+        ubicacion: resolverUbicacionProyecto(lote.x_proyecto),
       },
       colindancias: colindancias.map((c) => ({
         lado: c.lado,

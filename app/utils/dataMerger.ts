@@ -121,6 +121,7 @@ export function mergeLotsData(
                 x_lote: getOdooVal(odooMatch.x_lote, lot.x_lote),
                 default_code: getOdooVal(odooMatch.default_code, lot.default_code),
                 x_cliente: getOdooVal(odooMatch.x_cliente, ''),
+                x_proyecto: getOdooVal(odooMatch.x_proyecto, lot.x_proyecto || ''),
                 points: geometry?.points || lot.points,
                 measurements: geometry?.measurements
             } as Lot;
@@ -156,6 +157,7 @@ export function mergeLotsData(
                     x_etapa: getOdooVal(odooMatch.x_etapa, ''),
                     x_cliente: getOdooVal(odooMatch.x_cliente, ''),
                     x_lote: getOdooVal(odooMatch.x_lote, ''),
+                    x_proyecto: getOdooVal(odooMatch.x_proyecto, ''),
                     default_code: code,
                     points: geometry.points,
                     measurements: geometry.measurements,

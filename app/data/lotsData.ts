@@ -21,6 +21,7 @@ export interface Lot {
     default_code: string; // Código de Odoo para matching (ej: E01MZX001)
     measurements?: LotMeasurements; // Pre-calculated geometry measurements
     x_cliente?: string; // Nombre del cliente asignado (Odoo x_cliente)
+    x_proyecto?: string; // Proyecto/urbanización al que pertenece (Odoo x_proyecto) — ver UBICACION_POR_PROYECTO en app/api/planos/generar/route.ts
 }
 
 

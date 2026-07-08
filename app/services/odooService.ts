@@ -24,6 +24,11 @@ export interface OdooProduct {
     x_lote?: string;
     x_cliente?: string | false;
     x_geometry_utm?: [number, number][] | false;
+    // Identifica a qué proyecto/urbanización pertenece el lote (ej. "terra-lima").
+    // Campo custom en Odoo — hay que crearlo y poblarlo ahí, no es nativo de
+    // product.template. Necesario para resolver la ubicación administrativa
+    // correcta por lote cuando hay más de un proyecto.
+    x_proyecto?: string | false;
 }
 
 // --- Server-Side Fetch Utility ---
