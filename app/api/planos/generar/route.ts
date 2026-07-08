@@ -61,6 +61,33 @@ const geometriesJson = geometriesEnrichedRaw as unknown as Record<string, {
   measurements: { sides: number[]; area: number; perimeter: number; centroid: [number, number] };
 }>;
 
+/**
+ * Limpia el valor crudo de x_ubicacion (texto libre cargado por el equipo
+ * comercial): recorta espacios y descarta valores placeholder/basura que
+ * aparecen en los datos reales (ej. una fila de guiones usada como
+ * separador visual en Odoo, o un solo espacio en blanco).
+ */
+function limpiarUbicacionCalle(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  if (/^[-_.\s]+$/.test(trimmed)) return undefined;
+  return trimmed;
+}
+
+/**
+ * Arma una dirección completa (calle/referencia + manzana + lote) a partir
+ * de x_ubicacion (ej. "CALLE 13" -> "Calle 13, Mz. Q Lote 72"). Si no hay
+ * dato de calle para este lote (24% de cobertura faltante hoy), no se manda
+ * 'direccion' en absoluto — plan_pro ya sintetiza "Mz. X Lote Y" como
+ * fallback en ese caso, así que no hace falta duplicar esa lógica acá.
+ */
+function construirDireccion(lote: Lot): string | undefined {
+  const calle = limpiarUbicacionCalle(lote.x_ubicacion);
+  if (!calle) return undefined;
+  return `${calle}, Mz. ${lote.x_mz} Lote ${lote.x_lote}`;
+}
+
 function mapEstadoParaPlanoPro(xStatu: string): 'libre' | 'separado' | 'vendido' {
   const normalizado = (xStatu || '').toLowerCase();
   if (normalizado.includes('vendido')) return 'vendido';
@@ -112,7 +139,7 @@ export async function POST(request: NextRequest) {
       'search_read',
       [[['active', '=', true]]],
       {
-        fields: ['id', 'name', 'default_code', 'list_price', 'qty_available', 'x_statu', 'x_area', 'x_mz', 'x_etapa', 'x_lote', 'x_cliente', 'x_geometry_utm', 'x_proyecto'],
+        fields: ['id', 'name', 'default_code', 'list_price', 'qty_available', 'x_statu', 'x_area', 'x_mz', 'x_etapa', 'x_lote', 'x_cliente', 'x_geometry_utm', 'x_proyecto', 'x_ubicacion'],
         limit: 1000,
         context: { lang: 'es_PE' },
       }
@@ -160,6 +187,16 @@ export async function POST(request: NextRequest) {
       }));
 
     // 4. Armar el payload para plan_pro
+    const ubicacionProyecto = resolverUbicacionProyecto(lote.x_proyecto);
+    const direccion = construirDireccion(lote);
+    // Combina la ubicación administrativa (por proyecto) con la dirección
+    // real del lote (por x_ubicacion) si alguna de las dos existe. Si el
+    // proyecto no está registrado en el mapa Y tampoco hay x_ubicacion,
+    // queda undefined — mismo comportamiento que antes de este cambio.
+    const ubicacion = ubicacionProyecto || direccion
+      ? { ...(ubicacionProyecto ?? {}), ...(direccion ? { direccion } : {}) }
+      : undefined;
+
     const payload = {
       vertices: lote.points,
       dimensiones,
@@ -170,7 +207,7 @@ export async function POST(request: NextRequest) {
         etapa: lote.x_etapa,
         numeroLote: lote.x_lote,
         estado: mapEstadoParaPlanoPro(lote.x_statu),
-        ubicacion: resolverUbicacionProyecto(lote.x_proyecto),
+        ubicacion,
       },
       colindancias: colindancias.map((c) => ({
         lado: c.lado,

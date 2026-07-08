@@ -22,6 +22,7 @@ export interface Lot {
     measurements?: LotMeasurements; // Pre-calculated geometry measurements
     x_cliente?: string; // Nombre del cliente asignado (Odoo x_cliente)
     x_proyecto?: string; // Proyecto/urbanización al que pertenece (Odoo x_proyecto) — ver UBICACION_POR_PROYECTO en app/api/planos/generar/route.ts
+    x_ubicacion?: string; // Calle/referencia del frente del lote (Odoo x_ubicacion), ej. "CALLE 13"
 }
 
 

@@ -29,6 +29,10 @@ export interface OdooProduct {
     // product.template. Necesario para resolver la ubicación administrativa
     // correcta por lote cuando hay más de un proyecto.
     x_proyecto?: string | false;
+    // Calle/referencia donde da el frente del lote (ej. "CALLE 13",
+    // "FRENTE A CALLE 9"). Texto libre cargado por el equipo comercial —
+    // 76% de cobertura, con ruido real (espacios, valores placeholder).
+    x_ubicacion?: string | false;
 }
 
 // --- Server-Side Fetch Utility ---
