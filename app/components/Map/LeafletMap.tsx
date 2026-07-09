@@ -6,6 +6,7 @@ import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility
 import 'leaflet-defaulticon-compatibility';
 import proj4 from 'proj4';
 import { Lot } from '@/app/data/lotsData';
+import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 import { useEffect, useState, useMemo, useRef } from 'react';
 import L from 'leaflet';
 import { calculateMidpoint } from '@/app/utils/geometryUtils';
@@ -13,8 +14,17 @@ import { calculateMidpoint } from '@/app/utils/geometryUtils';
 // Define UTM zone 18L projection (WGS84)
 proj4.defs("EPSG:32718", "+proj=utm +zone=18 +south +datum=WGS84 +units=m +no_defs");
 
+// Color de cada tipo de elemento urbano (calle/parque) — independiente de
+// getColor() de estados de venta, y sin entrada en la leyenda: no son
+// productos vendibles, solo contexto visual del plano.
+const COLOR_ELEMENTO_URBANO: Record<ElementoUrbano['tipo'], string> = {
+    calle: '#4B5563',      // Gray-600 (gris oscuro suave)
+    area_verde: '#86EFAC', // Green-300 (verde suave)
+};
+
 interface LeafletMapProps {
     lots: Lot[];
+    elementosUrbanos?: ElementoUrbano[];
     selectedLotId: string | null;
     onLotSelect: (lot: Lot) => void;
     mapType: 'street' | 'satellite' | 'blank';
@@ -224,7 +234,7 @@ function MeasurementController({ selectedLotId, lots }: { selectedLotId: string 
     return <SideMeasurementTooltips lot={selectedLot} map={map} />;
 }
 
-export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, userLocation, preferCanvas = true, showMeasurements = true }: LeafletMapProps) {
+export default function LeafletMap({ lots, elementosUrbanos = [], selectedLotId, onLotSelect, mapType, userLocation, preferCanvas = true, showMeasurements = true }: LeafletMapProps) {
     const center: [number, number] = [-12.0464, -77.0428];
     const [zoom, setZoom] = useState(17.5);
     const [isMobile, setIsMobile] = useState(false);
@@ -261,6 +271,21 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
         });
         return map;
     }, [lots]);
+
+    // Posiciones Lat/Lng de calles/parques, memoizadas igual que los lotes.
+    const elementosUrbanosPositions = useMemo(() => {
+        return elementosUrbanos.map(elemento => ({
+            elemento,
+            positions: elemento.points.map(p => {
+                try {
+                    const [lon, lat] = proj4("EPSG:32718", "EPSG:4326", [p[0], p[1]]);
+                    return [lat, lon] as [number, number];
+                } catch {
+                    return [0, 0] as [number, number];
+                }
+            }),
+        }));
+    }, [elementosUrbanos]);
 
     // COORDENADAS DEL PLANO GENERAL (MASTERPLAN)
     // Proporcionadas por el usuario (Actualizadas):
@@ -355,6 +380,25 @@ export default function LeafletMap({ lots, selectedLotId, onLotSelect, mapType, 
                     />
                 </>
             )}
+
+            {/* Calles y parques (contexto visual, no vendibles): se dibujan
+                debajo de los lotes, sin tooltip ni interacción de selección. */}
+            {elementosUrbanosPositions.map(({ elemento, positions }) => {
+                if (!positions || positions.length === 0) return null;
+                return (
+                    <Polygon
+                        key={`urbano-${elemento.codigo}`}
+                        positions={positions}
+                        pathOptions={{
+                            color: COLOR_ELEMENTO_URBANO[elemento.tipo],
+                            fillColor: COLOR_ELEMENTO_URBANO[elemento.tipo],
+                            fillOpacity: 0.5,
+                            weight: 1,
+                            interactive: false,
+                        }}
+                    />
+                );
+            })}
 
             {lots.map((lot) => {
                 const positions = memoizedPositionsMap.get(`${lot.id}-${lot.default_code}`);

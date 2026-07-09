@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchOdoo, OdooProduct } from '@/app/services/odooService';
+import { fetchOdoo, fetchElementosUrbanos, OdooProduct } from '@/app/services/odooService';
 import { lotsData, Lot } from '@/app/data/lotsData';
 import { mergeLotsData, normalizeCode } from '@/app/utils/dataMerger';
 import { derivarColindanciasYDimensiones } from '@/app/utils/colindanciasUtils';
 import { calculateCentroid, calculateDistance } from '@/app/utils/geometryUtils';
 import { requireStaffSession } from '@/app/lib/staffAuth';
 import geometriesEnrichedRaw from '@/app/data/geometries-enriched.json';
+import { mergeElementosUrbanos } from '@/app/data/elementosUrbanos';
 
 const RADIO_CONTEXTO_METROS = 250;
 
@@ -165,7 +166,8 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Derivar colindancias y dimensiones por geometría (frente/fondo/derecha/izquierda)
-    const { colindancias, dimensiones } = derivarColindanciasYDimensiones(lote, allLots);
+    const elementosUrbanos = mergeElementosUrbanos(await fetchElementosUrbanos());
+    const { colindancias, dimensiones } = derivarColindanciasYDimensiones(lote, allLots, elementosUrbanos);
 
     // 3. Contexto de entorno: todos los lotes cuyo centroide cae dentro de un
     //    radio fijo del centroide del lote objetivo, para dibujar el entorno

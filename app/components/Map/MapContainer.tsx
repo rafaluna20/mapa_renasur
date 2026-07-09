@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { Lot } from '@/app/data/lotsData';
+import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 
 const LeafletMap = dynamic(
     () => import('./LeafletMap'),
@@ -17,6 +18,7 @@ const LeafletMap = dynamic(
 
 interface MapContainerProps {
     lots: Lot[];
+    elementosUrbanos?: ElementoUrbano[];
     selectedLotId: string | null;
     onLotSelect: (lot: Lot) => void;
     mapType: 'street' | 'satellite' | 'blank';

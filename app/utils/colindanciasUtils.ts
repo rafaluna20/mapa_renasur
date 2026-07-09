@@ -1,9 +1,10 @@
 import { Lot } from '@/app/data/lotsData';
+import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 import { calculateDistance, calculateMidpoint } from '@/app/utils/geometryUtils';
 
 export interface ColindanciaDerivada {
     lado: 'frente' | 'fondo' | 'derecha' | 'izquierda';
-    tipo: 'lote' | 'calle';
+    tipo: 'lote' | 'calle' | 'area_verde';
     nombre: string;
     longitud: number;
 }
@@ -25,8 +26,7 @@ function puntosSonCercanos(p1: [number, number], p2: [number, number], tol = TOL
     return calculateDistance(p1, p2) <= tol;
 }
 
-function edgeCompartidoConLote(a: [number, number], b: [number, number], otroLote: Lot): boolean {
-    const pts = otroLote.points;
+function edgeCompartido(a: [number, number], b: [number, number], pts: [number, number][]): boolean {
     for (let i = 0; i < pts.length; i++) {
         const p = pts[i];
         const q = pts[(i + 1) % pts.length];
@@ -47,7 +47,22 @@ function encontrarVecino(
     for (const otro of todosLosLotes) {
         if (otro.id === lote.id) continue;
         if (!otro.points || otro.points.length < 3) continue;
-        if (edgeCompartidoConLote(a, b, otro)) return otro;
+        if (edgeCompartido(a, b, otro.points)) return otro;
+    }
+    return null;
+}
+
+// Busca si el lado (a,b) coincide con el borde de una calle/parque real. Se
+// verifica DESPUÉS de encontrarVecino (lote): si el lado ya colinda con otro
+// lote, no hace falta buscar aquí.
+function encontrarVecinoUrbano(
+    a: [number, number],
+    b: [number, number],
+    elementosUrbanos: ElementoUrbano[]
+): ElementoUrbano | null {
+    for (const elemento of elementosUrbanos) {
+        if (!elemento.points || elemento.points.length < 3) continue;
+        if (edgeCompartido(a, b, elemento.points)) return elemento;
     }
     return null;
 }
@@ -58,13 +73,15 @@ interface Edge {
     b: [number, number];
     longitud: number;
     midpoint: [number, number];
-    vecino: Lot | null;
+    vecinoLote: Lot | null;
+    vecinoUrbano: ElementoUrbano | null;
 }
 
 /**
- * Deriva colindancias (qué hay en cada lado: otro lote o calle) y las
- * dimensiones con nomenclatura frente/fondo/derecha/izquierda a partir de
- * la geometría real del lote y de todos los lotes del mapa.
+ * Deriva colindancias (qué hay en cada lado: otro lote, calle o área verde)
+ * y las dimensiones con nomenclatura frente/fondo/derecha/izquierda a
+ * partir de la geometría real del lote, de todos los lotes del mapa, y
+ * (opcional) de los elementos urbanos (calles/parques) con geometría real.
  *
  * Heurística (no hay dato de negocio que diga "cuál lado es el frente"):
  * - Frente = el lado más largo entre los que NO colindan con otro lote
@@ -76,10 +93,16 @@ interface Edge {
  * Para lotes de esquina o polígonos irregulares (más de 4 lados) puede
  * haber más de una colindancia por lado — es intencional, el schema de
  * plan_pro acepta un array.
+ *
+ * Si un lado no colinda con otro lote, se verifica contra elementosUrbanos
+ * (calle/área verde reales) para obtener el nombre real de la vía/parque en
+ * vez del texto genérico "Calle". Si tampoco hay coincidencia (todavía no
+ * se cargó la geometría de esa calle), cae al comportamiento anterior.
  */
 export function derivarColindanciasYDimensiones(
     lote: Lot,
-    todosLosLotes: Lot[]
+    todosLosLotes: Lot[],
+    elementosUrbanos: ElementoUrbano[] = []
 ): { colindancias: ColindanciaDerivada[]; dimensiones: DimensionesDerivadas } {
     const pts = lote.points;
     const n = pts.length;
@@ -92,17 +115,19 @@ export function derivarColindanciasYDimensiones(
     for (let i = 0; i < n; i++) {
         const a = pts[i];
         const b = pts[(i + 1) % n];
+        const vecinoLote = encontrarVecino(a, b, lote, todosLosLotes);
         edges.push({
             index: i,
             a,
             b,
             longitud: calculateDistance(a, b),
             midpoint: calculateMidpoint(a, b),
-            vecino: encontrarVecino(a, b, lote, todosLosLotes),
+            vecinoLote,
+            vecinoUrbano: vecinoLote ? null : encontrarVecinoUrbano(a, b, elementosUrbanos),
         });
     }
 
-    const edgesCalle = edges.filter((e) => !e.vecino);
+    const edgesCalle = edges.filter((e) => !e.vecinoLote);
     const frente = (edgesCalle.length > 0 ? edgesCalle : edges).reduce((max, e) =>
         e.longitud > max.longitud ? e : max
     );
@@ -122,12 +147,30 @@ export function derivarColindanciasYDimensiones(
     const colindancias: ColindanciaDerivada[] = [];
 
     const agregarColindancia = (edge: Edge, lado: ColindanciaDerivada['lado']) => {
-        colindancias.push({
-            lado,
-            tipo: edge.vecino ? 'lote' : 'calle',
-            nombre: edge.vecino ? edge.vecino.name || edge.vecino.default_code : 'Calle',
-            longitud: parseFloat(edge.longitud.toFixed(2)),
-        });
+        if (edge.vecinoLote) {
+            colindancias.push({
+                lado,
+                tipo: 'lote',
+                nombre: edge.vecinoLote.name || edge.vecinoLote.default_code,
+                longitud: parseFloat(edge.longitud.toFixed(2)),
+            });
+        } else if (edge.vecinoUrbano) {
+            colindancias.push({
+                lado,
+                tipo: edge.vecinoUrbano.tipo,
+                nombre: edge.vecinoUrbano.nombre,
+                longitud: parseFloat(edge.longitud.toFixed(2)),
+            });
+        } else {
+            // Fallback: todavía no se cargó la geometría real de la
+            // calle/parque de este lado — mismo comportamiento de antes.
+            colindancias.push({
+                lado,
+                tipo: 'calle',
+                nombre: 'Calle',
+                longitud: parseFloat(edge.longitud.toFixed(2)),
+            });
+        }
     };
 
     agregarColindancia(frente, 'frente');

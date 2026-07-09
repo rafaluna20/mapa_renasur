@@ -4,10 +4,12 @@ import { useState, useEffect } from 'react';
 import MapContainerWrapper from './MapContainer';
 import LotDetailModal from '../UI/LotDetailModal';
 import { Lot } from '@/app/data/lotsData';
+import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 import { odooService, OdooUser } from '@/app/services/odooService';
 
 interface MapAreaProps {
     lots: Lot[];
+    elementosUrbanos?: ElementoUrbano[];
     selectedLotId: string | null;
     onLotSelect: (lot: Lot) => void;
     onCloseModal: () => void;
@@ -27,7 +29,7 @@ interface MapAreaProps {
 }
 
 export default function MapArea({
-    lots, selectedLotId, onLotSelect, onCloseModal,
+    lots, elementosUrbanos = [], selectedLotId, onLotSelect, onCloseModal,
     mapType, onMapTypeChange,
     userLocation, onUserLocationChange,
     selectedLot, onUpdateStatus,
@@ -178,6 +180,7 @@ export default function MapArea({
             <div className="flex-1 z-0 relative h-full">
                 <MapContainerWrapper
                     lots={lots}
+                    elementosUrbanos={elementosUrbanos}
                     selectedLotId={selectedLotId}
                     onLotSelect={onLotSelect}
                     mapType={mapType}

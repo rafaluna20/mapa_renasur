@@ -9,6 +9,7 @@ import Header from '@/app/components/UI/Header';
 import LotCard from '@/app/components/UI/LotCard';
 import { lotsData, Lot } from '@/app/data/lotsData';
 import geometriesEnrichedRaw from '@/app/data/geometries-enriched.json';
+import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 import { useSmartSearch } from '@/app/hooks/useSmartSearch';
 import { mergeLotsData } from '@/app/utils/dataMerger';
 
@@ -44,6 +45,7 @@ import { exportToPdf } from '@/app/utils/pdfExporter'; // Utilidad para exportar
 interface HomeClientProps {
     odooProducts: OdooProduct[]; // Array de productos obtenidos de Odoo
     hasConnectionError?: boolean; // Flag if Odoo fetch failed
+    elementosUrbanos?: ElementoUrbano[]; // Calles/áreas verdes (modelo Odoo separado, ver page.tsx)
 }
 
 // ----------------------------------------------------------------------
@@ -54,7 +56,7 @@ interface HomeClientProps {
  * Recibe datos de Odoo, los fusiona con geometría local, y coordina
  * la comunicación entre el Mapa, la Barra Lateral y los Filtros.
  */
-export default function HomeClient({ odooProducts, hasConnectionError = false }: HomeClientProps) {
+export default function HomeClient({ odooProducts, hasConnectionError = false, elementosUrbanos = [] }: HomeClientProps) {
 
     // Hooks de Contexto y Enrutamiento
     const { user, loading } = useAuth(); // Obtiene el usuario autenticado
@@ -462,6 +464,7 @@ export default function HomeClient({ odooProducts, hasConnectionError = false }:
                 */}
                 <MapArea
                     lots={filteredLots}
+                    elementosUrbanos={elementosUrbanos}
                     selectedLotId={selectedLotId}
                     onLotSelect={(l) => setSelectedLotId(l.id)}
                     mapType={mapType}

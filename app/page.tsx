@@ -1,4 +1,5 @@
-import { fetchOdoo, OdooProduct } from '@/app/services/odooService';
+import { fetchOdoo, fetchElementosUrbanos, OdooProduct } from '@/app/services/odooService';
+import { mergeElementosUrbanos } from '@/app/data/elementosUrbanos';
 import HomeClient from '@/app/components/HomeClient';
 
 // Force dynamic rendering because Odoo data changes regularly
@@ -63,9 +64,19 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ r
     }
   }
 
+  // Elementos urbanos (calles/áreas verdes): modelo Odoo separado, nunca
+  // pasa por la caché/fusión de lotes de arriba. Si falla, no debe tumbar
+  // la carga del mapa — fetchElementosUrbanos ya devuelve [] en ese caso.
+  const elementosUrbanosOdoo = await fetchElementosUrbanos();
+  const elementosUrbanos = mergeElementosUrbanos(elementosUrbanosOdoo);
+
   return (
     <main>
-      <HomeClient odooProducts={products} hasConnectionError={hasConnectionError} />
+      <HomeClient
+        odooProducts={products}
+        hasConnectionError={hasConnectionError}
+        elementosUrbanos={elementosUrbanos}
+      />
     </main>
   );
 }

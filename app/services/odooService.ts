@@ -1,4 +1,5 @@
 import { apiFetch } from '@/app/lib/apiFetch';
+import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 
 // --- Type Definitions ---
 export interface OdooUser {
@@ -99,6 +100,49 @@ export async function fetchOdoo(
     } catch (error) {
         console.error("Fetch Odoo Error:", error);
         throw error;
+    }
+}
+
+// Registro crudo del modelo Odoo 'elemento.urbano' (módulo elemento_urbano_geometry).
+interface OdooElementoUrbano {
+    id: number;
+    name: string;
+    codigo: string | false;
+    tipo: 'calle' | 'area_verde' | false;
+    x_geometry_utm: [number, number][] | false;
+}
+
+/**
+ * Trae calles/áreas verdes desde el modelo Odoo 'elemento.urbano' —
+ * intencionalmente NO es product.template, así que nunca puede colarse en
+ * mergeLotsData, stats de ventas, ni la página de cotización. Server-side
+ * solamente (usa fetchOdoo, que requiere las env vars de servidor).
+ * Si el módulo aún no está instalado o la consulta falla, devuelve []
+ * silenciosamente (no debe tumbar el mapa ni la generación de planos).
+ */
+export async function fetchElementosUrbanos(): Promise<ElementoUrbano[]> {
+    try {
+        const registros: OdooElementoUrbano[] = await fetchOdoo(
+            'elemento.urbano',
+            'search_read',
+            [[['active', '=', true], ['x_geometry_utm', '!=', false]]],
+            {
+                fields: ['id', 'name', 'codigo', 'tipo', 'x_geometry_utm'],
+                limit: 500,
+            }
+        );
+
+        return registros
+            .filter((r) => Array.isArray(r.x_geometry_utm) && r.x_geometry_utm.length >= 3 && (r.tipo === 'calle' || r.tipo === 'area_verde'))
+            .map((r) => ({
+                codigo: r.codigo || `elemento-urbano-${r.id}`,
+                nombre: r.name,
+                tipo: r.tipo as 'calle' | 'area_verde',
+                points: r.x_geometry_utm as [number, number][],
+            }));
+    } catch (error) {
+        console.warn('No se pudieron obtener elementos urbanos desde Odoo (¿módulo elemento_urbano_geometry instalado?):', error);
+        return [];
     }
 }
 

@@ -34,8 +34,18 @@ export interface StaffSessionPayload {
 export function getStaffCookieOptions() {
     return {
         httpOnly: true,
+        // 'none' (no 'lax'): la app se usa embebida en un iframe cross-origin
+        // desde Odoo (mapa_renasur_connector). Con 'lax', el navegador no
+        // envía la cookie en las peticiones fetch/XHR que la app hace desde
+        // dentro del iframe (solo se habría enviado en una navegación de
+        // nivel superior) — el login parecía completarse pero la sesión no
+        // se reconocía en ninguna petición posterior. 'none' requiere
+        // 'secure: true', por eso solo se activa en producción (HTTPS);
+        // en local (HTTP) el navegador rechazaría la cookie con 'none' sin
+        // 'secure', así que se mantiene 'lax' en desarrollo, donde no hay
+        // iframe cross-origin de por medio.
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax' as const,
+        sameSite: (process.env.NODE_ENV === 'production' ? 'none' : 'lax') as 'none' | 'lax',
         path: '/',
         maxAge: STAFF_SESSION_MAX_AGE,
     };
