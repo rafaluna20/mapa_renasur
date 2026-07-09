@@ -7,7 +7,7 @@ import { calculateCentroid, calculateDistance } from '@/app/utils/geometryUtils'
 import { requireStaffSession } from '@/app/lib/staffAuth';
 import geometriesEnrichedRaw from '@/app/data/geometries-enriched.json';
 
-const RADIO_CONTEXTO_METROS = 200;
+const RADIO_CONTEXTO_METROS = 250;
 
 interface UbicacionProyecto {
   departamento: string;
