@@ -188,6 +188,20 @@ export async function POST(request: NextRequest) {
         vertices: l.points,
       }));
 
+    // 3b. Calles y áreas verdes reales (elemento.urbano, ver
+    // derivarColindanciasYDimensiones más arriba): antes solo se usaban
+    // para el texto de colindancias en la Memoria Descriptiva, nunca se
+    // dibujaban en el plano. Sin filtro de radio — son pocos elementos por
+    // proyecto y suelen ser relevantes aunque el centroide caiga un poco
+    // afuera del radio de lotes vecinos.
+    const elementosUrbanosContexto = elementosUrbanos.map((e) => ({
+      tipo: e.tipo === 'area_verde' ? 'AREA_VERDE' : 'CALLE',
+      codigo: e.codigo,
+      texto: e.nombre,
+      estado: '',
+      vertices: e.points,
+    }));
+
     // 4. Armar el payload para plan_pro
     const ubicacionProyecto = resolverUbicacionProyecto(lote.x_proyecto);
     const direccion = construirDireccion(lote);
@@ -218,7 +232,9 @@ export async function POST(request: NextRequest) {
         longitud: c.longitud,
       })),
       propietario: lote.x_cliente ? { nombre: lote.x_cliente } : undefined,
-      contexto: elementosContexto.length > 0 ? { elementos: elementosContexto } : undefined,
+      contexto: (elementosContexto.length > 0 || elementosUrbanosContexto.length > 0)
+        ? { elementos: [...elementosContexto, ...elementosUrbanosContexto] }
+        : undefined,
     };
 
     // 5. Llamar a plan_pro
