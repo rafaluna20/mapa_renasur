@@ -4,7 +4,8 @@ import { calculateDistance, calculateMidpoint } from '@/app/utils/geometryUtils'
 
 export interface ColindanciaDerivada {
     lado: 'frente' | 'fondo' | 'derecha' | 'izquierda';
-    tipo: 'lote' | 'calle' | 'area_verde';
+    /** "lote" o el código de capa dinámico del elemento urbano (ver ElementoUrbano). */
+    tipo: string;
     nombre: string;
     longitud: number;
 }

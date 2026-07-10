@@ -194,8 +194,14 @@ export async function POST(request: NextRequest) {
     // dibujaban en el plano. Sin filtro de radio — son pocos elementos por
     // proyecto y suelen ser relevantes aunque el centroide caiga un poco
     // afuera del radio de lotes vecinos.
+    // "tipo" ya no pasa por una convención de mayúsculas fija: viaja tal
+    // cual el código de capa dinámico (elemento.urbano.capa en Odoo), junto
+    // con su color/mostrarEtiqueta — así una capa nueva no requiere tocar
+    // este archivo ni el adaptador de plan_pro.
     const elementosUrbanosContexto = elementosUrbanos.map((e) => ({
-      tipo: e.tipo === 'area_verde' ? 'AREA_VERDE' : 'CALLE',
+      tipo: e.tipo,
+      color: e.color,
+      mostrarEtiqueta: e.mostrarEtiqueta,
       codigo: e.codigo,
       texto: e.nombre,
       estado: '',

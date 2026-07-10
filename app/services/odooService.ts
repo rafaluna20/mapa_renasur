@@ -104,16 +104,28 @@ export async function fetchOdoo(
 }
 
 // Registro crudo del modelo Odoo 'elemento.urbano' (módulo elemento_urbano_geometry).
+// capa_id viene como tupla [id, display_name] (Many2one vía JSON-RPC clásico,
+// no soporta traversal por punto en 'fields' de search_read).
 interface OdooElementoUrbano {
     id: number;
     name: string;
     codigo: string | false;
-    tipo: 'calle' | 'area_verde' | false;
+    capa_id: [number, string] | false;
     x_geometry_utm: [number, number][] | false;
 }
 
+// Registro crudo del modelo Odoo 'elemento.urbano.capa' — capas estilo
+// AutoCAD (nombre, código de wire-format, color, si muestra etiqueta),
+// editables desde Odoo sin tocar código en mapa_renasur/plan_pro.
+interface OdooElementoUrbanoCapa {
+    id: number;
+    codigo: string;
+    color: string;
+    mostrar_etiqueta: boolean;
+}
+
 /**
- * Trae calles/áreas verdes desde el modelo Odoo 'elemento.urbano' —
+ * Trae calles/áreas verdes/etc. desde el modelo Odoo 'elemento.urbano' —
  * intencionalmente NO es product.template, así que nunca puede colarse en
  * mergeLotsData, stats de ventas, ni la página de cotización. Server-side
  * solamente (usa fetchOdoo, que requiere las env vars de servidor).
@@ -127,19 +139,42 @@ export async function fetchElementosUrbanos(): Promise<ElementoUrbano[]> {
             'search_read',
             [[['active', '=', true], ['x_geometry_utm', '!=', false]]],
             {
-                fields: ['id', 'name', 'codigo', 'tipo', 'x_geometry_utm'],
+                fields: ['id', 'name', 'codigo', 'capa_id', 'x_geometry_utm'],
                 limit: 500,
             }
         );
 
-        return registros
-            .filter((r) => Array.isArray(r.x_geometry_utm) && r.x_geometry_utm.length >= 3 && (r.tipo === 'calle' || r.tipo === 'area_verde'))
-            .map((r) => ({
-                codigo: r.codigo || `elemento-urbano-${r.id}`,
-                nombre: r.name,
-                tipo: r.tipo as 'calle' | 'area_verde',
-                points: r.x_geometry_utm as [number, number][],
-            }));
+        const validos = registros.filter(
+            (r) => Array.isArray(r.x_geometry_utm) && r.x_geometry_utm.length >= 3 && r.capa_id,
+        );
+        if (validos.length === 0) return [];
+
+        // Segunda consulta (join manual): capa_id solo trae [id, nombre] por
+        // JSON-RPC, así que el color/mostrar_etiqueta de cada capa se resuelve
+        // en un solo search_read adicional por los ids usados.
+        const capaIds = [...new Set(validos.map((r) => (r.capa_id as [number, string])[0]))];
+        const capas: OdooElementoUrbanoCapa[] = await fetchOdoo(
+            'elemento.urbano.capa',
+            'search_read',
+            [[['id', 'in', capaIds]]],
+            { fields: ['id', 'codigo', 'color', 'mostrar_etiqueta'] }
+        );
+        const capaPorId = new Map(capas.map((c) => [c.id, c]));
+
+        return validos
+            .map((r) => {
+                const capa = capaPorId.get((r.capa_id as [number, string])[0]);
+                if (!capa) return null;
+                return {
+                    codigo: r.codigo || `elemento-urbano-${r.id}`,
+                    nombre: r.name,
+                    tipo: capa.codigo,
+                    color: capa.color,
+                    mostrarEtiqueta: capa.mostrar_etiqueta,
+                    points: r.x_geometry_utm as [number, number][],
+                };
+            })
+            .filter((e): e is ElementoUrbano => e !== null);
     } catch (error) {
         console.warn('No se pudieron obtener elementos urbanos desde Odoo (¿módulo elemento_urbano_geometry instalado?):', error);
         return [];

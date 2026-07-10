@@ -14,13 +14,11 @@ import { calculateMidpoint } from '@/app/utils/geometryUtils';
 // Define UTM zone 18L projection (WGS84)
 proj4.defs("EPSG:32718", "+proj=utm +zone=18 +south +datum=WGS84 +units=m +no_defs");
 
-// Color de cada tipo de elemento urbano (calle/parque) — independiente de
-// getColor() de estados de venta, y sin entrada en la leyenda: no son
-// productos vendibles, solo contexto visual del plano.
-const COLOR_ELEMENTO_URBANO: Record<ElementoUrbano['tipo'], string> = {
-    calle: '#4B5563',      // Gray-600 (gris oscuro suave)
-    area_verde: '#86EFAC', // Green-300 (verde suave)
-};
+// Color de respaldo si un elemento urbano llegara sin color (no debería
+// pasar: capa_id es requerido en Odoo). El color real de cada elemento
+// viene de su capa (elemento.urbano.capa en Odoo, estilo AutoCAD) — ya no
+// es una tabla fija acá, así que un tipo/color nuevo no requiere deploy.
+const COLOR_ELEMENTO_URBANO_FALLBACK = '#AAAAAA';
 
 interface LeafletMapProps {
     lots: Lot[];
@@ -390,8 +388,8 @@ export default function LeafletMap({ lots, elementosUrbanos = [], selectedLotId,
                         key={`urbano-${elemento.codigo}`}
                         positions={positions}
                         pathOptions={{
-                            color: COLOR_ELEMENTO_URBANO[elemento.tipo],
-                            fillColor: COLOR_ELEMENTO_URBANO[elemento.tipo],
+                            color: elemento.color || COLOR_ELEMENTO_URBANO_FALLBACK,
+                            fillColor: elemento.color || COLOR_ELEMENTO_URBANO_FALLBACK,
                             fillOpacity: 0.5,
                             weight: 1,
                             interactive: false,

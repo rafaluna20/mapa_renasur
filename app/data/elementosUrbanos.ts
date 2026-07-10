@@ -14,7 +14,16 @@ import elementosUrbanosRaw from './elementos-urbanos.json';
 export interface ElementoUrbano {
     codigo: string;
     nombre: string;
-    tipo: 'calle' | 'area_verde';
+    /**
+     * Código de capa (elemento.urbano.capa en Odoo) — ya no es un enum
+     * fijo: un admin puede crear una capa nueva (ej. "postes") desde Odoo
+     * sin tocar código acá, siempre que también traiga su "color".
+     */
+    tipo: string;
+    /** Color hex de la capa (definido en Odoo, editable sin deploy). */
+    color: string;
+    /** Si el nombre del elemento se imprime como etiqueta en el plano. */
+    mostrarEtiqueta: boolean;
     points: [number, number][];
 }
 
