@@ -167,6 +167,12 @@ export async function POST(request: NextRequest) {
 
     // 2. Derivar colindancias y dimensiones por geometría (frente/fondo/derecha/izquierda)
     const elementosUrbanos = mergeElementosUrbanos(await fetchElementosUrbanos());
+    // DIAGNOSTICO TEMPORAL: confirmar si el color ya llega mal desde Odoo o
+    // se pierde despues, al armar el payload hacia plan_pro. Quitar una vez
+    // resuelto el bug de "colores en escala de grises en el PDF".
+    console.log('[planos/generar][DIAG] elementosUrbanos desde Odoo:', JSON.stringify(
+      elementosUrbanos.map((e) => ({ codigo: e.codigo, tipo: e.tipo, color: e.color, mostrarEtiqueta: e.mostrarEtiqueta }))
+    ));
     const { colindancias, dimensiones } = derivarColindanciasYDimensiones(lote, allLots, elementosUrbanos);
 
     // 3. Contexto de entorno: todos los lotes cuyo centroide cae dentro de un
@@ -207,6 +213,11 @@ export async function POST(request: NextRequest) {
       estado: '',
       vertices: e.points,
     }));
+    // DIAGNOSTICO TEMPORAL: ver el mismo dato tal cual queda armado para el
+    // payload final hacia plan_pro (justo antes del fetch más abajo).
+    console.log('[planos/generar][DIAG] elementosUrbanosContexto (payload hacia plan_pro):', JSON.stringify(
+      elementosUrbanosContexto.map((e) => ({ codigo: e.codigo, tipo: e.tipo, color: e.color, mostrarEtiqueta: e.mostrarEtiqueta }))
+    ));
 
     // 4. Armar el payload para plan_pro
     const ubicacionProyecto = resolverUbicacionProyecto(lote.x_proyecto);
