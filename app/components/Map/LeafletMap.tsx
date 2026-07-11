@@ -10,6 +10,7 @@ import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 import { useEffect, useState, useMemo, useRef } from 'react';
 import L from 'leaflet';
 import { calculateMidpoint } from '@/app/utils/geometryUtils';
+import { expandirVerticesConArcos } from '@/app/utils/arcoUtils';
 
 // Define UTM zone 18L projection (WGS84)
 proj4.defs("EPSG:32718", "+proj=utm +zone=18 +south +datum=WGS84 +units=m +no_defs");
@@ -257,7 +258,11 @@ export default function LeafletMap({ lots, elementosUrbanos = [], selectedLotId,
     const memoizedPositionsMap = useMemo(() => {
         const map = new Map<string, [number, number][]>();
         lots.forEach(lot => {
-            const positions: [number, number][] = lot.points.map(p => {
+            // Lados curvos (x_geometry_arcos): se muestrea la curva real en
+            // UTM ANTES de proyectar a lat/lng, así el mapa dibuja el arco
+            // real en vez de la cuerda recta entre sus 2 extremos.
+            const puntosUtm = expandirVerticesConArcos(lot.points, lot.x_geometry_arcos);
+            const positions: [number, number][] = puntosUtm.map(p => {
                 try {
                     const [lon, lat] = proj4("EPSG:32718", "EPSG:4326", [p[0], p[1]]);
                     return [lat, lon] as [number, number];

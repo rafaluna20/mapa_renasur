@@ -123,3 +123,40 @@ export function buscarArcoPorIndice(
     if (!arcos) return undefined;
     return arcos.find((a) => a.indiceVertice === indiceVertice);
 }
+
+/**
+ * Expande el polígono de un lote (vértices originales, SIN cerrar —
+ * Leaflet no necesita repetir el primer punto al final) insertando puntos
+ * muestreados en cada lado marcado como arco en `arcos`. El resto de lados
+ * (rectos) se mantienen tal cual. Mismo helper que usa plan_pro
+ * (lib/geometry/arcoUtils.ts) para el PDF — acá se usa para que el mapa
+ * (Leaflet) también dibuje la curva real, no la cuerda recta.
+ */
+export function expandirVerticesConArcos(
+    vertices: [number, number][],
+    arcos: ArcoMetadata[] | undefined | null
+): [number, number][] {
+    if (!arcos || arcos.length === 0 || vertices.length < 2) {
+        return vertices;
+    }
+
+    const arcoPorIndice = new Map(arcos.map((a) => [a.indiceVertice, a]));
+    const n = vertices.length;
+    const resultado: [number, number][] = [vertices[0]];
+
+    for (let i = 0; i < n; i++) {
+        const a = vertices[i];
+        const b = vertices[(i + 1) % n];
+        const arco = arcoPorIndice.get(i);
+        if (arco) {
+            const puntosArco = muestrearArco(a, b, arco, 16);
+            resultado.push(...puntosArco.slice(1));
+        } else if (i < n - 1) {
+            // El último lado (n-1 -> 0) no se agrega: "resultado" ya
+            // empieza en vertices[0], cerrar acá lo duplicaría.
+            resultado.push(b);
+        }
+    }
+
+    return resultado;
+}
