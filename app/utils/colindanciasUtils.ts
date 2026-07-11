@@ -78,6 +78,30 @@ interface Edge {
     vecinoUrbano: ElementoUrbano | null;
 }
 
+// Ángulo agudo (0°-90°) entre las direcciones de dos aristas, ignorando el
+// sentido de recorrido del polígono: una arista "antiparalela" a otra
+// (misma línea, sentido contrario) es tan paralela geométricamente como una
+// en el mismo sentido, por eso se usa |coseno|. 0° = paralelas, 90° =
+// perpendiculares.
+function anguloEntreAristas(
+    edgeA: { a: [number, number]; b: [number, number] },
+    edgeB: { a: [number, number]; b: [number, number] }
+): number {
+    const v1 = [edgeA.b[0] - edgeA.a[0], edgeA.b[1] - edgeA.a[1]];
+    const v2 = [edgeB.b[0] - edgeB.a[0], edgeB.b[1] - edgeB.a[1]];
+    const mag1 = Math.hypot(v1[0], v1[1]);
+    const mag2 = Math.hypot(v2[0], v2[1]);
+    if (mag1 === 0 || mag2 === 0) return 90; // arista degenerada (largo ~0): no debe "robar" el fondo
+    const cos = (v1[0] * v2[0] + v1[1] * v2[1]) / (mag1 * mag2);
+    const anguloRad = Math.acos(Math.min(1, Math.max(-1, Math.abs(cos))));
+    return (anguloRad * 180) / Math.PI;
+}
+
+// Umbral para considerar una arista "paralela" al frente (candidata a
+// fondo) vs "lateral" (candidata a derecha/izquierda). 45° es el punto
+// medio natural entre paralelo (0°) y perpendicular (90°).
+const UMBRAL_PARALELO_GRADOS = 45;
+
 /**
  * Deriva colindancias (qué hay en cada lado: otro lote, calle o área verde)
  * y las dimensiones con nomenclatura frente/fondo/derecha/izquierda a
@@ -100,9 +124,23 @@ interface Edge {
  * 3. Si el lote está completamente rodeado de otros lotes (caso anómalo):
  *    el lado más largo del polígono.
  *
- * Fondo = el lado restante geométricamente más opuesto al frente.
- * Derecha/Izquierda = el resto, clasificado por el signo del producto
- * cruzado respecto a la dirección del frente.
+ * Fondo/Derecha/Izquierda: caso general con N vecinos por lado. Ninguno de
+ * los 3 se elige como una única arista "opuesta" por índice — eso solo
+ * soporta un vecino por lado. En cambio, cada arista (menos el frente) se
+ * clasifica primero por ÁNGULO respecto a la dirección del frente:
+ * - "paralela" (dentro de UMBRAL_PARALELO_GRADOS de 0°/180°): candidata a
+ *   fondo — en un lote razonablemente rectangular, el lado opuesto al
+ *   frente corre en su misma dirección, sin importar cuántos vecinos lo
+ *   dividan en tramos.
+ * - "lateral" (más cerca de 90°): candidata a derecha/izquierda.
+ * Luego se recorre el polígono en orden desde el frente con una máquina de
+ * estados (derecha → fondo → izquierda, en ese orden, cada uno pudiendo
+ * abarcar varias aristas contiguas): así un lote con, por ejemplo, 2 vecinos
+ * de fondo, 2 de derecha y 3 de izquierda genera las 7 colindancias
+ * correctas, cada una con su propio vecino — no solo una por lado.
+ * Si NINGUNA arista cae dentro del umbral (polígono muy irregular), se usa
+ * la de ángulo más chico como único fondo, para garantizar que "fondo"
+ * nunca quede vacío (dimensiones.fondo es un número, no un arreglo).
  *
  * Para lotes de esquina o polígonos irregulares (más de 4 lados) puede
  * haber más de una colindancia por lado — es intencional, el schema de
@@ -151,18 +189,30 @@ export function derivarColindanciasYDimensiones(
         e.longitud > max.longitud ? e : max
     );
 
-    // Fondo = la arista topológicamente opuesta al frente (a mitad de camino
-    // recorriendo el polígono), no la geométricamente "más lejana" por
-    // distancia de punto medio. Verificado con datos reales: en un lote con
-    // forma de paralelogramo, una arista ADYACENTE al frente puede tener su
-    // punto medio más lejos que la arista realmente opuesta, dando un fondo
-    // incorrecto (topológicamente pegado al frente) y dejando todo el resto
-    // de lados del mismo lado (derecha vacío).
-    const indiceFondo = (frente.index + Math.round(n / 2)) % n;
-    const fondo = edges[indiceFondo];
+    // Orden de recorrido del polígono empezando justo después del frente.
+    const ordenDesdeFrente: number[] = [];
+    for (let paso = 1; paso < n; paso++) {
+        ordenDesdeFrente.push((frente.index + paso) % n);
+    }
+
+    // Clasificar cada arista restante por ángulo respecto al frente (ver
+    // anguloEntreAristas más arriba): "paralela" = candidata a fondo,
+    // "lateral" = candidata a derecha/izquierda. Si ninguna califica
+    // (polígono muy irregular), se usa la de menor ángulo como único fondo
+    // — mismo respaldo que antes, para que fondo nunca quede vacío.
+    const anguloPorIndice = new Map<number, number>(
+        ordenDesdeFrente.map((idx) => [idx, anguloEntreAristas(frente, edges[idx])])
+    );
+    const paralelas = ordenDesdeFrente.filter((idx) => anguloPorIndice.get(idx)! <= UMBRAL_PARALELO_GRADOS);
+    const indicesFondo = new Set(
+        paralelas.length > 0
+            ? paralelas
+            : [ordenDesdeFrente.reduce((min, idx) => (anguloPorIndice.get(idx)! < anguloPorIndice.get(min)! ? idx : min))]
+    );
 
     let ladoDerechoLongitud = 0;
     let ladoIzquierdoLongitud = 0;
+    let fondoLongitud = 0;
     const colindancias: ColindanciaDerivada[] = [];
 
     const agregarColindancia = (edge: Edge, lado: ColindanciaDerivada['lado']) => {
@@ -193,26 +243,28 @@ export function derivarColindanciasYDimensiones(
     };
 
     agregarColindancia(frente, 'frente');
-    agregarColindancia(fondo, 'fondo');
 
-    // Clasificar el resto por orden de recorrido del polígono (topológico, no
-    // geométrico): caminando desde el frente hacia el fondo en un sentido son
-    // "derecha", caminando desde el fondo de vuelta al frente son "izquierda".
-    // Un producto cruzado relativo al punto medio del frente no sirve aquí:
-    // para polígonos reales dio el mismo signo en ambos lados (verificado).
-    const ordenDesdeFrente: number[] = [];
-    for (let paso = 1; paso < n; paso++) {
-        ordenDesdeFrente.push((frente.index + paso) % n);
-    }
-    const posicionFondo = ordenDesdeFrente.indexOf(fondo.index);
-
-    ordenDesdeFrente.forEach((idx, posicion) => {
-        if (idx === fondo.index) return;
+    // Máquina de estados recorriendo el polígono en orden desde el frente:
+    // empieza en "derecha", pasa a "fondo" en cuanto aparece la primera
+    // arista candidata (paralela), y a "izquierda" en cuanto esa racha
+    // termina. Así fondo/derecha/izquierda admiten cada uno varias aristas
+    // contiguas (varios vecinos), no solo una.
+    let estado: ColindanciaDerivada['lado'] = 'derecha';
+    ordenDesdeFrente.forEach((idx) => {
         const edge = edges[idx];
-        const lado: ColindanciaDerivada['lado'] = posicion < posicionFondo ? 'derecha' : 'izquierda';
-        if (lado === 'derecha') ladoDerechoLongitud += edge.longitud;
+        const esFondoCandidata = indicesFondo.has(idx);
+
+        if (estado === 'derecha' && esFondoCandidata) {
+            estado = 'fondo';
+        } else if (estado === 'fondo' && !esFondoCandidata) {
+            estado = 'izquierda';
+        }
+
+        if (estado === 'derecha') ladoDerechoLongitud += edge.longitud;
+        else if (estado === 'fondo') fondoLongitud += edge.longitud;
         else ladoIzquierdoLongitud += edge.longitud;
-        agregarColindancia(edge, lado);
+
+        agregarColindancia(edge, estado);
     });
 
     const area = lote.measurements?.area ?? lote.x_area;
@@ -222,7 +274,7 @@ export function derivarColindanciasYDimensiones(
         colindancias,
         dimensiones: {
             frente: parseFloat(frente.longitud.toFixed(2)),
-            fondo: parseFloat(fondo.longitud.toFixed(2)),
+            fondo: parseFloat(fondoLongitud.toFixed(2)),
             ladoDerecho: parseFloat(ladoDerechoLongitud.toFixed(2)),
             ladoIzquierdo: parseFloat(ladoIzquierdoLongitud.toFixed(2)),
             area,
