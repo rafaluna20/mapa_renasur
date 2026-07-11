@@ -84,12 +84,25 @@ interface Edge {
  * partir de la geometría real del lote, de todos los lotes del mapa, y
  * (opcional) de los elementos urbanos (calles/parques) con geometría real.
  *
- * Heurística (no hay dato de negocio que diga "cuál lado es el frente"):
- * - Frente = el lado más largo entre los que NO colindan con otro lote
- *   (asumiendo que el frente da a una calle).
- * - Fondo = el lado restante geométricamente más opuesto al frente.
- * - Derecha/Izquierda = el resto, clasificado por el signo del producto
- *   cruzado respecto a la dirección del frente.
+ * Criterio de "frente" (en 3 niveles, de más a menos confiable):
+ * 1. El lado que colinda con una capa de tipo "calle" real (elementosUrbanos).
+ *    La longitud NO importa acá: el frente de un lote no es necesariamente
+ *    el lado más largo, puede ser cualquiera — lo que lo hace frente es dar
+ *    a la vía pública, no su tamaño. Si hay más de un lado con calle
+ *    confirmada (lote de esquina con dos frentes), se usa la longitud SOLO
+ *    como desempate entre esos candidatos, ya que la estructura actual
+ *    permite un solo "frente" por lote.
+ * 2. Si ningún lado tiene una calle confirmada todavía (su geometría real
+ *    aún no se cargó en elemento_urbano_geometry): el lado más largo entre
+ *    los que no colindan con otro lote — mismo criterio que se usaba antes
+ *    de tener capas reales, como red de seguridad mientras se completa la
+ *    digitalización de calles.
+ * 3. Si el lote está completamente rodeado de otros lotes (caso anómalo):
+ *    el lado más largo del polígono.
+ *
+ * Fondo = el lado restante geométricamente más opuesto al frente.
+ * Derecha/Izquierda = el resto, clasificado por el signo del producto
+ * cruzado respecto a la dirección del frente.
  *
  * Para lotes de esquina o polígonos irregulares (más de 4 lados) puede
  * haber más de una colindancia por lado — es intencional, el schema de
@@ -128,8 +141,13 @@ export function derivarColindanciasYDimensiones(
         });
     }
 
-    const edgesCalle = edges.filter((e) => !e.vecinoLote);
-    const frente = (edgesCalle.length > 0 ? edgesCalle : edges).reduce((max, e) =>
+    const edgesCalleConfirmada = edges.filter((e) => e.vecinoUrbano?.tipo === 'calle');
+    const edgesSinLote = edges.filter((e) => !e.vecinoLote);
+    const candidatosFrente =
+        edgesCalleConfirmada.length > 0 ? edgesCalleConfirmada
+        : edgesSinLote.length > 0 ? edgesSinLote
+        : edges;
+    const frente = candidatosFrente.reduce((max, e) =>
         e.longitud > max.longitud ? e : max
     );
 
