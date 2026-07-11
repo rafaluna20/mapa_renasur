@@ -208,10 +208,13 @@ export async function POST(request: NextRequest) {
       tipo: e.tipo,
       color: e.color,
       mostrarEtiqueta: e.mostrarEtiqueta,
+      esArea: e.esArea,
       codigo: e.codigo,
       texto: e.nombre,
       estado: '',
       vertices: e.points,
+      arcos: e.arcos,
+      circulo: e.circulo,
     }));
     // DIAGNOSTICO TEMPORAL: ver el mismo dato tal cual queda armado para el
     // payload final hacia plan_pro (justo antes del fetch más abajo).

@@ -117,16 +117,19 @@ interface OdooElementoUrbano {
     codigo: string | false;
     capa_id: [number, string] | false;
     x_geometry_utm: [number, number][] | false;
+    x_geometry_arcos: ArcoMetadata[] | false;
+    x_geometry_circulo: { centro: [number, number]; radio: number } | false;
 }
 
 // Registro crudo del modelo Odoo 'elemento.urbano.capa' — capas estilo
-// AutoCAD (nombre, código de wire-format, color, si muestra etiqueta),
-// editables desde Odoo sin tocar código en mapa_renasur/plan_pro.
+// AutoCAD (nombre, código de wire-format, color, si muestra etiqueta, si es
+// área o línea), editables desde Odoo sin tocar código en mapa_renasur/plan_pro.
 interface OdooElementoUrbanoCapa {
     id: number;
     codigo: string;
     color: string;
     mostrar_etiqueta: boolean;
+    es_area: boolean;
 }
 
 /**
@@ -142,27 +145,32 @@ export async function fetchElementosUrbanos(): Promise<ElementoUrbano[]> {
         const registros: OdooElementoUrbano[] = await fetchOdoo(
             'elemento.urbano',
             'search_read',
-            [[['active', '=', true], ['x_geometry_utm', '!=', false]]],
+            // Un elemento es válido con UN polígono (x_geometry_utm) O un
+            // círculo completo (x_geometry_circulo) — no hace falta el
+            // primero si tiene el segundo.
+            [['active', '=', true], '|', ['x_geometry_utm', '!=', false], ['x_geometry_circulo', '!=', false]],
             {
-                fields: ['id', 'name', 'codigo', 'capa_id', 'x_geometry_utm'],
+                fields: ['id', 'name', 'codigo', 'capa_id', 'x_geometry_utm', 'x_geometry_arcos', 'x_geometry_circulo'],
                 limit: 500,
             }
         );
 
-        const validos = registros.filter(
-            (r) => Array.isArray(r.x_geometry_utm) && r.x_geometry_utm.length >= 3 && r.capa_id,
-        );
+        const validos = registros.filter((r) => {
+            const tieneCirculo = !!(r.x_geometry_circulo && r.x_geometry_circulo.radio);
+            const tienePoligono = Array.isArray(r.x_geometry_utm) && r.x_geometry_utm.length >= 3;
+            return (tieneCirculo || tienePoligono) && r.capa_id;
+        });
         if (validos.length === 0) return [];
 
         // Segunda consulta (join manual): capa_id solo trae [id, nombre] por
-        // JSON-RPC, así que el color/mostrar_etiqueta de cada capa se resuelve
-        // en un solo search_read adicional por los ids usados.
+        // JSON-RPC, así que el color/mostrar_etiqueta/es_area de cada capa
+        // se resuelve en un solo search_read adicional por los ids usados.
         const capaIds = [...new Set(validos.map((r) => (r.capa_id as [number, string])[0]))];
         const capas: OdooElementoUrbanoCapa[] = await fetchOdoo(
             'elemento.urbano.capa',
             'search_read',
             [[['id', 'in', capaIds]]],
-            { fields: ['id', 'codigo', 'color', 'mostrar_etiqueta'] }
+            { fields: ['id', 'codigo', 'color', 'mostrar_etiqueta', 'es_area'] }
         );
         const capaPorId = new Map(capas.map((c) => [c.id, c]));
 
@@ -176,7 +184,10 @@ export async function fetchElementosUrbanos(): Promise<ElementoUrbano[]> {
                     tipo: capa.codigo,
                     color: capa.color,
                     mostrarEtiqueta: capa.mostrar_etiqueta,
-                    points: r.x_geometry_utm as [number, number][],
+                    esArea: capa.es_area,
+                    points: (r.x_geometry_utm || []) as [number, number][],
+                    ...(r.x_geometry_arcos ? { arcos: r.x_geometry_arcos } : {}),
+                    ...(r.x_geometry_circulo ? { circulo: r.x_geometry_circulo } : {}),
                 };
             })
             .filter((e): e is ElementoUrbano => e !== null);

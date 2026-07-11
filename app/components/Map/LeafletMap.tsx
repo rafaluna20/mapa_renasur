@@ -1,6 +1,6 @@
 'use client';
 
-import { MapContainer, TileLayer, Polygon, useMap, Tooltip, Circle, CircleMarker, ImageOverlay } from 'react-leaflet';
+import { MapContainer, TileLayer, Polygon, Polyline, useMap, Tooltip, Circle, CircleMarker, ImageOverlay } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.css';
 import 'leaflet-defaulticon-compatibility';
@@ -275,19 +275,36 @@ export default function LeafletMap({ lots, elementosUrbanos = [], selectedLotId,
         return map;
     }, [lots]);
 
-    // Posiciones Lat/Lng de calles/parques, memoizadas igual que los lotes.
+    // Posiciones Lat/Lng de calles/parques/etc, memoizadas igual que los
+    // lotes. Un elemento puede ser: círculo completo (x_geometry_circulo,
+    // centro+radio), o un polígono/línea (points, con lados curvos
+    // expandidos vía expandirVerticesConArcos antes de proyectar).
     const elementosUrbanosPositions = useMemo(() => {
-        return elementosUrbanos.map(elemento => ({
-            elemento,
-            positions: elemento.points.map(p => {
-                try {
-                    const [lon, lat] = proj4("EPSG:32718", "EPSG:4326", [p[0], p[1]]);
-                    return [lat, lon] as [number, number];
-                } catch {
-                    return [0, 0] as [number, number];
-                }
-            }),
-        }));
+        const utmToLatLng = (p: [number, number]): [number, number] => {
+            try {
+                const [lon, lat] = proj4("EPSG:32718", "EPSG:4326", [p[0], p[1]]);
+                return [lat, lon];
+            } catch {
+                return [0, 0];
+            }
+        };
+        return elementosUrbanos.map(elemento => {
+            if (elemento.circulo) {
+                return {
+                    elemento,
+                    kind: 'circulo' as const,
+                    center: utmToLatLng(elemento.circulo.centro),
+                    radiusMeters: elemento.circulo.radio,
+                };
+            }
+            const puntosUtm = expandirVerticesConArcos(elemento.points, elemento.arcos);
+            const kind: 'area' | 'linea' = elemento.esArea ? 'area' : 'linea';
+            return {
+                elemento,
+                kind,
+                positions: puntosUtm.map(utmToLatLng),
+            };
+        });
     }, [elementosUrbanos]);
 
     // COORDENADAS DEL PLANO GENERAL (MASTERPLAN)
@@ -384,17 +401,42 @@ export default function LeafletMap({ lots, elementosUrbanos = [], selectedLotId,
                 </>
             )}
 
-            {/* Calles y parques (contexto visual, no vendibles): se dibujan
-                debajo de los lotes, sin tooltip ni interacción de selección. */}
-            {elementosUrbanosPositions.map(({ elemento, positions }) => {
-                if (!positions || positions.length === 0) return null;
+            {/* Calles/parques/círculos/líneas (contexto visual, no vendibles):
+                se dibujan debajo de los lotes, sin tooltip ni interacción. */}
+            {elementosUrbanosPositions.map((item) => {
+                const { elemento } = item;
+                const color = elemento.color || COLOR_ELEMENTO_URBANO_FALLBACK;
+
+                if (item.kind === 'circulo') {
+                    return (
+                        <Circle
+                            key={`urbano-${elemento.codigo}`}
+                            center={item.center}
+                            radius={item.radiusMeters}
+                            pathOptions={{ color, fillColor: color, fillOpacity: 0.5, weight: 1, interactive: false }}
+                        />
+                    );
+                }
+
+                if (!item.positions || item.positions.length === 0) return null;
+
+                if (item.kind === 'linea') {
+                    return (
+                        <Polyline
+                            key={`urbano-${elemento.codigo}`}
+                            positions={item.positions}
+                            pathOptions={{ color, weight: 2, interactive: false }}
+                        />
+                    );
+                }
+
                 return (
                     <Polygon
                         key={`urbano-${elemento.codigo}`}
-                        positions={positions}
+                        positions={item.positions}
                         pathOptions={{
-                            color: elemento.color || COLOR_ELEMENTO_URBANO_FALLBACK,
-                            fillColor: elemento.color || COLOR_ELEMENTO_URBANO_FALLBACK,
+                            color,
+                            fillColor: color,
                             fillOpacity: 0.5,
                             weight: 1,
                             interactive: false,

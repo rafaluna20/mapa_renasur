@@ -1,4 +1,5 @@
 import elementosUrbanosRaw from './elementos-urbanos.json';
+import { ArcoMetadata } from '@/app/utils/arcoUtils';
 
 /**
  * Elemento urbano no vendible (calle, área verde/parque): geometría real
@@ -24,7 +25,13 @@ export interface ElementoUrbano {
     color: string;
     /** Si el nombre del elemento se imprime como etiqueta en el plano. */
     mostrarEtiqueta: boolean;
+    /** Si la capa es un área (polígono relleno) o una línea (trazo abierto, sin relleno). */
+    esArea: boolean;
     points: [number, number][];
+    /** Lados curvos del polígono (points), si el elemento tiene alguno. */
+    arcos?: ArcoMetadata[];
+    /** Presente solo si el elemento es un círculo completo (reemplaza a "points"). */
+    circulo?: { centro: [number, number]; radio: number };
 }
 
 // Respaldo estático (mismo rol que geometries.json para lotes no migrados a
