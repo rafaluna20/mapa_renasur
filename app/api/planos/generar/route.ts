@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
       'search_read',
       [[['active', '=', true]]],
       {
-        fields: ['id', 'name', 'default_code', 'list_price', 'qty_available', 'x_statu', 'x_area', 'x_mz', 'x_etapa', 'x_lote', 'x_cliente', 'x_geometry_utm', 'x_proyecto', 'x_ubicacion'],
+        fields: ['id', 'name', 'default_code', 'list_price', 'qty_available', 'x_statu', 'x_area', 'x_mz', 'x_etapa', 'x_lote', 'x_cliente', 'x_geometry_utm', 'x_proyecto', 'x_ubicacion', 'x_geometry_arcos'],
         limit: 1000,
         context: { lang: 'es_PE' },
       }
@@ -232,6 +232,10 @@ export async function POST(request: NextRequest) {
 
     const payload = {
       vertices: lote.points,
+      // Metadata de lados curvos del polígono principal (ver
+      // x_geometry_arcos en Odoo/product_lot_geometry) — permite a plan_pro
+      // dibujar la curva real en vez de una línea recta entre esos 2 vértices.
+      arcos: lote.x_geometry_arcos,
       dimensiones,
       lote: {
         codigo: lote.default_code,
@@ -247,6 +251,9 @@ export async function POST(request: NextRequest) {
         tipo: c.tipo,
         nombre: c.nombre,
         longitud: c.longitud,
+        radio: c.radio,
+        longitudArco: c.longitudArco,
+        sentido: c.sentido,
       })),
       propietario: lote.x_cliente ? { nombre: lote.x_cliente } : undefined,
       contexto: (elementosContexto.length > 0 || elementosUrbanosContexto.length > 0)

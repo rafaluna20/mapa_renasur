@@ -1,5 +1,6 @@
 import { apiFetch } from '@/app/lib/apiFetch';
 import { ElementoUrbano } from '@/app/data/elementosUrbanos';
+import { ArcoMetadata } from '@/app/utils/arcoUtils';
 
 // --- Type Definitions ---
 export interface OdooUser {
@@ -34,6 +35,10 @@ export interface OdooProduct {
     // "FRENTE A CALLE 9"). Texto libre cargado por el equipo comercial —
     // 76% de cobertura, con ruido real (espacios, valores placeholder).
     x_ubicacion?: string | false;
+    // Metadata de lados curvos (ver product_lot_geometry): [{ indiceVertice,
+    // radio, longitudArco, sentido }, ...]. false/[] si el lote no tiene
+    // ningún lado curvo (la inmensa mayoría).
+    x_geometry_arcos?: ArcoMetadata[] | false;
 }
 
 // --- Server-Side Fetch Utility ---

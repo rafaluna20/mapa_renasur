@@ -1,6 +1,7 @@
 import { Lot } from '@/app/data/lotsData';
 import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 import { calculateDistance, calculateMidpoint } from '@/app/utils/geometryUtils';
+import { ArcoMetadata, buscarArcoPorIndice } from '@/app/utils/arcoUtils';
 
 export interface ColindanciaDerivada {
     lado: 'frente' | 'fondo' | 'derecha' | 'izquierda';
@@ -8,6 +9,10 @@ export interface ColindanciaDerivada {
     tipo: string;
     nombre: string;
     longitud: number;
+    /** Presente solo si este lado es un arco de circunferencia (ver ArcoMetadata). */
+    radio?: number;
+    longitudArco?: number;
+    sentido?: 'horario' | 'antihorario';
 }
 
 export interface DimensionesDerivadas {
@@ -76,6 +81,8 @@ interface Edge {
     midpoint: [number, number];
     vecinoLote: Lot | null;
     vecinoUrbano: ElementoUrbano | null;
+    /** Presente si este lado es un arco de circunferencia (ver x_geometry_arcos en Odoo). */
+    arco?: ArcoMetadata;
 }
 
 // Ángulo agudo (0°-90°) entre las direcciones de dos aristas, ignorando el
@@ -168,14 +175,18 @@ export function derivarColindanciasYDimensiones(
         const a = pts[i];
         const b = pts[(i + 1) % n];
         const vecinoLote = encontrarVecino(a, b, lote, todosLosLotes);
+        const arco = buscarArcoPorIndice(lote.x_geometry_arcos, i);
         edges.push({
             index: i,
             a,
             b,
-            longitud: calculateDistance(a, b),
+            // Lado curvo: usar la longitud de arco real, no la distancia
+            // recta (cuerda) entre los 2 extremos.
+            longitud: arco ? arco.longitudArco : calculateDistance(a, b),
             midpoint: calculateMidpoint(a, b),
             vecinoLote,
             vecinoUrbano: vecinoLote ? null : encontrarVecinoUrbano(a, b, elementosUrbanos),
+            arco,
         });
     }
 
@@ -216,12 +227,17 @@ export function derivarColindanciasYDimensiones(
     const colindancias: ColindanciaDerivada[] = [];
 
     const agregarColindancia = (edge: Edge, lado: ColindanciaDerivada['lado']) => {
+        const infoArco = edge.arco
+            ? { radio: edge.arco.radio, longitudArco: edge.arco.longitudArco, sentido: edge.arco.sentido }
+            : {};
+
         if (edge.vecinoLote) {
             colindancias.push({
                 lado,
                 tipo: 'lote',
                 nombre: edge.vecinoLote.name || edge.vecinoLote.default_code,
                 longitud: parseFloat(edge.longitud.toFixed(2)),
+                ...infoArco,
             });
         } else if (edge.vecinoUrbano) {
             colindancias.push({
@@ -229,6 +245,7 @@ export function derivarColindanciasYDimensiones(
                 tipo: edge.vecinoUrbano.tipo,
                 nombre: edge.vecinoUrbano.nombre,
                 longitud: parseFloat(edge.longitud.toFixed(2)),
+                ...infoArco,
             });
         } else {
             // Fallback: todavía no se cargó la geometría real de la
@@ -238,6 +255,7 @@ export function derivarColindanciasYDimensiones(
                 tipo: 'calle',
                 nombre: 'Calle',
                 longitud: parseFloat(edge.longitud.toFixed(2)),
+                ...infoArco,
             });
         }
     };

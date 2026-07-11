@@ -123,6 +123,7 @@ export function mergeLotsData(
                 x_cliente: getOdooVal(odooMatch.x_cliente, ''),
                 x_proyecto: getOdooVal(odooMatch.x_proyecto, lot.x_proyecto || ''),
                 x_ubicacion: getOdooVal(odooMatch.x_ubicacion, lot.x_ubicacion || ''),
+                x_geometry_arcos: odooMatch.x_geometry_arcos || lot.x_geometry_arcos,
                 points: geometry?.points || lot.points,
                 measurements: geometry?.measurements
             } as Lot;
@@ -160,6 +161,7 @@ export function mergeLotsData(
                     x_lote: getOdooVal(odooMatch.x_lote, ''),
                     x_proyecto: getOdooVal(odooMatch.x_proyecto, ''),
                     x_ubicacion: getOdooVal(odooMatch.x_ubicacion, ''),
+                    x_geometry_arcos: odooMatch.x_geometry_arcos || undefined,
                     default_code: code,
                     points: geometry.points,
                     measurements: geometry.measurements,

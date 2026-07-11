@@ -1,3 +1,5 @@
+import { ArcoMetadata } from '@/app/utils/arcoUtils';
+
 export interface LotMeasurements {
     sides: number[];              // Length of each side in meters
     area: number;                 // Area in square meters
@@ -23,6 +25,7 @@ export interface Lot {
     x_cliente?: string; // Nombre del cliente asignado (Odoo x_cliente)
     x_proyecto?: string; // Proyecto/urbanización al que pertenece (Odoo x_proyecto) — ver UBICACION_POR_PROYECTO en app/api/planos/generar/route.ts
     x_ubicacion?: string; // Calle/referencia del frente del lote (Odoo x_ubicacion), ej. "CALLE 13"
+    x_geometry_arcos?: ArcoMetadata[]; // Metadata de lados curvos (Odoo x_geometry_arcos), ver product_lot_geometry
 }
 
 
