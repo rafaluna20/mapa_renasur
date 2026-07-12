@@ -9,7 +9,7 @@ import { Lot } from '@/app/data/lotsData';
 import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 import { useEffect, useState, useMemo, useRef } from 'react';
 import L from 'leaflet';
-import { calculateMidpoint } from '@/app/utils/geometryUtils';
+import { calculateMidpoint, calculateCentroid } from '@/app/utils/geometryUtils';
 import { expandirVerticesConArcos } from '@/app/utils/arcoUtils';
 
 // Define UTM zone 18L projection (WGS84)
@@ -156,31 +156,27 @@ function SideMeasurementTooltips({ lot, map }: { lot: Lot; map: L.Map }) {
             return;
         }
 
-        // Helper function to determine tooltip direction based on edge orientation
-        const getTooltipDirection = (p1: [number, number], p2: [number, number]): 'top' | 'bottom' | 'left' | 'right' => {
-            const dx = p2[0] - p1[0];
-            const dy = p2[1] - p1[1];
-
-            // Calculate angle in degrees (0-360)
-            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-            const normalizedAngle = (angle + 360) % 360;
-
-            // Determine direction based on angle
-            // Top: 45-135 degrees (edge goes up-right to up-left)
-            // Bottom: 225-315 degrees (edge goes down-left to down-right)
-            // Right: 315-45 degrees (edge goes right)
-            // Left: 135-225 degrees (edge goes left)
-
-            if (normalizedAngle >= 45 && normalizedAngle < 135) {
-                return 'top';
-            } else if (normalizedAngle >= 135 && normalizedAngle < 225) {
-                return 'left';
-            } else if (normalizedAngle >= 225 && normalizedAngle < 315) {
-                return 'bottom';
-            } else {
-                return 'right';
-            }
+        // Proyecta un punto UTM a píxeles de PANTALLA (no geo): la única
+        // forma correcta de calcular un ángulo de rotación CSS que se vea
+        // alineado al lado tal como se dibuja en el mapa. Se usa un zoom
+        // fijo (el actual al momento de seleccionar el lote) solo como
+        // referencia — el ÁNGULO entre 2 puntos cercanos es invariante al
+        // zoom en Web Mercator (proyección conforme), así que no hace
+        // falta recalcular en cada evento de zoom/pan.
+        const zoomRef = map.getZoom();
+        const utmToScreenPoint = (utmPoint: [number, number]): L.Point => {
+            const [lon, lat] = proj4("EPSG:32718", "EPSG:4326", utmPoint);
+            return map.project([lat, lon], zoomRef);
         };
+
+        const centroidUtm = calculateCentroid(lot.points);
+        const centroidPx = utmToScreenPoint(centroidUtm);
+
+        // Desplazamiento fijo en PÍXELES (no metros): así la etiqueta se ve
+        // igual de "adentro" del lote sin importar el nivel de zoom — un
+        // desplazamiento en metros se vería enorme muy acercado o
+        // invisible muy alejado.
+        const OFFSET_PX = 13;
 
         // Create a tooltip for each side
         lot.points.forEach((point, index) => {
@@ -190,23 +186,52 @@ function SideMeasurementTooltips({ lot, map }: { lot: Lot; map: L.Map }) {
             // Calculate midpoint in UTM
             const midpointUTM = calculateMidpoint(point, nextPoint);
 
-            // Determine tooltip direction
-            const direction = getTooltipDirection(point, nextPoint);
-
             // Convert to lat/lng for display
             try {
                 const [lon, lat] = proj4("EPSG:32718", "EPSG:4326", [midpointUTM[0], midpointUTM[1]]);
                 const sideLength = lot.measurements!.sides[index];
 
+                // Ángulo del lado en píxeles de pantalla, normalizado a
+                // [-90°, 90°] para que el texto nunca quede al revés
+                // (misma convención que las cotas del Plano Perimétrico).
+                const p1px = utmToScreenPoint(point);
+                const p2px = utmToScreenPoint(nextPoint);
+                const dxPx = p2px.x - p1px.x;
+                const dyPx = p2px.y - p1px.y;
+                let angleDeg = Math.atan2(dyPx, dxPx) * (180 / Math.PI);
+                if (angleDeg > 90) angleDeg -= 180;
+                else if (angleDeg < -90) angleDeg += 180;
+
+                // Perpendicular al lado, orientada hacia el CENTROIDE del
+                // lote (adentro) — mismo criterio de "hacia qué lado
+                // apunta" que ya usa plan_pro para sus cotas.
+                const lenPx = Math.sqrt(dxPx * dxPx + dyPx * dyPx) || 1;
+                let perpX = -dyPx / lenPx;
+                let perpY = dxPx / lenPx;
+
+                const midPx = utmToScreenPoint(midpointUTM);
+                const toCentroidX = centroidPx.x - midPx.x;
+                const toCentroidY = centroidPx.y - midPx.y;
+                if (perpX * toCentroidX + perpY * toCentroidY < 0) {
+                    perpX = -perpX;
+                    perpY = -perpY;
+                }
+
+                const offsetX = perpX * OFFSET_PX;
+                const offsetY = perpY * OFFSET_PX;
+
                 const tooltip = L.tooltip({
                     permanent: true,
-                    direction: direction,
-                    className: 'side-measurement-tooltip',
+                    direction: 'center',
+                    className: 'side-measurement-tooltip-anchor',
                     opacity: 1,
-                    offset: [0, 0] // No offset needed, let direction handle it
+                    offset: [0, 0],
+                    interactive: false,
                 })
                     .setLatLng([lat, lon])
-                    .setContent(`${sideLength.toFixed(2)}m`)
+                    .setContent(
+                        `<div class="side-measurement-tooltip" style="transform: translate(${offsetX.toFixed(1)}px, ${offsetY.toFixed(1)}px) rotate(${angleDeg.toFixed(1)}deg);">${sideLength.toFixed(2)}m</div>`
+                    )
                     .addTo(map);
 
                 newTooltips.push(tooltip);

@@ -18,27 +18,43 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* Side Measurement Tooltips for Map */
-.side-measurement-tooltip {
-  background: rgba(0, 0, 0, 0.85) !important;
-  border: 1.6px solid rgba(255, 255, 255, 0.9) !important;
-  border-radius: 5px !important;
-  padding: 3px 8px !important;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4) !important;
-  font-size: 10.4px !important;
-  font-weight: 700 !important;
-  color: white !important;
-  text-align: center !important;
-  line-height: 1.2 !important;
-  letter-spacing: 0.4px !important;
-  backdrop-filter: blur(4px) !important;
-  z-index: 1000 !important;
-  /* Aparece suavemente cuando se crea (sin movimiento, solo opacidad) */
-  animation: fadeInSideLabels 0.6s ease-out !important;
+/* Side Measurement Tooltips for Map: el contenedor EXTERNO
+   (side-measurement-tooltip-anchor) es el que Leaflet posiciona/mueve
+   (translate3d) en el punto medio geográfico de cada lado — se deja
+   totalmente "invisible" (sin caja propia), para que el div INTERNO
+   (side-measurement-tooltip, dentro del contenido vía setContent) sea
+   libre de rotar + desplazarse en píxeles sin pelear con el transform de
+   posicionamiento de Leaflet. */
+.side-measurement-tooltip-anchor {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  pointer-events: none !important;
 }
 
-.side-measurement-tooltip::before {
+.side-measurement-tooltip-anchor::before {
   display: none !important;
+}
+
+.side-measurement-tooltip {
+  display: inline-block;
+  background: rgba(0, 0, 0, 0.85);
+  border: 1.6px solid rgba(255, 255, 255, 0.9);
+  border-radius: 5px;
+  padding: 3px 8px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
+  font-size: 10.4px;
+  font-weight: 700;
+  color: white;
+  text-align: center;
+  line-height: 1.2;
+  letter-spacing: 0.4px;
+  backdrop-filter: blur(4px);
+  white-space: nowrap;
+  /* Aparece suavemente cuando se crea (sin movimiento, solo opacidad) */
+  animation: fadeInSideLabels 0.6s ease-out;
 }
 
 /* ============================================
