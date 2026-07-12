@@ -284,7 +284,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
 
     return (
         <>
-            <div className="fixed md:absolute bottom-6 left-1/2 -translate-x-1/2 md:translate-x-0 md:left-auto md:bottom-auto md:top-4 md:right-4 w-[90%] md:w-96 bg-white rounded-2xl md:rounded-xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] md:shadow-2xl border border-slate-200 overflow-hidden z-[1000] animate-in slide-in-from-bottom-12 md:slide-in-from-right-8 fade-in duration-300 origin-bottom md:origin-top-right scale-[0.95] md:scale-[0.85] flex flex-col max-h-[95vh]">
+            <div className="fixed md:absolute bottom-6 left-1/2 -translate-x-1/2 md:translate-x-0 md:left-auto md:bottom-auto md:top-4 md:right-4 w-[90%] md:w-96 bg-white rounded-2xl md:rounded-xl shadow-[0_2px_8px_rgb(0,0,0,0.08),0_16px_40px_rgb(0,0,0,0.18)] border border-slate-100 overflow-hidden z-[1000] animate-in slide-in-from-bottom-12 md:slide-in-from-right-8 fade-in duration-300 origin-bottom md:origin-top-right scale-[0.95] md:scale-[0.85] flex flex-col max-h-[95vh]">
 
             {/* Header */}
             <div className={`h-22 md:h-24 ${config.bg} relative shrink-0 flex flex-col`}>
