@@ -1,6 +1,7 @@
 import { OdooProduct } from '@/app/services/odooService';
 import { Lot } from '@/app/data/lotsData';
 import { calculateLotMeasurements, LotMeasurements } from '@/app/utils/geometryUtils';
+import { ArcoMetadata } from '@/app/utils/arcoUtils';
 
 export interface EnrichedGeometry {
     coordinates: [number, number][];
@@ -24,10 +25,14 @@ interface ResolvedGeometry {
  */
 function resolveGeometry(
     odooVertices: [number, number][] | false | undefined,
-    registryGeometry: EnrichedGeometry | undefined
+    registryGeometry: EnrichedGeometry | undefined,
+    arcos?: ArcoMetadata[] | false
 ): ResolvedGeometry | null {
     if (Array.isArray(odooVertices) && odooVertices.length >= 3) {
-        return { points: odooVertices, measurements: calculateLotMeasurements(odooVertices) };
+        return {
+            points: odooVertices,
+            measurements: calculateLotMeasurements(odooVertices, arcos || undefined),
+        };
     }
     if (registryGeometry?.coordinates?.length) {
         return { points: registryGeometry.coordinates, measurements: registryGeometry.measurements };
@@ -102,7 +107,7 @@ export function mergeLotsData(
         }
 
         const registryGeometry = geometriesJson[normCode] || geometriesJson[rawCode];
-        const geometry = resolveGeometry(odooMatch?.x_geometry_utm, registryGeometry);
+        const geometry = resolveGeometry(odooMatch?.x_geometry_utm, registryGeometry, odooMatch?.x_geometry_arcos);
 
         if (odooMatch) {
             if (odooMatch.default_code) integratedCodes.add(normalizeCode(odooMatch.default_code));
@@ -145,7 +150,7 @@ export function mergeLotsData(
 
         if (code && !integratedCodes.has(code) && !integratedIds.has(odooId)) {
             const registryGeometry = geometriesJson[code];
-            const geometry = resolveGeometry(odooMatch.x_geometry_utm, registryGeometry);
+            const geometry = resolveGeometry(odooMatch.x_geometry_utm, registryGeometry, odooMatch.x_geometry_arcos);
             if (geometry) {
                 integratedCodes.add(code);
                 integratedIds.add(odooId);

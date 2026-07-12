@@ -3,6 +3,8 @@
  * All calculations assume coordinates are in meters (UTM projection)
  */
 
+import { ArcoMetadata } from '@/app/utils/arcoUtils';
+
 export interface Point {
     x: number;
     y: number;
@@ -44,24 +46,32 @@ export function calculateMidpoint(
 }
 
 /**
- * Calculate the length of each side of a polygon
+ * Calculate the length of each side of a polygon. Si `arcos` marca un lado
+ * como curvo (ver x_geometry_arcos en Odoo), se usa su longitudArco real en
+ * vez de la distancia recta entre los 2 vértices — mismo criterio que ya
+ * usa colindanciasUtils.ts para el lado en la Memoria Descriptiva, para que
+ * la etiqueta de longitud en el mapa (SideMeasurementTooltips) no muestre la
+ * cuerda recta de un lado que en realidad es un arco.
  * @param coordinates - Array of polygon vertices [[x1, y1], [x2, y2], ...]
  * @returns Array of side lengths in meters
  */
 export function calculateSideLengths(
-    coordinates: [number, number][]
+    coordinates: [number, number][],
+    arcos?: ArcoMetadata[]
 ): number[] {
     if (coordinates.length < 3) {
         return [];
     }
 
+    const arcoPorIndice = new Map((arcos || []).map((a) => [a.indiceVertice, a]));
     const sides: number[] = [];
     const n = coordinates.length;
 
     for (let i = 0; i < n; i++) {
         const p1 = coordinates[i];
         const p2 = coordinates[(i + 1) % n]; // Wrap to first point
-        sides.push(calculateDistance(p1, p2));
+        const arco = arcoPorIndice.get(i);
+        sides.push(arco ? arco.longitudArco : calculateDistance(p1, p2));
     }
 
     return sides;
@@ -94,8 +104,8 @@ export function calculateArea(coordinates: [number, number][]): number {
  * @param coordinates - Array of polygon vertices [[x1, y1], [x2, y2], ...]
  * @returns Perimeter in meters
  */
-export function calculatePerimeter(coordinates: [number, number][]): number {
-    const sides = calculateSideLengths(coordinates);
+export function calculatePerimeter(coordinates: [number, number][], arcos?: ArcoMetadata[]): number {
+    const sides = calculateSideLengths(coordinates, arcos);
     return sides.reduce((sum, side) => sum + side, 0);
 }
 
@@ -128,12 +138,13 @@ export function calculateCentroid(
  * @returns Complete measurements object
  */
 export function calculateLotMeasurements(
-    coordinates: [number, number][]
+    coordinates: [number, number][],
+    arcos?: ArcoMetadata[]
 ): LotMeasurements {
     return {
-        sides: calculateSideLengths(coordinates),
+        sides: calculateSideLengths(coordinates, arcos),
         area: calculateArea(coordinates),
-        perimeter: calculatePerimeter(coordinates),
+        perimeter: calculatePerimeter(coordinates, arcos),
         centroid: calculateCentroid(coordinates),
     };
 }
