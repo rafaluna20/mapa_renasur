@@ -505,7 +505,7 @@ export default function LeafletMap({ lots, elementosUrbanos = [], selectedLotId,
                                 className="!bg-transparent !border-0 !shadow-none p-0 tooltip-opt"
                                 opacity={1}
                             >
-                                <div className={`flex flex-col items-center justify-center bg-white rounded shadow-sm border border-slate-200 p-1 min-w-[40px] cursor-pointer lot-label-container ${areaClass} ${isSelected ? 'label-selected border-blue-500 shadow-blue-500/20' : ''}`}>
+                                <div className={`flex flex-col items-center justify-center bg-white rounded border border-slate-200 p-1 min-w-[40px] cursor-pointer lot-label-container ${areaClass} ${isSelected ? 'label-selected border-blue-500' : ''}`}>
                                     <span className="text-slate-800 font-bold text-[9px] tracking-tight uppercase text-center leading-none">
                                         {lot.x_mz}{lot.x_lote}
                                     </span>

@@ -270,6 +270,12 @@ button:active:not(:disabled) {
   will-change: opacity, transform;
   backface-visibility: hidden;
   animation: fadeIn 0.3s ease-out;
+  /* Sombra más marcada que el shadow-sm de Tailwind (className en
+     LeafletMap.tsx): sin esto, la etiqueta blanca se pierde visualmente
+     sobre rellenos de color variado (verde/rojo/morado/amarillo) o sobre
+     el mapa satelital. No lleva !important — .label-selected pisa esto
+     limpiamente con su propio glow azul cuando el lote está seleccionado. */
+  box-shadow: 0 4px 8px -2px rgba(15, 23, 42, 0.25), 0 2px 4px -1px rgba(15, 23, 42, 0.15);
 }
 
 /* --- La etiqueta del lote SELECCIONADO siempre destaca --- */
