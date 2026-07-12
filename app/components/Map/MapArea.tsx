@@ -151,17 +151,20 @@ export default function MapArea({
             </div>
 
             {/* Legend Overlay + cubo isométrico de marca (Terra Lima Lotes) */}
-            <div className="absolute bottom-34 right-4 z-[400] flex flex-col items-end gap-3">
+            <div className="absolute bottom-34 right-4 z-[400] flex flex-col items-end gap-[17px]">
                 {/* Solo desktop: en móvil ese espacio es escaso y esto es
-                    puramente decorativo, no aporta a la tarea del usuario. */}
-                <div className="hidden md:block terra-lima-cube-scene pointer-events-none" aria-hidden="true">
+                    puramente decorativo, no aporta a la tarea del usuario.
+                    self-center: centrado sobre el ancho de la leyenda, no
+                    pegado al borde derecho como el resto de los elementos
+                    de esta columna. */}
+                <div className="hidden md:block self-center terra-lima-cube-scene pointer-events-none" aria-hidden="true">
                     <div className="terra-lima-cube">
-                        <div className="cube-face cube-face-front">TERRA</div>
-                        <div className="cube-face cube-face-back">TERRA</div>
-                        <div className="cube-face cube-face-right">LIMA</div>
-                        <div className="cube-face cube-face-left">LIMA</div>
-                        <div className="cube-face cube-face-top">LOTES</div>
-                        <div className="cube-face cube-face-bottom">LOTES</div>
+                        <div className="cube-face cube-face-front">TERRA LIMA</div>
+                        <div className="cube-face cube-face-back">TERRA LIMA</div>
+                        <div className="cube-face cube-face-right">VENTA</div>
+                        <div className="cube-face cube-face-left">VENTA</div>
+                        <div className="cube-face cube-face-top">TERRA LIMA</div>
+                        <div className="cube-face cube-face-bottom">VENTA</div>
                     </div>
                 </div>
 

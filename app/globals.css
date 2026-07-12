@@ -96,11 +96,14 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 9px;
+  text-align: center;
+  padding: 2px;
+  font-size: 7.5px;
+  line-height: 1.15;
   font-weight: 800;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
   color: white;
-  background: linear-gradient(135deg, #a145f5, #7c3aed);
+  background: linear-gradient(135deg, #10b981, #059669);
   border: 1px solid rgba(255, 255, 255, 0.35);
   backface-visibility: hidden;
 }
@@ -113,19 +116,19 @@ body {
 }
 .cube-face-right {
   transform: rotateY(90deg) translateZ(30px);
-  background: linear-gradient(135deg, #8d32df, #6d28d9);
+  background: linear-gradient(135deg, #059669, #047857);
 }
 .cube-face-left {
   transform: rotateY(-90deg) translateZ(30px);
-  background: linear-gradient(135deg, #8d32df, #6d28d9);
+  background: linear-gradient(135deg, #059669, #047857);
 }
 .cube-face-top {
   transform: rotateX(90deg) translateZ(30px);
-  background: linear-gradient(135deg, #6d28d9, #5b21b6);
+  background: linear-gradient(135deg, #34d399, #10b981);
 }
 .cube-face-bottom {
   transform: rotateX(-90deg) translateZ(30px);
-  background: linear-gradient(135deg, #6d28d9, #5b21b6);
+  background: linear-gradient(135deg, #047857, #065f46);
 }
 
 /* Accesibilidad: quien tenga activada la preferencia de "reducir
