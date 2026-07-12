@@ -92,7 +92,7 @@ export default function MapArea({
 
             {/* Map Controls (Floating) */}
             <div className="absolute top-4 right-4 z-[400] flex flex-col gap-2">
-                <div className="bg-white rounded-lg shadow-md p-1 border border-slate-200 flex flex-col gap-1">
+                <div className="bg-white rounded-lg shadow-[0_2px_6px_rgb(0,0,0,0.12),0_10px_24px_rgb(0,0,0,0.22)] p-1 border border-slate-100 flex flex-col gap-1">
                     <button
                         onClick={() => onMapTypeChange('street')}
                         className={`p-2 rounded hover:bg-slate-100 transition-colors ${mapType === 'street' ? 'bg-[#A145F5]/10 text-[#A145F5]' : 'text-slate-600'}`}
@@ -124,7 +124,7 @@ export default function MapArea({
                     </button>
                 </div>
                 <button
-                    className="bg-white text-slate-700 p-2 rounded-lg shadow-md border border-slate-200 hover:bg-slate-50"
+                    className="bg-white text-slate-700 p-2 rounded-lg shadow-[0_2px_6px_rgb(0,0,0,0.12),0_10px_24px_rgb(0,0,0,0.22)] border border-slate-100 hover:bg-slate-50"
                     title="Mi Ubicación"
                     onClick={() => {
                         if (navigator.geolocation) {
@@ -151,7 +151,7 @@ export default function MapArea({
             </div>
 
             {/* Legend Overlay */}
-            <div className="absolute bottom-34 right-4 z-[400] bg-white/90 backdrop-blur-sm p-3 rounded-lg shadow-lg border border-slate-200 pointer-events-none">
+            <div className="absolute bottom-34 right-4 z-[400] bg-white/90 backdrop-blur-sm p-3 rounded-lg shadow-[0_2px_6px_rgb(0,0,0,0.12),0_10px_24px_rgb(0,0,0,0.22)] border border-slate-100 pointer-events-none">
                 <h4 className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Leyenda</h4>
                 <div className="space-y-1">
                     <div className="flex items-center gap-2 text-xs">
