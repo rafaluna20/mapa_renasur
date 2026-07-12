@@ -148,7 +148,15 @@ export async function fetchElementosUrbanos(): Promise<ElementoUrbano[]> {
             // Un elemento es válido con UN polígono (x_geometry_utm) O un
             // círculo completo (x_geometry_circulo) — no hace falta el
             // primero si tiene el segundo.
-            [['active', '=', true], '|', ['x_geometry_utm', '!=', false], ['x_geometry_circulo', '!=', false]],
+            // IMPORTANTE: "args" acá debe ser [domain] (un solo elemento que
+            // ES la lista de condiciones) — el mismo patrón que la consulta
+            // de capas más abajo. Sin este nivel extra de arreglo, Odoo
+            // recibe el domain partido en args sueltos (fields/offset/limit
+            // con basura), lanza un error server-side, y esta función lo
+            // atrapa silenciosamente devolviendo [] — exactamente el bug
+            // que dejó de dibujar TODOS los elementos urbanos (no solo los
+            // círculos) desde que se agregó el operador '|' acá.
+            [[['active', '=', true], '|', ['x_geometry_utm', '!=', false], ['x_geometry_circulo', '!=', false]]],
             {
                 fields: ['id', 'name', 'codigo', 'capa_id', 'x_geometry_utm', 'x_geometry_arcos', 'x_geometry_circulo'],
                 limit: 500,
