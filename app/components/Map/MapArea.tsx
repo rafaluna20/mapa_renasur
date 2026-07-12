@@ -150,29 +150,44 @@ export default function MapArea({
                 </button>
             </div>
 
-            {/* Legend Overlay */}
-            <div className="absolute bottom-34 right-4 z-[400] bg-white/90 backdrop-blur-sm p-3 rounded-lg shadow-[0_6px_14px_rgb(0,0,0,0.3),0_35px_70px_rgb(0,0,0,0.55)] border border-slate-100 pointer-events-none">
-                <h4 className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Leyenda</h4>
-                <div className="space-y-1">
-                    <div className="flex items-center gap-2 text-xs">
-                        <div className="w-3 h-3 rounded-sm bg-slate-400"></div>
-                        <span className="text-slate-700">No Vender</span>
+            {/* Legend Overlay + cubo isométrico de marca (Terra Lima Lotes) */}
+            <div className="absolute bottom-34 right-4 z-[400] flex flex-col items-end gap-3">
+                {/* Solo desktop: en móvil ese espacio es escaso y esto es
+                    puramente decorativo, no aporta a la tarea del usuario. */}
+                <div className="hidden md:block terra-lima-cube-scene pointer-events-none" aria-hidden="true">
+                    <div className="terra-lima-cube">
+                        <div className="cube-face cube-face-front">TERRA</div>
+                        <div className="cube-face cube-face-back">TERRA</div>
+                        <div className="cube-face cube-face-right">LIMA</div>
+                        <div className="cube-face cube-face-left">LIMA</div>
+                        <div className="cube-face cube-face-top">LOTES</div>
+                        <div className="cube-face cube-face-bottom">LOTES</div>
                     </div>
-                    <div className="flex items-center gap-2 text-xs">
-                        <div className="w-3 h-3 rounded-sm bg-emerald-400"></div>
-                        <span className="text-slate-700">Disponible</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs">
-                        <div className="w-3 h-3 rounded-sm bg-yellow-300"></div>
-                        <span className="text-slate-700">En Cotización</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs">
-                        <div className="w-3 h-3 rounded-sm bg-purple-400"></div>
-                        <span className="text-slate-700">Reservado</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs">
-                        <div className="w-3 h-3 rounded-sm bg-red-400"></div>
-                        <span className="text-slate-700">Vendido</span>
+                </div>
+
+                <div className="bg-white/90 backdrop-blur-sm p-3 rounded-lg shadow-[0_6px_14px_rgb(0,0,0,0.3),0_35px_70px_rgb(0,0,0,0.55)] border border-slate-100 pointer-events-none">
+                    <h4 className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Leyenda</h4>
+                    <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-xs">
+                            <div className="w-3 h-3 rounded-sm bg-slate-400"></div>
+                            <span className="text-slate-700">No Vender</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                            <div className="w-3 h-3 rounded-sm bg-emerald-400"></div>
+                            <span className="text-slate-700">Disponible</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                            <div className="w-3 h-3 rounded-sm bg-yellow-300"></div>
+                            <span className="text-slate-700">En Cotización</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                            <div className="w-3 h-3 rounded-sm bg-purple-400"></div>
+                            <span className="text-slate-700">Reservado</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                            <div className="w-3 h-3 rounded-sm bg-red-400"></div>
+                            <span className="text-slate-700">Vendido</span>
+                        </div>
                     </div>
                 </div>
             </div>

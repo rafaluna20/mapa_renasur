@@ -58,6 +58,86 @@ body {
 }
 
 /* ============================================
+   CUBO 3D ISOMÉTRICO DE MARCA (sobre la leyenda del mapa)
+   ============================================ */
+
+.terra-lima-cube-scene {
+  width: 60px;
+  height: 60px;
+  perspective: 500px;
+}
+
+.terra-lima-cube {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  /* -35.264deg es el ángulo isométrico real (arctan(1/√2)); se combina
+     con una rotación continua en Y para que el cubo gire sobre sí mismo
+     manteniendo la vista isométrica. Lenta (12s/vuelta) a propósito —
+     esto es un detalle de marca sobre una herramienta de trabajo, no
+     debe competir por atención con el mapa. */
+  animation: terraLimaCubeSpin 12s linear infinite;
+}
+
+@keyframes terraLimaCubeSpin {
+  from {
+    transform: rotateX(-35.264deg) rotateY(0deg);
+  }
+  to {
+    transform: rotateX(-35.264deg) rotateY(360deg);
+  }
+}
+
+.terra-lima-cube .cube-face {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: white;
+  background: linear-gradient(135deg, #a145f5, #7c3aed);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  backface-visibility: hidden;
+}
+
+.cube-face-front {
+  transform: translateZ(30px);
+}
+.cube-face-back {
+  transform: rotateY(180deg) translateZ(30px);
+}
+.cube-face-right {
+  transform: rotateY(90deg) translateZ(30px);
+  background: linear-gradient(135deg, #8d32df, #6d28d9);
+}
+.cube-face-left {
+  transform: rotateY(-90deg) translateZ(30px);
+  background: linear-gradient(135deg, #8d32df, #6d28d9);
+}
+.cube-face-top {
+  transform: rotateX(90deg) translateZ(30px);
+  background: linear-gradient(135deg, #6d28d9, #5b21b6);
+}
+.cube-face-bottom {
+  transform: rotateX(-90deg) translateZ(30px);
+  background: linear-gradient(135deg, #6d28d9, #5b21b6);
+}
+
+/* Accesibilidad: quien tenga activada la preferencia de "reducir
+   movimiento" ve el cubo fijo en la pose isométrica, sin girar. */
+@media (prefers-reduced-motion: reduce) {
+  .terra-lima-cube {
+    animation: none;
+    transform: rotateX(-35.264deg) rotateY(-30deg);
+  }
+}
+
+/* ============================================
    ANIMACIONES Y TRANSICIONES PARA EL MAPA
    ============================================ */
 
