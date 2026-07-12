@@ -157,14 +157,17 @@ export default function MapArea({
                     self-center: centrado sobre el ancho de la leyenda, no
                     pegado al borde derecho como el resto de los elementos
                     de esta columna. */}
-                <div className="hidden md:block self-center terra-lima-cube-scene pointer-events-none" aria-hidden="true">
-                    <div className="terra-lima-cube">
-                        <div className="cube-face cube-face-front">TERRA LIMA</div>
-                        <div className="cube-face cube-face-back">TERRA LIMA</div>
-                        <div className="cube-face cube-face-right">VENTA</div>
-                        <div className="cube-face cube-face-left">VENTA</div>
-                        <div className="cube-face cube-face-top">TERRA LIMA</div>
-                        <div className="cube-face cube-face-bottom">VENTA</div>
+                <div className="hidden md:flex flex-col items-center gap-1 self-center pointer-events-none" aria-hidden="true">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Lotes</span>
+                    <div className="terra-lima-cube-scene">
+                        <div className="terra-lima-cube">
+                            <div className="cube-face cube-face-front">TERRA LIMA</div>
+                            <div className="cube-face cube-face-back">TERRA LIMA</div>
+                            <div className="cube-face cube-face-right">VENTA</div>
+                            <div className="cube-face cube-face-left">VENTA</div>
+                            <div className="cube-face cube-face-top">TERRA LIMA</div>
+                            <div className="cube-face cube-face-bottom">VENTA</div>
+                        </div>
                     </div>
                 </div>
 

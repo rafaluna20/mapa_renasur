@@ -62,9 +62,9 @@ body {
    ============================================ */
 
 .terra-lima-cube-scene {
-  width: 60px;
-  height: 60px;
-  perspective: 500px;
+  width: 54px;
+  height: 54px;
+  perspective: 450px;
 }
 
 .terra-lima-cube {
@@ -91,44 +91,49 @@ body {
 
 .terra-lima-cube .cube-face {
   position: absolute;
-  width: 60px;
-  height: 60px;
+  width: 54px;
+  height: 54px;
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: center;
   padding: 2px;
-  font-size: 7.5px;
+  font-size: 7px;
   line-height: 1.15;
   font-weight: 800;
   letter-spacing: 0.3px;
   color: white;
-  background: linear-gradient(135deg, #10b981, #059669);
   border: 1px solid rgba(255, 255, 255, 0.35);
   backface-visibility: hidden;
 }
 
+/* Misma paleta que la Leyenda (ver bloque de abajo en MapArea.tsx):
+   Disponible (emerald-400), No Vender (slate-400), En Cotización
+   (yellow-300), Reservado (purple-400), Vendido (red-400). */
 .cube-face-front {
-  transform: translateZ(30px);
+  transform: translateZ(27px);
+  background: #34d399; /* Disponible */
 }
 .cube-face-back {
-  transform: rotateY(180deg) translateZ(30px);
+  transform: rotateY(180deg) translateZ(27px);
+  background: #94a3b8; /* No Vender */
 }
 .cube-face-right {
-  transform: rotateY(90deg) translateZ(30px);
-  background: linear-gradient(135deg, #059669, #047857);
+  transform: rotateY(90deg) translateZ(27px);
+  background: #fde047; /* En Cotización */
+  color: #422006; /* Contraste: el amarillo claro no se lee bien en blanco */
 }
 .cube-face-left {
-  transform: rotateY(-90deg) translateZ(30px);
-  background: linear-gradient(135deg, #059669, #047857);
+  transform: rotateY(-90deg) translateZ(27px);
+  background: #c084fc; /* Reservado */
 }
 .cube-face-top {
-  transform: rotateX(90deg) translateZ(30px);
-  background: linear-gradient(135deg, #34d399, #10b981);
+  transform: rotateX(90deg) translateZ(27px);
+  background: #f87171; /* Vendido */
 }
 .cube-face-bottom {
-  transform: rotateX(-90deg) translateZ(30px);
-  background: linear-gradient(135deg, #047857, #065f46);
+  transform: rotateX(-90deg) translateZ(27px);
+  background: #34d399; /* Disponible (repetida: solo 5 colores en la leyenda para 6 caras) */
 }
 
 /* Accesibilidad: quien tenga activada la preferencia de "reducir
