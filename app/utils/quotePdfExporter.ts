@@ -62,7 +62,12 @@ export const exportQuoteToPdf = async (
     vendorName: string = 'No especificado',
     clientDetails?: ClientPdfDetails,
     returnBlob: boolean = false,
-    includeSchedule: boolean = true
+    includeSchedule: boolean = true,
+    // 🆕 Desglose de la cuota inicial cuando el cliente la paga en varios
+    // pagos (2, 3... N) en vez de uno solo. Si viene undefined o con un
+    // solo elemento, el cronograma se ve exactamente igual que antes (una
+    // sola fila "PAGO INICIAL").
+    initialPaymentBreakdown?: { amount: number; date: Date }[]
 ): Promise<Blob | void> => {
     const clientName = clientDetails?.name;
     const doc = new jsPDF({
@@ -224,7 +229,14 @@ export const exportQuoteToPdf = async (
             }
         });
 
-        clientSectionY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+        // Usar el borde INFERIOR de la caja dibujada (clientBoxY + 32), no
+        // el finalY de la tabla: la caja tiene alto fijo, así que si el
+        // contenido de la tabla (nombre/teléfono/etc. cortos, sin wrap) mide
+        // menos que esos 32mm, el próximo título ("DETALLE FINANCIERO")
+        // terminaba dibujándose pegado o encima del borde de la caja.
+        const clientBoxBottom = clientBoxY + 32;
+        const tableBottom = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+        clientSectionY = Math.max(clientBoxBottom, tableBottom);
     }
 
     // --- 4. RESUMEN FINANCIERO ---
@@ -315,15 +327,36 @@ export const exportQuoteToPdf = async (
         doc.setTextColor(...COLORS.primary.dark);
         doc.text(`CRONOGRAMA DE PAGOS - ${calcs.installments.length} CUOTAS`, margin, tableY);
 
-        // Preparar datos: fila inicial + cuotas
-        const tableBody: any[][] = [
-            // Fila de pago inicial
-            [
+        // 🆕 Fila(s) de pago inicial: si el cliente la paga en varios pagos
+        // (initialPaymentBreakdown con más de 1 elemento), se muestra una
+        // fila por cada uno (0.1, 0.2...) con su fecha real y el saldo
+        // pendiente después de ESE pago puntual. Con 1 solo pago (el caso
+        // de siempre) se ve exactamente igual que antes: una sola fila
+        // "PAGO INICIAL" sin fecha propia.
+        const initialPaymentRows: any[][] = (() => {
+            if (initialPaymentBreakdown && initialPaymentBreakdown.length > 1) {
+                let running = calcs.discountedPrice;
+                return initialPaymentBreakdown.map((p, i) => {
+                    running = financeService.roundTo4Decimals(running - p.amount);
+                    return [
+                        { content: `0.${i + 1}`, styles: { fontStyle: 'bold' as const } },
+                        { content: financeService.formatDate(p.date), styles: { fontStyle: 'bold' as const, fillColor: COLORS.primary.veryLight } },
+                        { content: financeService.formatCurrency(p.amount), styles: { textColor: COLORS.primary.main, fontStyle: 'bold' as const } },
+                        { content: financeService.formatCurrency(Math.max(0, running)), styles: { textColor: COLORS.gray.medium } }
+                    ];
+                });
+            }
+            return [[
                 { content: '0', styles: { fontStyle: 'bold' as const } },
                 { content: 'PAGO INICIAL', styles: { fontStyle: 'bold' as const, fillColor: COLORS.primary.veryLight } },
                 { content: financeService.formatCurrency(calcs.initialPayment), styles: { textColor: COLORS.primary.main, fontStyle: 'bold' as const } },
                 { content: financeService.formatCurrency(calcs.remainingBalance), styles: { textColor: COLORS.gray.medium } }
-            ],
+            ]];
+        })();
+
+        // Preparar datos: fila(s) inicial(es) + cuotas
+        const tableBody: any[][] = [
+            ...initialPaymentRows,
             // Cuotas mensuales
             ...calcs.installments.map(inst => [
                 inst.number.toString(),

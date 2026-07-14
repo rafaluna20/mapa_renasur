@@ -9,6 +9,12 @@ export interface LocalQuoteTerms {
     discountAmount: number;
     discountedPrice: number;
     initialPayment: number;
+    // Desglose de la cuota inicial cuando el cliente la paga en varios
+    // pagos (2, 3... N) en vez de uno solo. initialPayment sigue siendo el
+    // TOTAL (suma de este arreglo) — nada del cálculo financiero ni el
+    // envío a Odoo depende de este desglose, es solo para reconstruir el
+    // detalle mostrado en el PDF/página si se necesita más adelante.
+    initialPaymentBreakdown?: { amount: number; date: string }[];
     numInstallments: number;
     monthlyInstallment: number;
     remainingBalance: number;

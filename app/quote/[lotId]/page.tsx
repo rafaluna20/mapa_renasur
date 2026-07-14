@@ -33,6 +33,17 @@ interface ClientSearchResult {
     street?: string;
 }
 
+// Pago adicional de la cuota inicial (2do, 3er, ... N pago). El primer
+// pago sigue viviendo en los estados initialPayment/initialPaymentDate ya
+// existentes, sin tocar su comportamiento — esto es solo lo que se suma
+// encima cuando el cliente divide la inicial en varios pagos.
+interface ExtraInitialPayment {
+    id: string;
+    amount: string;
+    dateIso: string;
+    dateDisplay: string;
+}
+
 export default function QuotePage({ params }: QuotePageProps) {
     const { user } = useAuth();
     const { lotId } = use(params);
@@ -155,6 +166,55 @@ export default function QuotePage({ params }: QuotePageProps) {
         }
     };
     
+    // 🆕 Cuota inicial en varios pagos: el 1er pago sigue en
+    // initialPayment/initialPaymentDate de arriba, sin cambios de
+    // comportamiento; esto es lo que el usuario suma con "+ Agregar pago"
+    // cuando el cliente paga la inicial en 2, 3... N partes.
+    const [extraInitialPayments, setExtraInitialPayments] = useState<ExtraInitialPayment[]>([]);
+
+    const addExtraInitialPayment = () => {
+        setExtraInitialPayments(prev => [
+            ...prev,
+            { id: `extra-${Date.now()}-${prev.length}`, amount: '', dateIso: '', dateDisplay: '' }
+        ]);
+    };
+    const removeExtraInitialPayment = (id: string) => {
+        setExtraInitialPayments(prev => prev.filter(p => p.id !== id));
+    };
+    const updateExtraInitialPaymentAmount = (id: string, valStr: string) => {
+        setExtraInitialPayments(prev => prev.map(p => (p.id === id ? { ...p, amount: valStr } : p)));
+    };
+    const setExtraInitialPaymentDisplay = (id: string, v: string) => {
+        setExtraInitialPayments(prev => prev.map(p => (p.id === id ? { ...p, dateDisplay: v } : p)));
+    };
+    const setExtraInitialPaymentIso = (id: string, v: string) => {
+        setExtraInitialPayments(prev => prev.map(p => (p.id === id ? { ...p, dateIso: v } : p)));
+    };
+
+    // Total real de la cuota inicial (1er pago + todos los adicionales) —
+    // esto es lo único que le importa al cálculo financiero, a Odoo y al
+    // saldo a financiar; el desglose en varios pagos es solo para mostrar
+    // en la página y en el PDF cómo se cobrará ese total.
+    const initialPaymentTotal = useMemo(() => {
+        const base = Number(initialPayment) || 0;
+        const extra = extraInitialPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+        return base + extra;
+    }, [initialPayment, extraInitialPayments]);
+
+    // Desglose para el PDF (cronograma de pagos): solo se arma cuando hay
+    // pagos adicionales — con 1 solo pago (el caso de siempre) el PDF sigue
+    // mostrando la única fila "PAGO INICIAL" de antes, sin cambios.
+    const initialPaymentBreakdownForPdf = useMemo(() => {
+        if (extraInitialPayments.length === 0) return undefined;
+        const rows = [
+            { amount: Number(initialPayment) || 0, date: financeService.parseLocalDate(initialPaymentDate) },
+            ...extraInitialPayments
+                .filter(p => p.dateIso)
+                .map(p => ({ amount: Number(p.amount) || 0, date: financeService.parseLocalDate(p.dateIso) })),
+        ];
+        return rows;
+    }, [initialPayment, initialPaymentDate, extraInitialPayments]);
+
     // 🆕 Tipo de Cronograma
     const [scheduleType, setScheduleType] = useState<'end_of_month' | 'fixed_day'>('end_of_month');
 
@@ -190,6 +250,7 @@ export default function QuotePage({ params }: QuotePageProps) {
             if (draft.discountPercent !== undefined) setDiscountPercent(draft.discountPercent);
             if (draft.discountAmount !== undefined) setDiscountAmount(draft.discountAmount);
             if (draft.initialPayment !== undefined) setInitialPayment(draft.initialPayment);
+            if (draft.extraInitialPayments) setExtraInitialPayments(draft.extraInitialPayments);
             if (draft.numInstallments !== undefined) setNumInstallments(draft.numInstallments);
             if (draft.scheduleType) setScheduleType(draft.scheduleType);
             if (draft.selectedClient) setSelectedClient(draft.selectedClient);
@@ -206,13 +267,13 @@ export default function QuotePage({ params }: QuotePageProps) {
     useEffect(() => {
         const handleSessionExpired = () => {
             sessionStorage.setItem(QUOTE_DRAFT_KEY, JSON.stringify({
-                discountPercent, discountAmount, initialPayment, numInstallments,
+                discountPercent, discountAmount, initialPayment, extraInitialPayments, numInstallments,
                 scheduleType, selectedClient, showCreateClient, newClientData,
             }));
         };
         window.addEventListener(STAFF_SESSION_EXPIRED_EVENT, handleSessionExpired);
         return () => window.removeEventListener(STAFF_SESSION_EXPIRED_EVENT, handleSessionExpired);
-    }, [QUOTE_DRAFT_KEY, discountPercent, discountAmount, initialPayment, numInstallments, scheduleType, selectedClient, showCreateClient, newClientData]);
+    }, [QUOTE_DRAFT_KEY, discountPercent, discountAmount, initialPayment, extraInitialPayments, numInstallments, scheduleType, selectedClient, showCreateClient, newClientData]);
 
     // Local Quote State
     const [currentQuoteId, setCurrentQuoteId] = useState<string | null>(null);
@@ -402,7 +463,11 @@ export default function QuotePage({ params }: QuotePageProps) {
                     discountPercent: Number(discountPercent) || 0,
                     discountAmount: Number(discountAmount) || 0,
                     discountedPrice: calculations.discountedPrice,
-                    initialPayment: Number(initialPayment) || 0,
+                    initialPayment: initialPaymentTotal,
+                    initialPaymentBreakdown: extraInitialPayments.length > 0 ? [
+                        { amount: Number(initialPayment) || 0, date: initialPaymentDate },
+                        ...extraInitialPayments.map(p => ({ amount: Number(p.amount) || 0, date: p.dateIso })),
+                    ] : undefined,
                     numInstallments: Number(numInstallments) || 0,
                     monthlyInstallment: calculations.monthlyInstallment,
                     remainingBalance: calculations.remainingBalance,
@@ -432,7 +497,8 @@ export default function QuotePage({ params }: QuotePageProps) {
                     address: selectedClient.street,
                 } : undefined,
                 false,
-                includeSchedule
+                includeSchedule,
+                initialPaymentBreakdownForPdf
             );
 
             // Notify Success (could use a toast)
@@ -476,7 +542,9 @@ export default function QuotePage({ params }: QuotePageProps) {
                     vat: selectedClient.vat,
                     address: selectedClient.street,
                 },
-                true // Request Blob return instead of download
+                true, // Request Blob return instead of download
+                true, // Incluir cronograma (comportamiento previo, sin flag propio acá)
+                initialPaymentBreakdownForPdf
             );
 
             if (!pdfBlob) {
@@ -494,10 +562,10 @@ export default function QuotePage({ params }: QuotePageProps) {
                     name: selectedClient.name,
                 },
                 lot.list_price, // Use full list price
-                `Cotización para ${lot.name}. Inicial: ${initialPayment}. Plazo: ${numInstallments} meses.`,
+                `Cotización para ${lot.name}. Inicial: ${initialPaymentTotal}. Plazo: ${numInstallments} meses.`,
                 {
                     installments: Number(numInstallments) || 0,
-                    downPayment: Number(initialPayment) || 0,
+                    downPayment: initialPaymentTotal,
                     discount: Number(discountAmount) || 0,
                     firstInstallmentDate: startDate
                 },
@@ -539,7 +607,17 @@ export default function QuotePage({ params }: QuotePageProps) {
         if (isNaN(initialDate.getTime())) {
             validInitialDate = new Date(); // Fallback a hoy si está vacío/inválido
         }
-        
+
+        // Si la cuota inicial se dividió en varios pagos, la fecha relevante
+        // para validar contra la primera cuota mensual es la del ÚLTIMO
+        // pago inicial (recién ahí termina de cobrarse la inicial) — no la
+        // del primero.
+        extraInitialPayments.forEach(p => {
+            if (!p.dateIso) return;
+            const d = financeService.parseLocalDate(p.dateIso);
+            if (!isNaN(d.getTime()) && d > validInitialDate) validInitialDate = d;
+        });
+
         if (isNaN(firstDate.getTime())) {
             // Fallback a fin del mes siguiente si está vacío/inválido
             validFirstDate = financeService.getLastDayOfMonth(
@@ -560,7 +638,7 @@ export default function QuotePage({ params }: QuotePageProps) {
             return financeService.calculateQuote(
                 lot.list_price,
                 Number(discountPercent) || 0,
-                Number(initialPayment) || 0,
+                initialPaymentTotal,
                 Number(numInstallments) || 0,
                 validInitialDate,    // Usar fechas validadas
                 validFirstDate,      // Usar fechas validadas
@@ -571,7 +649,7 @@ export default function QuotePage({ params }: QuotePageProps) {
             setDateValidationError('⚠️ Error al calcular la cotización. Por favor revisa los datos ingresados.');
             return null;
         }
-    }, [lot, discountPercent, initialPayment, numInstallments, initialPaymentDate, firstInstallmentDate, scheduleType]);
+    }, [lot, discountPercent, initialPaymentTotal, extraInitialPayments, numInstallments, initialPaymentDate, firstInstallmentDate, scheduleType]);
 
     // Derived states para validación visual de fechas tipeadas
     const isInitialDateInvalid = initialPaymentDateDisplay.length === 8 && isoToDisplay(initialPaymentDate) !== initialPaymentDateDisplay;
@@ -1004,6 +1082,81 @@ export default function QuotePage({ params }: QuotePageProps) {
                                             />
                                             <Calendar size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500 pointer-events-none" />
                                         </div>
+                                    </div>
+
+                                    {/* 🆕 Pagos adicionales de la cuota inicial: el cliente a veces
+                                        paga la inicial en 2, 3... N partes en vez de un solo monto.
+                                        El primer pago es el bloque "Cuota Inicial (S/)" de arriba —
+                                        esto es lo que se suma encima. */}
+                                    {extraInitialPayments.map((payment, idx) => (
+                                        <div key={payment.id}>
+                                            <div className="flex items-center justify-between mb-2">
+                                                <label className="block text-sm font-bold text-slate-700">
+                                                    Cuota Inicial - Pago {idx + 2} (S/)
+                                                </label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => removeExtraInitialPayment(payment.id)}
+                                                    className="text-xs text-red-500 hover:text-red-700 font-bold"
+                                                >
+                                                    Quitar
+                                                </button>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="relative">
+                                                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">S/</div>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        value={payment.amount}
+                                                        onChange={(e) => updateExtraInitialPaymentAmount(payment.id, e.target.value)}
+                                                        onKeyDown={preventNegative}
+                                                        className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800 transition-all"
+                                                        placeholder="Monto"
+                                                    />
+                                                </div>
+                                                <div className="relative">
+                                                    <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                                    <input
+                                                        type="text"
+                                                        value={payment.dateDisplay}
+                                                        onChange={(e) => handleDateDisplayChange(
+                                                            e.target.value,
+                                                            (v) => setExtraInitialPaymentDisplay(payment.id, v),
+                                                            (v) => setExtraInitialPaymentIso(payment.id, v)
+                                                        )}
+                                                        placeholder="dd/mm/aa"
+                                                        maxLength={8}
+                                                        className="w-full pl-9 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all font-medium tracking-widest text-slate-800"
+                                                    />
+                                                    <input
+                                                        type="date"
+                                                        value={payment.dateIso}
+                                                        onChange={(e) => {
+                                                            setExtraInitialPaymentIso(payment.id, e.target.value);
+                                                            setExtraInitialPaymentDisplay(payment.id, isoToDisplay(e.target.value));
+                                                        }}
+                                                        className="absolute right-0 top-0 bottom-0 w-10 opacity-0 cursor-pointer"
+                                                    />
+                                                    <Calendar size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500 pointer-events-none" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+
+                                    <div>
+                                        <button
+                                            type="button"
+                                            onClick={addExtraInitialPayment}
+                                            className="w-full py-2 border-2 border-dashed border-indigo-200 rounded-xl text-indigo-600 font-bold text-sm hover:bg-indigo-50 hover:border-indigo-300 transition-colors"
+                                        >
+                                            + Dividir cuota inicial (agregar otro pago)
+                                        </button>
+                                        {extraInitialPayments.length > 0 && (
+                                            <div className="mt-2 text-sm font-bold text-slate-700 text-right">
+                                                Total cuota inicial: {financeService.formatCurrency(initialPaymentTotal)}
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* 🆕 Fecha Primera Cuota (Cuota 1) */}
