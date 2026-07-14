@@ -484,7 +484,6 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, e
                     currentUser={user}
                     onExport={() => exportToSvg(filteredLots)}
                     onExportPdf={() => exportToPdf('map-export-area', 'Mapa-Renasur.pdf')}
-                    stats={stats}
                 />
 
                 {/* 

@@ -26,10 +26,6 @@ interface MapAreaProps {
     currentUser?: OdooUser | null;
     onExport: () => void;
     onExportPdf: () => void;
-    // Contadores en tiempo real (mismos que ProductDashboard, ver
-    // HomeClient.tsx) — se replican acá junto a la Leyenda para que se
-    // vean sin tener que mirar el sidebar.
-    stats?: { available: number; reserved: number; sold: number };
 }
 
 export default function MapArea({
@@ -41,8 +37,7 @@ export default function MapArea({
     preferCanvas,
     showMeasurements, onToggleMeasurements,
     currentUser,
-    onExport, onExportPdf,
-    stats
+    onExport, onExportPdf
 }: MapAreaProps) {
     const [activeQuotes, setActiveQuotes] = useState<{ count: number; quotes: { orderId: number; clientName: string; vendorName: string }[] } | null>(null);
 
@@ -201,25 +196,6 @@ export default function MapArea({
                         </div>
                     </div>
                 </div>
-
-                {/* Cantidades en tiempo real (mismos contadores que
-                    ProductDashboard en el sidebar) */}
-                {stats && (
-                    <div className="bg-white/90 backdrop-blur-sm p-2 rounded-lg shadow-[0_6px_14px_rgb(0,0,0,0.3),0_35px_70px_rgb(0,0,0,0.55)] border border-slate-100 pointer-events-none grid grid-cols-3 gap-1.5 text-center">
-                        <div className="flex flex-col items-center px-2 py-1 rounded-md bg-emerald-50 border border-emerald-100">
-                            <span className="text-sm font-bold text-emerald-600">{stats.available}</span>
-                            <span className="font-medium text-emerald-700 text-[8px] uppercase tracking-wide">Disponibles</span>
-                        </div>
-                        <div className="flex flex-col items-center px-2 py-1 rounded-md bg-amber-50 border border-amber-100">
-                            <span className="text-sm font-bold text-amber-600">{stats.reserved}</span>
-                            <span className="font-medium text-amber-700 text-[8px] uppercase tracking-wide">Reservados</span>
-                        </div>
-                        <div className="flex flex-col items-center px-2 py-1 rounded-md bg-red-50 border border-red-100">
-                            <span className="text-sm font-bold text-red-600">{stats.sold}</span>
-                            <span className="font-medium text-red-700 text-[8px] uppercase tracking-wide">Vendidos</span>
-                        </div>
-                    </div>
-                )}
             </div>
 
             <div className="flex-1 z-0 relative h-full">
