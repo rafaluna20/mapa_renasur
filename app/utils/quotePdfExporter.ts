@@ -329,18 +329,22 @@ export const exportQuoteToPdf = async (
 
         // 🆕 Fila(s) de pago inicial: si el cliente la paga en varios pagos
         // (initialPaymentBreakdown con más de 1 elemento), se muestra una
-        // fila por cada uno (0.1, 0.2...) con su fecha real y el saldo
-        // pendiente después de ESE pago puntual. Con 1 solo pago (el caso
-        // de siempre) se ve exactamente igual que antes: una sola fila
-        // "PAGO INICIAL" sin fecha propia.
+        // fila por cada uno — "Cuota Inicial" (el primero, que es el pago a
+        // la firma), "Cuota Inicial 2", "Cuota Inicial 3"... — con su fecha
+        // real y el saldo pendiente después de ESE pago puntual. Con 1 solo
+        // pago (el caso de siempre) se ve exactamente igual que antes: una
+        // sola fila "PAGO INICIAL" sin fecha propia.
         const initialPaymentRows: any[][] = (() => {
             if (initialPaymentBreakdown && initialPaymentBreakdown.length > 1) {
                 let running = calcs.discountedPrice;
                 return initialPaymentBreakdown.map((p, i) => {
                     running = financeService.roundTo4Decimals(running - p.amount);
+                    const etiqueta = i === 0
+                        ? 'Cuota Inicial (Pago a la firma)'
+                        : `Cuota Inicial ${i + 1}`;
                     return [
                         { content: `0.${i + 1}`, styles: { fontStyle: 'bold' as const } },
-                        { content: financeService.formatDate(p.date), styles: { fontStyle: 'bold' as const, fillColor: COLORS.primary.veryLight } },
+                        { content: `${etiqueta}\n${financeService.formatDate(p.date)}`, styles: { fontStyle: 'bold' as const, fillColor: COLORS.primary.veryLight } },
                         { content: financeService.formatCurrency(p.amount), styles: { textColor: COLORS.primary.main, fontStyle: 'bold' as const } },
                         { content: financeService.formatCurrency(Math.max(0, running)), styles: { textColor: COLORS.gray.medium } }
                     ];

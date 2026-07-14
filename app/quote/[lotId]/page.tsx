@@ -977,8 +977,8 @@ export default function QuotePage({ params }: QuotePageProps) {
 
                                     {/* Descuento Dual — tarjeta gris, separada de la cuota inicial
                                         (verde) y del financiamiento mensual (azul, más abajo). */}
-                                    <div className="bg-slate-200 border border-slate-300 rounded-xl p-4 space-y-3">
-                                        <label className="block text-sm font-bold text-slate-700">Descuento aplicado</label>
+                                    <div className="bg-white border border-slate-200 border-l-4 border-l-slate-400 rounded-xl p-4 space-y-3">
+                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Descuento aplicado</label>
                                         <div className="grid grid-cols-2 gap-3">
                                             <div className="relative">
                                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">%</div>
@@ -1016,11 +1016,12 @@ export default function QuotePage({ params }: QuotePageProps) {
                                         />
                                     </div>
 
-                                    {/* 🆕 Cuota Inicial: agrupada en una sola tarjeta con fondo verde
+                                    {/* 🆕 Cuota Inicial: agrupada en una sola tarjeta con acento verde
                                         para diferenciarla claramente del financiamiento mensual
                                         (Plazo / Fecha Primera Cuota, más abajo) — antes estos campos
                                         estaban intercalados y la página no se entendía bien. */}
-                                    <div className="bg-emerald-200 border border-emerald-300 rounded-xl p-4 space-y-4">
+                                    <div className="bg-white border border-slate-200 border-l-4 border-l-emerald-500 rounded-xl p-4 space-y-4">
+                                        <label className="block text-xs font-bold text-emerald-700 uppercase tracking-wider">Cuota Inicial</label>
                                         <div className="grid grid-cols-2 gap-3">
                                             <div>
                                                 <label className="block text-sm font-bold text-slate-700 mb-2">Cuota Inicial (S/)</label>
@@ -1151,9 +1152,10 @@ export default function QuotePage({ params }: QuotePageProps) {
                                     </div>
 
                                     {/* 🆕 Financiamiento Mensual: Plazo + Fecha Primera Cuota + Modo
-                                        de Cronograma agrupados en una tarjeta azul — separados de la
-                                        cuota inicial (verde) y el descuento (gris). */}
-                                    <div className="bg-sky-200 border border-sky-300 rounded-xl p-4 space-y-4">
+                                        de Cronograma agrupados en una tarjeta con acento azul —
+                                        separados de la cuota inicial (verde) y el descuento (gris). */}
+                                    <div className="bg-white border border-slate-200 border-l-4 border-l-blue-500 rounded-xl p-4 space-y-4">
+                                        <label className="block text-xs font-bold text-blue-700 uppercase tracking-wider">Financiamiento Mensual</label>
                                         <div className="grid grid-cols-2 gap-3">
                                             {/* Cantidad de Cuotas Libres */}
                                             <div>
