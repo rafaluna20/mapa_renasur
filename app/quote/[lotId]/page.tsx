@@ -1015,19 +1015,137 @@ export default function QuotePage({ params }: QuotePageProps) {
                                         />
                                     </div>
 
-                                    {/* Cuota Inicial */}
-                                    <div>
-                                        <label className="block text-sm font-bold text-slate-700 mb-2">Cuota Inicial (S/)</label>
-                                        <div className="relative">
-                                            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">S/</div>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                value={initialPayment}
-                                                onChange={(e) => handleInitialPaymentChange(e.target.value)}
-                                                onKeyDown={preventNegative}
-                                                className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800 transition-all"
-                                            />
+                                    {/* 🆕 Cuota Inicial: agrupada en una sola tarjeta con fondo verde
+                                        para diferenciarla claramente del financiamiento mensual
+                                        (Plazo / Fecha Primera Cuota, más abajo) — antes estos campos
+                                        estaban intercalados y la página no se entendía bien. */}
+                                    <div className="bg-emerald-50/70 border border-emerald-100 rounded-xl p-4 space-y-4">
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="block text-sm font-bold text-slate-700 mb-2">Cuota Inicial (S/)</label>
+                                                <div className="relative">
+                                                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">S/</div>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        value={initialPayment}
+                                                        onChange={(e) => handleInitialPaymentChange(e.target.value)}
+                                                        onKeyDown={preventNegative}
+                                                        className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800 transition-all"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-bold text-slate-700 mb-2">
+                                                    Fecha Cuota Inicial (Cuota 0)
+                                                </label>
+                                                <div className="relative">
+                                                    <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                                    <input
+                                                        type="text"
+                                                        value={initialPaymentDateDisplay}
+                                                        onChange={(e) => handleDateDisplayChange(
+                                                            e.target.value,
+                                                            setInitialPaymentDateDisplay,
+                                                            setInitialPaymentDate
+                                                        )}
+                                                        placeholder="dd/mm/aa"
+                                                        maxLength={8}
+                                                        className={`w-full pl-9 pr-10 py-2.5 bg-white border rounded-xl focus:ring-2 transition-all font-medium tracking-widest ${
+                                                            isInitialDateInvalid
+                                                                ? 'border-red-400 focus:ring-red-500 text-red-600'
+                                                                : 'border-slate-200 focus:ring-indigo-500 text-slate-800'
+                                                        }`}
+                                                    />
+                                                    {/* Date picker trigger */}
+                                                    <input
+                                                        type="date"
+                                                        value={initialPaymentDate}
+                                                        onChange={(e) => {
+                                                            setInitialPaymentDate(e.target.value);
+                                                            setInitialPaymentDateDisplay(isoToDisplay(e.target.value));
+                                                        }}
+                                                        className="absolute right-0 top-0 bottom-0 w-10 opacity-0 cursor-pointer"
+                                                    />
+                                                    <Calendar size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500 pointer-events-none" />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* 🆕 Pagos adicionales de la cuota inicial: el cliente a veces
+                                            paga la inicial en 2, 3... N partes en vez de un solo monto.
+                                            El primer pago es la fila de arriba — esto es lo que se suma
+                                            encima. */}
+                                        {extraInitialPayments.map((payment, idx) => (
+                                            <div key={payment.id}>
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <label className="block text-sm font-bold text-slate-700">
+                                                        Cuota Inicial - Pago {idx + 2} (S/)
+                                                    </label>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeExtraInitialPayment(payment.id)}
+                                                        className="text-xs text-red-500 hover:text-red-700 font-bold"
+                                                    >
+                                                        Quitar
+                                                    </button>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <div className="relative">
+                                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">S/</div>
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            value={payment.amount}
+                                                            onChange={(e) => updateExtraInitialPaymentAmount(payment.id, e.target.value)}
+                                                            onKeyDown={preventNegative}
+                                                            className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800 transition-all"
+                                                            placeholder="Monto"
+                                                        />
+                                                    </div>
+                                                    <div className="relative">
+                                                        <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                                        <input
+                                                            type="text"
+                                                            value={payment.dateDisplay}
+                                                            onChange={(e) => handleDateDisplayChange(
+                                                                e.target.value,
+                                                                (v) => setExtraInitialPaymentDisplay(payment.id, v),
+                                                                (v) => setExtraInitialPaymentIso(payment.id, v)
+                                                            )}
+                                                            placeholder="dd/mm/aa"
+                                                            maxLength={8}
+                                                            className="w-full pl-9 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all font-medium tracking-widest text-slate-800"
+                                                        />
+                                                        <input
+                                                            type="date"
+                                                            value={payment.dateIso}
+                                                            onChange={(e) => {
+                                                                setExtraInitialPaymentIso(payment.id, e.target.value);
+                                                                setExtraInitialPaymentDisplay(payment.id, isoToDisplay(e.target.value));
+                                                            }}
+                                                            className="absolute right-0 top-0 bottom-0 w-10 opacity-0 cursor-pointer"
+                                                        />
+                                                        <Calendar size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500 pointer-events-none" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+
+                                        <div>
+                                            <button
+                                                type="button"
+                                                onClick={addExtraInitialPayment}
+                                                className="w-full py-2 border-2 border-dashed border-emerald-300 rounded-xl text-emerald-700 font-bold text-sm hover:bg-emerald-100 hover:border-emerald-400 transition-colors"
+                                            >
+                                                + Dividir cuota inicial (agregar otro pago)
+                                            </button>
+                                            {extraInitialPayments.length > 0 && (
+                                                <div className="mt-2 text-sm font-bold text-emerald-800 text-right">
+                                                    Total cuota inicial: {financeService.formatCurrency(initialPaymentTotal)}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
@@ -1045,118 +1163,6 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                 className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800 transition-all"
                                             />
                                         </div>
-                                    </div>
-
-                                    {/* Fecha Cuota Inicial (Cuota 0) */}
-                                    <div>
-                                        <label className="block text-sm font-bold text-slate-700 mb-2">
-                                            Fecha Cuota Inicial (Cuota 0)
-                                        </label>
-                                        <div className="relative">
-                                            <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                            <input
-                                                type="text"
-                                                value={initialPaymentDateDisplay}
-                                                onChange={(e) => handleDateDisplayChange(
-                                                    e.target.value,
-                                                    setInitialPaymentDateDisplay,
-                                                    setInitialPaymentDate
-                                                )}
-                                                placeholder="dd/mm/aa"
-                                                maxLength={8}
-                                                className={`w-full pl-9 pr-10 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 transition-all font-medium tracking-widest ${
-                                                    isInitialDateInvalid
-                                                        ? 'border-red-400 focus:ring-red-500 text-red-600'
-                                                        : 'border-slate-200 focus:ring-indigo-500 text-slate-800'
-                                                }`}
-                                            />
-                                            {/* Date picker trigger */}
-                                            <input
-                                                type="date"
-                                                value={initialPaymentDate}
-                                                onChange={(e) => {
-                                                    setInitialPaymentDate(e.target.value);
-                                                    setInitialPaymentDateDisplay(isoToDisplay(e.target.value));
-                                                }}
-                                                className="absolute right-0 top-0 bottom-0 w-10 opacity-0 cursor-pointer"
-                                            />
-                                            <Calendar size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500 pointer-events-none" />
-                                        </div>
-                                    </div>
-
-                                    {/* 🆕 Pagos adicionales de la cuota inicial: el cliente a veces
-                                        paga la inicial en 2, 3... N partes en vez de un solo monto.
-                                        El primer pago es el bloque "Cuota Inicial (S/)" de arriba —
-                                        esto es lo que se suma encima. */}
-                                    {extraInitialPayments.map((payment, idx) => (
-                                        <div key={payment.id}>
-                                            <div className="flex items-center justify-between mb-2">
-                                                <label className="block text-sm font-bold text-slate-700">
-                                                    Cuota Inicial - Pago {idx + 2} (S/)
-                                                </label>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => removeExtraInitialPayment(payment.id)}
-                                                    className="text-xs text-red-500 hover:text-red-700 font-bold"
-                                                >
-                                                    Quitar
-                                                </button>
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-3">
-                                                <div className="relative">
-                                                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">S/</div>
-                                                    <input
-                                                        type="number"
-                                                        min="0"
-                                                        value={payment.amount}
-                                                        onChange={(e) => updateExtraInitialPaymentAmount(payment.id, e.target.value)}
-                                                        onKeyDown={preventNegative}
-                                                        className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800 transition-all"
-                                                        placeholder="Monto"
-                                                    />
-                                                </div>
-                                                <div className="relative">
-                                                    <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                                    <input
-                                                        type="text"
-                                                        value={payment.dateDisplay}
-                                                        onChange={(e) => handleDateDisplayChange(
-                                                            e.target.value,
-                                                            (v) => setExtraInitialPaymentDisplay(payment.id, v),
-                                                            (v) => setExtraInitialPaymentIso(payment.id, v)
-                                                        )}
-                                                        placeholder="dd/mm/aa"
-                                                        maxLength={8}
-                                                        className="w-full pl-9 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 transition-all font-medium tracking-widest text-slate-800"
-                                                    />
-                                                    <input
-                                                        type="date"
-                                                        value={payment.dateIso}
-                                                        onChange={(e) => {
-                                                            setExtraInitialPaymentIso(payment.id, e.target.value);
-                                                            setExtraInitialPaymentDisplay(payment.id, isoToDisplay(e.target.value));
-                                                        }}
-                                                        className="absolute right-0 top-0 bottom-0 w-10 opacity-0 cursor-pointer"
-                                                    />
-                                                    <Calendar size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500 pointer-events-none" />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-
-                                    <div>
-                                        <button
-                                            type="button"
-                                            onClick={addExtraInitialPayment}
-                                            className="w-full py-2 border-2 border-dashed border-indigo-200 rounded-xl text-indigo-600 font-bold text-sm hover:bg-indigo-50 hover:border-indigo-300 transition-colors"
-                                        >
-                                            + Dividir cuota inicial (agregar otro pago)
-                                        </button>
-                                        {extraInitialPayments.length > 0 && (
-                                            <div className="mt-2 text-sm font-bold text-slate-700 text-right">
-                                                Total cuota inicial: {financeService.formatCurrency(initialPaymentTotal)}
-                                            </div>
-                                        )}
                                     </div>
 
                                     {/* 🆕 Fecha Primera Cuota (Cuota 1) */}
