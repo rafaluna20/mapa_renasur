@@ -251,6 +251,16 @@ export const exportQuoteToPdf = async (
     // Calcular porcentaje de descuento
     const discountPercent = (calcs.discountAmount / calcs.originalPrice * 100).toFixed(2);
 
+    // 🆕 Fila(s) de "Pago Inicial": si el cliente la paga en varios pagos,
+    // se desglosa acá también (mismos nombres que la página de cotización
+    // y el cronograma más abajo), no solo el total.
+    const pagoInicialRows: any[][] = initialPaymentBreakdown && initialPaymentBreakdown.length > 1
+        ? initialPaymentBreakdown.map((p, i) => [
+            i === 0 ? 'Pago Inicial (A la firma)' : `Cuota Inicial ${i + 1}`,
+            financeService.formatCurrency(p.amount)
+        ])
+        : [['Pago Inicial (A la firma)', financeService.formatCurrency(calcs.initialPayment)]];
+
     autoTable(doc, {
         startY: finalY + 3,
         margin: { left: margin, right: margin + 15 },
@@ -269,7 +279,7 @@ export const exportQuoteToPdf = async (
                 { content: 'VALOR TOTAL DE VENTA', styles: { fontStyle: 'bold', fillColor: COLORS.primary.veryLight, textColor: COLORS.primary.dark, fontSize: 11 } },
                 { content: financeService.formatCurrency(calcs.discountedPrice), styles: { fontStyle: 'bold', fillColor: COLORS.primary.veryLight, textColor: COLORS.primary.dark, fontSize: 11 } }
             ],
-            ['Pago Inicial (A la firma)', financeService.formatCurrency(calcs.initialPayment)],
+            ...pagoInicialRows,
             [
                 { content: 'SALDO A FINANCIAR', styles: { fontStyle: 'bold', textColor: COLORS.primary.main } },
                 { content: financeService.formatCurrency(calcs.remainingBalance), styles: { fontStyle: 'bold', textColor: COLORS.primary.main } }
