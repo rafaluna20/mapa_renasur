@@ -19,6 +19,20 @@ interface QuotePageProps {
     params: Promise<{ lotId: string }>;
 }
 
+// Cliente encontrado vía búsqueda en Odoo (res.partner). El backend
+// (app/api/odoo/search_partners/route.ts) ya trae email/phone/mobile/vat/
+// street — antes se descartaban acá, dejando el PDF de cotización sin
+// datos de contacto del cliente.
+interface ClientSearchResult {
+    id: number;
+    name: string;
+    email?: string;
+    phone?: string;
+    mobile?: string;
+    vat?: string;
+    street?: string;
+}
+
 export default function QuotePage({ params }: QuotePageProps) {
     const { user } = useAuth();
     const { lotId } = use(params);
@@ -149,8 +163,8 @@ export default function QuotePage({ params }: QuotePageProps) {
 
     // Cliente (Búsqueda de Odoo)
     const [searchTerm, setSearchTerm] = useState('');
-    const [searchResults, setSearchResults] = useState<{ id: number; name: string }[]>([]);
-    const [selectedClient, setSelectedClient] = useState<{ id: number; name: string } | null>(null);
+    const [searchResults, setSearchResults] = useState<ClientSearchResult[]>([]);
+    const [selectedClient, setSelectedClient] = useState<ClientSearchResult | null>(null);
     const [isSearching, setIsSearching] = useState(false);
     const [showCreateClient, setShowCreateClient] = useState(false);
     const [isCreatingClient, setIsCreatingClient] = useState(false);
@@ -220,7 +234,15 @@ export default function QuotePage({ params }: QuotePageProps) {
             setIsSearching(true);
             try {
                 const raw = await odooService.searchPartners(searchTerm);
-                setSearchResults(raw.map(r => ({ id: Number(r.id), name: String(r.name ?? '') })));
+                setSearchResults(raw.map(r => ({
+                    id: Number(r.id),
+                    name: String(r.name ?? ''),
+                    email: r.email ? String(r.email) : undefined,
+                    phone: r.phone ? String(r.phone) : undefined,
+                    mobile: r.mobile ? String(r.mobile) : undefined,
+                    vat: r.vat ? String(r.vat) : undefined,
+                    street: r.street ? String(r.street) : undefined,
+                })));
             } catch (error) {
                 console.error('Error searching partners:', error);
                 setSearchResults([]);
@@ -232,7 +254,7 @@ export default function QuotePage({ params }: QuotePageProps) {
         return () => clearTimeout(timer);
     }, [searchTerm, selectedClient]);
 
-    const selectClient = (client: { id: number; name: string }) => {
+    const selectClient = (client: ClientSearchResult) => {
         setSelectedClient(client);
         setSearchTerm(client.name);
         setSearchResults([]);
@@ -402,7 +424,13 @@ export default function QuotePage({ params }: QuotePageProps) {
                 lot,
                 calculations,
                 user?.name || 'No especificado',
-                selectedClient?.name,
+                selectedClient ? {
+                    name: selectedClient.name,
+                    phone: selectedClient.phone || selectedClient.mobile,
+                    email: selectedClient.email,
+                    vat: selectedClient.vat,
+                    address: selectedClient.street,
+                } : undefined,
                 false,
                 includeSchedule
             );
@@ -441,7 +469,13 @@ export default function QuotePage({ params }: QuotePageProps) {
                 lot,
                 calculations,
                 user?.name || 'Vendedor',
-                selectedClient.name,
+                {
+                    name: selectedClient.name,
+                    phone: selectedClient.phone || selectedClient.mobile,
+                    email: selectedClient.email,
+                    vat: selectedClient.vat,
+                    address: selectedClient.street,
+                },
                 true // Request Blob return instead of download
             );
 

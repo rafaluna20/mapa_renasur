@@ -44,14 +44,27 @@ const COLORS = {
  * Exporta una cotización a un archivo PDF profesional con diseño corporativo TERRA LIMA.
  * Utiliza jsPDF y jspdf-autotable para manejar tablas multi-página.
  */
+/** Datos de contacto del cliente (res.partner en Odoo) para la sección
+ *  "DATOS DEL CLIENTE" del PDF. Todos opcionales: no todos los clientes
+ *  tienen los 4 campos cargados en Odoo (ej. los creados rápido desde acá
+ *  mismo no piden dirección) — los que falten se muestran como "---". */
+export interface ClientPdfDetails {
+    name?: string;
+    phone?: string;
+    email?: string;
+    vat?: string;
+    address?: string;
+}
+
 export const exportQuoteToPdf = async (
     lot: Lot,
     calcs: QuoteCalculations,
     vendorName: string = 'No especificado',
-    clientName?: string,
+    clientDetails?: ClientPdfDetails,
     returnBlob: boolean = false,
     includeSchedule: boolean = true
 ): Promise<Blob | void> => {
+    const clientName = clientDetails?.name;
     const doc = new jsPDF({
         orientation: 'p',
         unit: 'mm',
@@ -165,8 +178,57 @@ export const exportQuoteToPdf = async (
         }
     });
 
+    // --- 3b. DATOS DEL CLIENTE ---
+    // Solo se dibuja si hay un cliente seleccionado (clientDetails no es
+    // undefined) — si aún no se eligió cliente, no tiene sentido mostrar
+    // una sección vacía. Los campos individuales que falten (ej. un
+    // cliente creado rápido, sin dirección) se muestran como "---" en vez
+    // de dejarlos en blanco o imprimir "undefined".
+    let clientSectionY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+    if (clientDetails) {
+        const clientInfoY = clientSectionY + 12;
+
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...COLORS.primary.dark);
+        doc.text('DATOS DEL CLIENTE', margin, clientInfoY);
+
+        const clientBoxY = clientInfoY + 3;
+        doc.setFillColor(...COLORS.primary.veryLight);
+        doc.setDrawColor(...COLORS.primary.main);
+        doc.setLineWidth(0.5);
+        doc.rect(margin, clientBoxY, pageWidth - (2 * margin) - 12, 32, 'FD');
+
+        const val = (v?: string) => (v && v.trim() ? v : '---');
+
+        autoTable(doc, {
+            startY: clientBoxY + 2,
+            margin: { left: margin + 3, right: margin + 15 },
+            theme: 'plain',
+            body: [
+                ['Nombre:', val(clientDetails.name), 'DNI/RUC:', val(clientDetails.vat)],
+                ['Teléfono:', val(clientDetails.phone), 'Email:', val(clientDetails.email)],
+                ['Dirección:', { content: val(clientDetails.address), colSpan: 3 } as any],
+            ],
+            styles: {
+                fontSize: 9,
+                cellPadding: 1.5,
+                textColor: COLORS.gray.dark,
+                overflow: 'linebreak'
+            },
+            columnStyles: {
+                0: { fontStyle: 'bold', textColor: COLORS.gray.medium, cellWidth: 25 },
+                1: { textColor: COLORS.gray.dark, cellWidth: 50, overflow: 'linebreak' },
+                2: { fontStyle: 'bold', textColor: COLORS.gray.medium, cellWidth: 22 },
+                3: { textColor: COLORS.gray.dark, cellWidth: 'auto', overflow: 'linebreak' }
+            }
+        });
+
+        clientSectionY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+    }
+
     // --- 4. RESUMEN FINANCIERO ---
-    const finalY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
+    const finalY = clientSectionY + 12;
 
     // Título de sección
     doc.setFontSize(11);
