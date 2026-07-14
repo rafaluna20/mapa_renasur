@@ -975,8 +975,9 @@ export default function QuotePage({ params }: QuotePageProps) {
                                         )}
                                     </div>
 
-                                    {/* Descuento Dual */}
-                                    <div className="space-y-3">
+                                    {/* Descuento Dual — tarjeta gris, separada de la cuota inicial
+                                        (verde) y del financiamiento mensual (azul, más abajo). */}
+                                    <div className="bg-slate-100/70 border border-slate-200 rounded-xl p-4 space-y-3">
                                         <label className="block text-sm font-bold text-slate-700">Descuento aplicado</label>
                                         <div className="grid grid-cols-2 gap-3">
                                             <div className="relative">
@@ -1149,103 +1150,108 @@ export default function QuotePage({ params }: QuotePageProps) {
                                         </div>
                                     </div>
 
-                                    {/* Cantidad de Cuotas Libres */}
-                                    <div>
-                                        <label className="block text-sm font-bold text-slate-700 mb-2">Plazo (Meses)</label>
-                                        <div className="relative">
-                                            <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                            <input
-                                                type="number"
-                                                min="1" max="180"
-                                                value={numInstallments}
-                                                onChange={(e) => handleNumInstallmentsChange(e.target.value)}
-                                                onKeyDown={preventNegative}
-                                                className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800 transition-all"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* 🆕 Fecha Primera Cuota (Cuota 1) */}
-                                    <div>
-                                        <label className="block text-sm font-bold text-slate-700 mb-2">
-                                            Fecha Primera Cuota (Cuota 1)
-                                        </label>
-                                        <div className="relative">
-                                            <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                                            <input
-                                                type="text"
-                                                value={firstInstallmentDateDisplay}
-                                                onChange={(e) => handleDateDisplayChange(
-                                                    e.target.value,
-                                                    setFirstInstallmentDateDisplay,
-                                                    setFirstInstallmentDate
-                                                )}
-                                                placeholder="dd/mm/aa"
-                                                maxLength={8}
-                                                className={`w-full pl-9 pr-10 py-2.5 bg-slate-50 border rounded-xl focus:ring-2 transition-all font-medium tracking-widest ${
-                                                    isFirstDateInvalid || dateValidationError
-                                                        ? 'border-red-400 focus:ring-red-500 text-red-600'
-                                                        : 'border-slate-200 focus:ring-indigo-500 text-slate-800'
-                                                }`}
-                                            />
-                                            {/* Date picker trigger */}
-                                            <input
-                                                type="date"
-                                                value={firstInstallmentDate}
-                                                min={initialPaymentDate}
-                                                onChange={(e) => {
-                                                    setFirstInstallmentDate(e.target.value);
-                                                    setFirstInstallmentDateDisplay(isoToDisplay(e.target.value));
-                                                }}
-                                                className="absolute right-0 top-0 bottom-0 w-10 opacity-0 cursor-pointer"
-                                            />
-                                            <Calendar size={16} className={`absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none ${isFirstDateInvalid || dateValidationError ? 'text-red-500' : 'text-indigo-500'}`} />
-                                        </div>
-                                        {/* Date Validation Error Message */}
-                                        {dateValidationError && (
-                                            <p className="text-red-500 text-xs mt-2 font-medium flex items-center gap-1">
-                                                {dateValidationError}
-                                            </p>
-                                        )}
-                                        {isFirstDateInvalid && !dateValidationError && (
-                                            <p className="text-red-500 text-xs mt-2 font-medium flex items-center gap-1">
-                                                ⚠️ Fecha inválida. Use un formato real.
-                                            </p>
-                                        )}
-                                    </div>
-
-                                    {/* 🆕 Tipo de Cronograma */}
-                                    <div>
-                                        <label className="block text-sm font-bold text-slate-700 mb-2">
-                                            Modo de Cronograma
-                                        </label>
-                                        <div className="flex gap-4">
-                                            <label className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-xl border cursor-pointer transition-all ${scheduleType === 'end_of_month' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-bold' : 'border-slate-200 hover:bg-slate-50 text-slate-600'}`}>
+                                    {/* 🆕 Financiamiento Mensual: Plazo + Fecha Primera Cuota + Modo
+                                        de Cronograma agrupados en una tarjeta azul — separados de la
+                                        cuota inicial (verde) y el descuento (gris). */}
+                                    <div className="bg-sky-50/70 border border-sky-100 rounded-xl p-4 space-y-4">
+                                        {/* Cantidad de Cuotas Libres */}
+                                        <div>
+                                            <label className="block text-sm font-bold text-slate-700 mb-2">Plazo (Meses)</label>
+                                            <div className="relative">
+                                                <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                                                 <input
-                                                    type="radio"
-                                                    name="scheduleType"
-                                                    value="end_of_month"
-                                                    checked={scheduleType === 'end_of_month'}
-                                                    onChange={() => setScheduleType('end_of_month')}
-                                                    className="hidden"
+                                                    type="number"
+                                                    min="1" max="180"
+                                                    value={numInstallments}
+                                                    onChange={(e) => handleNumInstallmentsChange(e.target.value)}
+                                                    onKeyDown={preventNegative}
+                                                    className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-slate-800 transition-all"
                                                 />
-                                                Fines de Mes
-                                            </label>
-                                            <label className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-xl border cursor-pointer transition-all ${scheduleType === 'fixed_day' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-bold' : 'border-slate-200 hover:bg-slate-50 text-slate-600'}`}>
-                                                <input
-                                                    type="radio"
-                                                    name="scheduleType"
-                                                    value="fixed_day"
-                                                    checked={scheduleType === 'fixed_day'}
-                                                    onChange={() => setScheduleType('fixed_day')}
-                                                    className="hidden"
-                                                />
-                                                Día Fijo ({firstInstallmentDate ? financeService.parseLocalDate(firstInstallmentDate).getDate() : ''})
-                                            </label>
+                                            </div>
                                         </div>
-                                        <p className="text-xs text-slate-500 mt-1.5">
-                                            {scheduleType === 'end_of_month' ? 'Las cuotas se programarán para el último día de cada mes.' : 'Las cuotas mantendrán el mismo día de la primera cuota.'}
-                                        </p>
+
+                                        {/* 🆕 Fecha Primera Cuota (Cuota 1) */}
+                                        <div>
+                                            <label className="block text-sm font-bold text-slate-700 mb-2">
+                                                Fecha Primera Cuota (Cuota 1)
+                                            </label>
+                                            <div className="relative">
+                                                <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                                <input
+                                                    type="text"
+                                                    value={firstInstallmentDateDisplay}
+                                                    onChange={(e) => handleDateDisplayChange(
+                                                        e.target.value,
+                                                        setFirstInstallmentDateDisplay,
+                                                        setFirstInstallmentDate
+                                                    )}
+                                                    placeholder="dd/mm/aa"
+                                                    maxLength={8}
+                                                    className={`w-full pl-9 pr-10 py-2.5 bg-white border rounded-xl focus:ring-2 transition-all font-medium tracking-widest ${
+                                                        isFirstDateInvalid || dateValidationError
+                                                            ? 'border-red-400 focus:ring-red-500 text-red-600'
+                                                            : 'border-slate-200 focus:ring-indigo-500 text-slate-800'
+                                                    }`}
+                                                />
+                                                {/* Date picker trigger */}
+                                                <input
+                                                    type="date"
+                                                    value={firstInstallmentDate}
+                                                    min={initialPaymentDate}
+                                                    onChange={(e) => {
+                                                        setFirstInstallmentDate(e.target.value);
+                                                        setFirstInstallmentDateDisplay(isoToDisplay(e.target.value));
+                                                    }}
+                                                    className="absolute right-0 top-0 bottom-0 w-10 opacity-0 cursor-pointer"
+                                                />
+                                                <Calendar size={16} className={`absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none ${isFirstDateInvalid || dateValidationError ? 'text-red-500' : 'text-indigo-500'}`} />
+                                            </div>
+                                            {/* Date Validation Error Message */}
+                                            {dateValidationError && (
+                                                <p className="text-red-500 text-xs mt-2 font-medium flex items-center gap-1">
+                                                    {dateValidationError}
+                                                </p>
+                                            )}
+                                            {isFirstDateInvalid && !dateValidationError && (
+                                                <p className="text-red-500 text-xs mt-2 font-medium flex items-center gap-1">
+                                                    ⚠️ Fecha inválida. Use un formato real.
+                                                </p>
+                                            )}
+                                        </div>
+
+                                        {/* 🆕 Tipo de Cronograma */}
+                                        <div>
+                                            <label className="block text-sm font-bold text-slate-700 mb-2">
+                                                Modo de Cronograma
+                                            </label>
+                                            <div className="flex gap-4">
+                                                <label className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-xl border cursor-pointer transition-all ${scheduleType === 'end_of_month' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-bold' : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-600'}`}>
+                                                    <input
+                                                        type="radio"
+                                                        name="scheduleType"
+                                                        value="end_of_month"
+                                                        checked={scheduleType === 'end_of_month'}
+                                                        onChange={() => setScheduleType('end_of_month')}
+                                                        className="hidden"
+                                                    />
+                                                    Fines de Mes
+                                                </label>
+                                                <label className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-xl border cursor-pointer transition-all ${scheduleType === 'fixed_day' ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-bold' : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-600'}`}>
+                                                    <input
+                                                        type="radio"
+                                                        name="scheduleType"
+                                                        value="fixed_day"
+                                                        checked={scheduleType === 'fixed_day'}
+                                                        onChange={() => setScheduleType('fixed_day')}
+                                                        className="hidden"
+                                                    />
+                                                    Día Fijo ({firstInstallmentDate ? financeService.parseLocalDate(firstInstallmentDate).getDate() : ''})
+                                                </label>
+                                            </div>
+                                            <p className="text-xs text-slate-500 mt-1.5">
+                                                {scheduleType === 'end_of_month' ? 'Las cuotas se programarán para el último día de cada mes.' : 'Las cuotas mantendrán el mismo día de la primera cuota.'}
+                                            </p>
+                                        </div>
                                     </div>
 
                                     {/* 🚨 Alerta de Validación de Fechas */}
