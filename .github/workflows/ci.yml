@@ -1,0 +1,65 @@
+name: CI
+
+# Antes de esto, no habia ningun gate automatico: cada push a main se
+# desplegaba directo si Vercel lograba compilar, sin lint/typecheck/tests
+# corriendo en ningun lado. Este workflow no reemplaza el deploy de
+# Vercel (sigue pasando igual) -- solo agrega una verificacion visible en
+# cada PR/push antes de que el codigo llegue ahi.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (informativo, no bloquea)
+        # continue-on-error: el repo ya tenia ~20 errores de lint preexistentes
+        # en archivos sin relacion a este cambio (ej. "no-explicit-any" en
+        # useSmartSearch.ts, reportService.ts) -- si esto bloqueara, el
+        # PRIMER run de CI saldria rojo por deuda vieja, no por algo nuevo.
+        # Se ve el resultado en los logs igual, solo no tumba el check.
+        # Cuando se limpien esos errores, quitar este continue-on-error para
+        # que lint vuelva a ser bloqueante.
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        # Variables dummy por defecto: el build de Next no necesita
+        # credenciales REALES de Odoo/Niubiz/etc para compilar (ninguna
+        # pagina las lee en tiempo de build), solo que existan para que el
+        # codigo que las referencia no truene. Si el repo tiene secrets
+        # reales configurados (Settings > Secrets), se usan esos en su
+        # lugar -- util si en el futuro se agrega una pagina que SI
+        # necesite datos reales al compilar.
+        run: npm run build
+        env:
+          ODOO_URL: ${{ secrets.ODOO_URL || 'https://example-odoo.invalid/jsonrpc' }}
+          ODOO_DB: ${{ secrets.ODOO_DB || 'dummy_db' }}
+          ODOO_USER_ID: ${{ secrets.ODOO_USER_ID || '1' }}
+          ODOO_PASSWORD: ${{ secrets.ODOO_PASSWORD || 'dummy' }}
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET || 'dummy-secret-for-ci-build-only' }}
+          NEXTAUTH_URL: ${{ secrets.NEXTAUTH_URL || 'http://localhost:3000' }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY || 'dummy' }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM || 'noreply@example.invalid' }}
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN || 'dummy' }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL || '' }}
+          DNIRUC_API_TOKEN: ${{ secrets.DNIRUC_API_TOKEN || 'dummy' }}

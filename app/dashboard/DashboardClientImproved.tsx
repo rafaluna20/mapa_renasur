@@ -52,6 +52,28 @@ const formatToDDMMYY = (dateStr?: string) => {
     return dateStr;
 };
 
+// Formatea montos del eje Y del gráfico eligiendo la unidad según la
+// escala real del valor — antes dividía siempre por 1000 sin decimales,
+// así que cualquier valor bajo (frecuente en cuentas nuevas/de prueba)
+// colapsaba a "S/0k" en las 4 etiquetas del eje.
+const formatAxisCurrency = (value: number): string => {
+    if (value >= 1_000_000) return `S/${(value / 1_000_000).toFixed(1)}M`;
+    if (value >= 1_000) return `S/${(value / 1_000).toFixed(1)}k`;
+    return `S/${Math.round(value)}`;
+};
+
+// Convierte horas transcurridas a un texto relativo legible — antes se
+// mostraba el número crudo de horas (ej. "Hace 1473h" en vez de "Hace 2 meses").
+const formatHoursElapsed = (hours: number): string => {
+    if (hours < 24) return `Hace ${hours}h`;
+    const days = Math.round(hours / 24);
+    if (days < 30) return `Hace ${days}d`;
+    const months = Math.round(days / 30);
+    if (months < 12) return `Hace ${months} ${months === 1 ? 'mes' : 'meses'}`;
+    const years = Math.round(months / 12);
+    return `Hace ${years} ${years === 1 ? 'año' : 'años'}`;
+};
+
 type PeriodFilter = '7d' | '30d' | '90d' | '180d' | 'ytd' | 'custom';
 type ChartView = 'simple' | 'detailed';
 
@@ -392,21 +414,18 @@ export default function DashboardClientImproved() {
                     monthsDivisor = Math.max(1, new Date().getMonth() + 1);
                 }
 
-                // Simular datos mejorados (en producción vendrían del backend)
+                // Datos reales del backend (ver app/api/odoo/stats/detailed/route.ts):
+                // conversionRate/pipelineValue ya no dependen de crm.lead (no existe
+                // en este Odoo) y comparison ya no es un +15%/+12%/+8% fijo — ambos
+                // se calculan ahí con datos reales de sale.order.
                 const enhancedData: EnhancedStats = {
                     ...data,
                     kpis: {
                         ...data.kpis,
                         avgTicket: data.kpis.totalSales / (salesCount || 1),
-                        conversionRate: data.kpis.conversionRate ?? 45,
-                        pipelineValue: data.kpis.pipelineValue ?? (data.kpis.pendingLeads * 85000),
                         salesVelocity: salesCount / monthsDivisor
                     },
-                    comparison: {
-                        totalSales: { value: data.kpis.totalSales, change: 15, trend: 'up' },
-                        commission: { value: data.kpis.commission, change: 12, trend: 'up' },
-                        salesCount: { value: salesCount, change: 8, trend: 'up' }
-                    }
+                    comparison: data.comparison
                 };
                 
                 setStats(enhancedData);
@@ -459,12 +478,11 @@ export default function DashboardClientImproved() {
                 url += `?${params.toString()}`;
             }
 
-            const response = await fetch(url, {
-                headers: {
-                    'x-user-id': authUser.uid.toString(),
-                    'x-is-system': authUser.is_system ? 'true' : 'false'
-                }
-            });
+            // 'x-user-id'/'x-is-system' ya no se envían: el servidor los
+            // ignoraba desde que estas rutas migraron a requireStaffSession
+            // (cookie httpOnly firmada) — mandarlos era código muerto que
+            // sugería una autorización que ya no depende de ahí.
+            const response = await fetch(url);
             const data = await response.json();
             
             if (data.success && data.stats) {
@@ -499,12 +517,11 @@ export default function DashboardClientImproved() {
                 url += `?${params.toString()}`;
             }
 
-            const response = await fetch(url, {
-                headers: {
-                    'x-user-id': authUser.uid.toString(),
-                    'x-is-system': authUser.is_system ? 'true' : 'false'
-                }
-            });
+            // 'x-user-id'/'x-is-system' ya no se envían: el servidor los
+            // ignoraba desde que estas rutas migraron a requireStaffSession
+            // (cookie httpOnly firmada) — mandarlos era código muerto que
+            // sugería una autorización que ya no depende de ahí.
+            const response = await fetch(url);
             const data = await response.json();
             if (data.success && data.data) {
                 // Forzar la etiqueta de fecha también para facturas
@@ -899,7 +916,7 @@ export default function DashboardClientImproved() {
                                         </defs>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" opacity={0.5} />
                                         <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} dy={10} />
-                                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={(value) => `S/${(value / 1000).toFixed(0)}k`} width={60} />
+                                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={formatAxisCurrency} width={60} />
                                         <Tooltip content={<EnhancedTooltip />} cursor={{ stroke: '#6366f1', strokeWidth: 1, strokeDasharray: '4 4' }} />
                                         <Area type="monotone" dataKey="ventas" stroke="#6366f1" strokeWidth={2.5} fillOpacity={1} fill="url(#colorSales)" dot={{ fill: '#6366f1', r: 3 }} activeDot={{ r: 5, fill: '#818cf8' }} />
                                     </AreaChart>
@@ -915,7 +932,7 @@ export default function DashboardClientImproved() {
                                         </defs>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" opacity={0.5} />
                                         <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} dy={10} />
-                                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={(value) => `S/${(value / 1000).toFixed(0)}k`} width={60} />
+                                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} tickFormatter={formatAxisCurrency} width={60} />
                                         <Tooltip content={<EnhancedTooltip />} />
                                         <Legend wrapperStyle={{ paddingTop: '20px' }} iconType="circle" />
                                         <Area type="monotone" dataKey="ventas" name="Ventas" stroke="#6366f1" strokeWidth={2} fill="url(#colorSalesDetailed)" />
@@ -1009,7 +1026,7 @@ export default function DashboardClientImproved() {
                                                 </div>
                                                 <span className="text-[10px] text-amber-400 flex items-center gap-1 font-medium bg-amber-950/20 px-2 py-0.5 rounded border border-amber-500/10">
                                                     <Clock size={9} />
-                                                    Hace {quote.hours}h
+                                                    {formatHoursElapsed(quote.hours)}
                                                 </span>
                                             </div>
                                         ))}

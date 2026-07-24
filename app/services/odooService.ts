@@ -329,7 +329,15 @@ export const odooService = {
     },
 
     async getDetailedSalesStats(userId: number, startDate?: string, endDate?: string): Promise<{
-        kpis: { totalSales: number; monthlyGoal: number; commission: number; pendingLeads: number; conversionRate?: number; pipelineValue?: number };
+        kpis: { totalSales: number; monthlyGoal: number; commission: number; pendingLeads: number; conversionRate: number; pipelineValue: number };
+        // Comparación real contra el período anterior de igual duración —
+        // calculada server-side (ver app/api/odoo/stats/detailed/route.ts),
+        // ya no un +15%/+12%/+8% fijo armado en el cliente.
+        comparison: {
+            totalSales: { value: number; change: number; trend: 'up' | 'down' | 'stable' };
+            commission: { value: number; change: number; trend: 'up' | 'down' | 'stable' };
+            salesCount: { value: number; change: number; trend: 'up' | 'down' | 'stable' };
+        };
         salesTrend: { name: string; ventas: number }[];
         recentActivity: { id: number; action: string; lot: string; date: string }[];
         competedLots: { lot: string; stage: string; quotes: { client: string; advisor: string; hours: number }[] }[];

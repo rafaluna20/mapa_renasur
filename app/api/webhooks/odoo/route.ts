@@ -1,6 +1,21 @@
+import crypto from 'crypto';
 import { paymentService } from '@/app/services/paymentService';
 import { emailService } from '@/app/services/emailService';
 import { fetchOdoo } from '@/app/services/odooService';
+
+/**
+ * Compara 2 secretos en tiempo constante (mismo patrón que
+ * app/api/auth/odoo-sso/route.ts) — evitar timing attacks, donde un
+ * atacante podría inferir el secreto correcto byte a byte midiendo
+ * cuánto tarda cada comparación fallida con `!==` normal.
+ */
+function timingSafeEqualStrings(a: unknown, b: string): boolean {
+    if (typeof a !== 'string') return false;
+    const bufA = Buffer.from(a);
+    const bufB = Buffer.from(b);
+    if (bufA.length !== bufB.length) return false;
+    return crypto.timingSafeEqual(bufA, bufB);
+}
 
 /**
  * Webhook para recibir eventos desde Odoo
@@ -21,7 +36,7 @@ export async function POST(request: Request) {
             }, { status: 503 });
         }
 
-        if (secret !== WEBHOOK_SECRET) {
+        if (!timingSafeEqualStrings(secret, WEBHOOK_SECRET)) {
             console.warn('[WEBHOOK] ⚠️ Intento de acceso no autorizado');
             return new Response('Unauthorized', { status: 401 });
         }

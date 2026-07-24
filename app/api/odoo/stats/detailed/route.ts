@@ -62,12 +62,6 @@ export async function GET(request: NextRequest) {
             draftDomain.push(["date_order", "<=", `${reqEndDate} 23:59:59`]);
         }
 
-        const draftCount = await fetchOdoo(
-            "sale.order",
-            "search_count",
-            [draftDomain]
-        );
-
         // B. Total sales amount (confirmed/done) — filtrado dinámicamente o al año actual para
         //    que coincida con el gráfico de tendencia y el % de meta mensual sea coherente
         const currentYearForKpi = new Date().getFullYear();
@@ -94,69 +88,101 @@ export async function GET(request: NextRequest) {
             totalValue = totalSalesData[0].amount_total || 0;
         }
 
+        const salesCountThisPeriod = await fetchOdoo(
+            "sale.order",
+            "search_count",
+            [[
+                ["user_id", "=", uid],
+                ["state", "in", ["sale", "done"]],
+                ["date_order", ">=", kpiStartDate],
+                ["date_order", "<=", kpiEndDate]
+            ]]
+        ) as number;
+
         // C. Calculate dynamic commission (6% dynamic real estate fee)
         const commission = totalValue * 0.06;
 
         // D. Monthly goal — configurable via env var, fallback a S/200,000
         const monthlyGoal = parseInt(process.env.SALES_MONTHLY_GOAL || '200000', 10);
 
-        // E. CRM Opportunities Integration (Pipeline & Conversion Rate)
-        let pipelineValue = 0;
-        let conversionRate = 0;
+        // E. Pipeline & tasa de conversión, calculados desde sale.order (draft
+        // = pipeline abierto) — NO desde crm.lead. Verificado directamente
+        // contra producción: el modelo crm.lead NO EXISTE en este Odoo (el
+        // módulo CRM nunca se instaló), así que el bloque try/catch anterior
+        // caía SIEMPRE al catch y mostraba una estimación fija (45% de
+        // conversión, cantidad de borradores × S/85,000 de pipeline) en vez
+        // de datos reales — nunca el valor real de las cotizaciones abiertas.
+        const draftAgg = await fetchOdoo(
+            "sale.order",
+            "read_group",
+            [draftDomain],
+            { fields: ["amount_total"], groupby: [] }
+        ) as { __count?: number; amount_total?: number }[];
+        const draftCount = draftAgg[0]?.__count || 0;
+        const pipelineValue = draftAgg[0]?.amount_total || 0;
 
-        try {
-            // Valor de Pipeline: Sumar planned_revenue de oportunidades en proceso (active = true, probability < 100)
-            const pipelineData = await fetchOdoo(
-                "crm.lead",
-                "read_group",
-                [[
-                    ["user_id", "=", uid],
-                    ["type", "=", "opportunity"],
-                    ["probability", "<", 100],
-                    ["active", "=", true]
-                ]],
-                {
-                    fields: ["planned_revenue"],
-                    groupby: ["user_id"]
-                }
-            ) as { amount_total?: number; planned_revenue?: number }[];
-
-            if (pipelineData && pipelineData.length > 0) {
-                pipelineValue = pipelineData[0].planned_revenue || 0;
-            }
-
-            // Tasa de conversión: ganadas vs creadas en el período seleccionado
-            const leadsDomain: any[] = [
+        // Tasa de conversión real: ventas confirmadas vs. TODAS las órdenes
+        // creadas en el período (draft + sale/done + cancel), usando
+        // create_date — a diferencia de date_order, los borradores casi
+        // nunca lo tienen todavía.
+        const allOrdersCreatedCount = await fetchOdoo(
+            "sale.order",
+            "search_count",
+            [[
                 ["user_id", "=", uid],
-                ["type", "=", "opportunity"]
-            ];
-            if (reqStartDate && reqEndDate) {
-                leadsDomain.push(["create_date", ">=", `${reqStartDate} 00:00:00`]);
-                leadsDomain.push(["create_date", "<=", `${reqEndDate} 23:59:59`]);
-            }
+                ["create_date", ">=", kpiStartDate],
+                ["create_date", "<=", kpiEndDate]
+            ]]
+        ) as number;
 
-            const totalLeadsCount = await fetchOdoo(
-                "crm.lead",
-                "search_count",
-                [leadsDomain]
-            ) as number;
+        const conversionRate = allOrdersCreatedCount > 0
+            ? Math.round((salesCountThisPeriod / allOrdersCreatedCount) * 100)
+            : 0;
 
-            const wonLeadsCount = await fetchOdoo(
-                "crm.lead",
-                "search_count",
-                [[...leadsDomain, ["probability", "=", 100]]]
-            ) as number;
+        // F. Comparación real contra el período anterior de igual duración
+        // (antes esto era un +15%/+12%/+8% fijo armado en el frontend, sin
+        // calcular nada real).
+        const periodMs = new Date(kpiEndDate).getTime() - new Date(kpiStartDate).getTime();
+        const prevEndDate = new Date(new Date(kpiStartDate).getTime() - 1000);
+        const prevStartDate = new Date(prevEndDate.getTime() - periodMs);
+        const prevStartStr = prevStartDate.toISOString().slice(0, 19).replace('T', ' ');
+        const prevEndStr = prevEndDate.toISOString().slice(0, 19).replace('T', ' ');
 
-            conversionRate = totalLeadsCount > 0 
-                ? Math.round((wonLeadsCount / totalLeadsCount) * 100)
-                : 0;
+        const prevSalesData = await fetchOdoo(
+            "sale.order",
+            "read_group",
+            [[
+                ["user_id", "=", uid],
+                ["state", "in", ["sale", "done"]],
+                ["date_order", ">=", prevStartStr],
+                ["date_order", "<=", prevEndStr]
+            ]],
+            { fields: ["amount_total"], groupby: ["user_id"] }
+        ) as { amount_total?: number }[];
+        const prevTotalValue = prevSalesData[0]?.amount_total || 0;
+        const prevCommission = prevTotalValue * 0.06;
 
-        } catch (crmError) {
-            console.warn("⚠️ CRM lead models are unavailable or permission denied in Odoo. Falling back to logical estimations:", crmError);
-            // Fallback analítico basado en cotizaciones activas (draft) e históricos
-            pipelineValue = draftCount * 85000;
-            conversionRate = 45; // Tasa histórica promedio
-        }
+        const prevSalesCount = await fetchOdoo(
+            "sale.order",
+            "search_count",
+            [[
+                ["user_id", "=", uid],
+                ["state", "in", ["sale", "done"]],
+                ["date_order", ">=", prevStartStr],
+                ["date_order", "<=", prevEndStr]
+            ]]
+        ) as number;
+
+        const pctChange = (curr: number, prev: number): number => {
+            if (prev === 0) return curr > 0 ? 100 : 0;
+            return Math.round(((curr - prev) / prev) * 100);
+        };
+        const trendOf = (change: number): 'up' | 'down' | 'stable' =>
+            change > 0 ? 'up' : change < 0 ? 'down' : 'stable';
+
+        const totalSalesChange = pctChange(totalValue, prevTotalValue);
+        const commissionChange = pctChange(commission, prevCommission);
+        const salesCountChange = pctChange(salesCountThisPeriod, prevSalesCount);
 
         // 2. DYNAMIC SALES TREND (Last 12 Months or dynamic range)
         const currentYear = new Date().getFullYear();
@@ -436,6 +462,11 @@ export async function GET(request: NextRequest) {
                     pendingLeads: draftCount,
                     pipelineValue,
                     conversionRate
+                },
+                comparison: {
+                    totalSales: { value: totalValue, change: totalSalesChange, trend: trendOf(totalSalesChange) },
+                    commission: { value: commission, change: commissionChange, trend: trendOf(commissionChange) },
+                    salesCount: { value: salesCountThisPeriod, change: salesCountChange, trend: trendOf(salesCountChange) }
                 },
                 salesTrend,
                 recentActivity,

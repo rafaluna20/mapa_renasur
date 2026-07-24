@@ -6,6 +6,7 @@ import LotDetailModal from '../UI/LotDetailModal';
 import { Lot } from '@/app/data/lotsData';
 import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 import { odooService, OdooUser } from '@/app/services/odooService';
+import { SHADOW_FLOATING } from '@/app/lib/designTokens';
 
 interface MapAreaProps {
     lots: Lot[];
@@ -92,7 +93,7 @@ export default function MapArea({
 
             {/* Map Controls (Floating) */}
             <div className="absolute top-4 right-4 z-[400] flex flex-col gap-2">
-                <div className="bg-white rounded-lg shadow-[0_6px_14px_rgb(0,0,0,0.3),0_35px_70px_rgb(0,0,0,0.55)] p-1 border border-slate-100 flex flex-col gap-1">
+                <div className={`bg-white rounded-lg ${SHADOW_FLOATING} p-1 border border-slate-100 flex flex-col gap-1`}>
                     <button
                         onClick={() => onMapTypeChange('street')}
                         className={`p-2 rounded hover:bg-slate-100 transition-colors ${mapType === 'street' ? 'bg-[#A145F5]/10 text-[#A145F5]' : 'text-slate-600'}`}
@@ -124,7 +125,7 @@ export default function MapArea({
                     </button>
                 </div>
                 <button
-                    className="bg-white text-slate-700 p-2 rounded-lg shadow-[0_6px_14px_rgb(0,0,0,0.3),0_35px_70px_rgb(0,0,0,0.55)] border border-slate-100 hover:bg-slate-50"
+                    className={`bg-white text-slate-700 p-2 rounded-lg ${SHADOW_FLOATING} border border-slate-100 hover:bg-slate-50`}
                     title="Mi Ubicación"
                     onClick={() => {
                         if (navigator.geolocation) {
@@ -171,7 +172,7 @@ export default function MapArea({
                     </div>
                 </div>
 
-                <div className="bg-white/90 backdrop-blur-sm p-3 rounded-lg shadow-[0_6px_14px_rgb(0,0,0,0.3),0_35px_70px_rgb(0,0,0,0.55)] border border-slate-100 pointer-events-none">
+                <div className={`bg-white/90 backdrop-blur-sm p-3 rounded-lg ${SHADOW_FLOATING} border border-slate-100 pointer-events-none`}>
                     <h4 className="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Leyenda</h4>
                     <div className="space-y-1">
                         <div className="flex items-center gap-2 text-xs">
