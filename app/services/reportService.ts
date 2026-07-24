@@ -43,6 +43,7 @@ const BRAND = {
     textMuted:  [71,  85,  105] as [number, number, number], // slate-600 (subtítulos y pies)
     amber:      [180, 83,  9]   as [number, number, number], // amber-700 (alertas legibles)
     indigo:     [67,  56,  202] as [number, number, number], // indigo-700 (valores/actividades)
+    red:        [185, 28,  28]  as [number, number, number], // red-700 (saldos vencidos/críticos)
     white:      [255, 255, 255] as [number, number, number],
 };
 
@@ -986,6 +987,10 @@ export interface PaidInvoicesReportData {
     blocks: { mz: string; etapa?: string; totalAmount: number; invoicesCount: number; uniqueLotsCount: number }[];
     recentPayments: { invoice: string; cuotaLabel?: string; date: string; client: string; lot: string; etapa?: string; mz: string; paidAmount: number }[];
     dateRangeLabel?: string;
+    // Antigüedad de saldos vencidos ("aging") — foto a hoy, independiente del rango de fechas anterior.
+    totalOverdue?: number;
+    aging?: { bucket: '0-30' | '31-60' | '61-90' | '90+'; totalAmount: number; invoicesCount: number }[];
+    overdueDetail?: { invoice: string; client: string; lot: string; daysOverdue: number; amountDue: number }[];
 }
 
 export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): Promise<void> {
@@ -1105,6 +1110,84 @@ export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): 
         },
         margin: { left: margin, right: margin },
     });
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // PÁGINA 2 — ANTIGÜEDAD DE SALDOS VENCIDOS (AGING, FOTO A HOY)
+    // ══════════════════════════════════════════════════════════════════════════
+    if (data.aging && data.aging.length > 0) {
+        doc.addPage();
+        drawRect(doc, 0, 0, W, H, BRAND.pageBg);
+        y = 22;
+
+        // Kpi Total Vencido
+        doc.setFillColor(...BRAND.white);
+        doc.setDrawColor(...BRAND.red);
+        doc.setLineWidth(0.5);
+        doc.roundedRect(W - margin - 75, y - 6, 75, 20, 2, 2, 'FD');
+        setFont(doc, 8, BRAND.red, 'bold');
+        doc.text('TOTAL SALDO VENCIDO (A HOY)', W - margin - 4, y, { align: 'right' });
+        setFont(doc, 14, BRAND.darkBg, 'bold');
+        doc.text(currency(data.totalOverdue || 0), W - margin - 4, y + 9, { align: 'right' });
+
+        drawSectionHeader(doc, 'ANTIGÜEDAD DE SALDOS VENCIDOS (AGING)', margin, y, BRAND.red);
+        drawLine(doc, margin, y + 2.5, W - margin, y + 2.5, BRAND.borderLight, 0.15);
+        y += 18;
+
+        const totalOverdueForPct = data.totalOverdue || 0;
+        const agingRows = data.aging.map(a => [
+            `${a.bucket} días`,
+            `${a.invoicesCount} facturas`,
+            currency(a.totalAmount),
+            pct(a.totalAmount, totalOverdueForPct)
+        ]);
+
+        autoTable(doc, {
+            startY: y,
+            head: [['ANTIGÜEDAD', 'FACTURAS VENCIDAS', 'MONTO VENCIDO', 'PARTICIPACIÓN']],
+            body: agingRows,
+            theme: 'plain',
+            styles: { font: 'helvetica', fontSize: 7.5, cellPadding: { top: 4, bottom: 4, left: 4, right: 4 }, textColor: BRAND.textLight, lineColor: BRAND.borderLight, lineWidth: 0.1 },
+            headStyles: { fillColor: BRAND.panelBg, textColor: BRAND.darkBg, fontStyle: 'bold', fontSize: 6.5 },
+            alternateRowStyles: { fillColor: [250, 252, 254] as [number, number, number] },
+            columnStyles: {
+                0: { fontStyle: 'bold', textColor: BRAND.darkBg },
+                2: { fontStyle: 'bold', textColor: BRAND.red, halign: 'right' },
+                3: { textColor: BRAND.textMuted, halign: 'center' }
+            },
+            margin: { left: margin, right: margin },
+        });
+        y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
+
+        if (data.overdueDetail && data.overdueDetail.length > 0) {
+            drawSectionHeader(doc, 'DETALLE DE FACTURAS VENCIDAS (TOP 15 MÁS URGENTES)', margin, y, BRAND.amber);
+            drawLine(doc, margin, y + 2.5, W - margin, y + 2.5, BRAND.borderLight, 0.15);
+            y += 5;
+
+            const overdueRows = data.overdueDetail.map(o => [
+                o.invoice,
+                o.client,
+                o.lot,
+                `${o.daysOverdue} días`,
+                currency(o.amountDue)
+            ]);
+
+            autoTable(doc, {
+                startY: y,
+                head: [['FACTURA', 'CLIENTE', 'LOTE', 'DÍAS VENCIDO', 'SALDO PENDIENTE']],
+                body: overdueRows,
+                theme: 'plain',
+                styles: { font: 'helvetica', fontSize: 7.5, cellPadding: { top: 3, bottom: 3, left: 4, right: 4 }, textColor: BRAND.textLight, lineColor: BRAND.borderLight, lineWidth: 0.1 },
+                headStyles: { fillColor: BRAND.panelBg, textColor: BRAND.darkBg, fontStyle: 'bold', fontSize: 6.5 },
+                alternateRowStyles: { fillColor: [250, 252, 254] as [number, number, number] },
+                columnStyles: {
+                    0: { fontStyle: 'bold', textColor: BRAND.darkBg },
+                    3: { fontStyle: 'bold', textColor: BRAND.amber, halign: 'center' },
+                    4: { fontStyle: 'bold', textColor: BRAND.red, halign: 'right' }
+                },
+                margin: { left: margin, right: margin },
+            });
+        }
+    }
 
     // ── Post Procesamiento
     const totalPages = doc.getNumberOfPages();

@@ -37,8 +37,19 @@ interface OdooInvoice {
     amount_total: number;
     amount_residual: number;
     invoice_date: string;
+    invoice_date_due?: string;
     partner_id: [number, string] | false;
     invoice_line_ids: number[];
+}
+
+const AGING_BUCKETS = ['0-30', '31-60', '61-90', '90+'] as const;
+type AgingBucket = typeof AGING_BUCKETS[number];
+
+function bucketFor(daysOverdue: number): AgingBucket {
+    if (daysOverdue > 90) return '90+';
+    if (daysOverdue > 60) return '61-90';
+    if (daysOverdue > 30) return '31-60';
+    return '0-30';
 }
 
 interface OdooInvoiceLine {
@@ -52,6 +63,111 @@ interface OdooProduct {
     id: number;
     default_code: string | false;
     x_mz: string | false;
+}
+
+/**
+ * Antigüedad de saldos VENCIDOS (facturas no pagadas cuya fecha de
+ * vencimiento ya pasó) — foto "a hoy", intencionalmente independiente del
+ * rango de fechas del reporte (ese rango es sobre facturas YA cobradas, un
+ * concepto distinto: la antigüedad de deuda siempre se mide contra la
+ * fecha actual, no contra un período pasado). Antes este reporte de
+ * "Recaudación" solo mostraba dinero ya cobrado, sin ninguna visibilidad
+ * de lo que sigue pendiente/vencido. Se computa en una función aparte y se
+ * llama ANTES del early-return de "no hay facturas pagadas" — si no,
+ * un período sin cobros pero con deuda vencida real habría devuelto la
+ * antigüedad vacía igual.
+ */
+async function computeOverdueAging() {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const overdueInvoices = await fetchOdoo(
+        "account.move",
+        "search_read",
+        [[
+            ["move_type", "=", "out_invoice"],
+            ["state", "=", "posted"],
+            ["payment_state", "in", ["not_paid", "partial"]],
+            ["invoice_date_due", "<", todayStr]
+        ]],
+        { fields: ["id", "name", "amount_total", "amount_residual", "invoice_date_due", "partner_id", "invoice_line_ids"] }
+    ) as OdooInvoice[];
+
+    const agingMap: Record<AgingBucket, { totalAmount: number; invoicesCount: number }> = {
+        '0-30': { totalAmount: 0, invoicesCount: 0 },
+        '31-60': { totalAmount: 0, invoicesCount: 0 },
+        '61-90': { totalAmount: 0, invoicesCount: 0 },
+        '90+': { totalAmount: 0, invoicesCount: 0 },
+    };
+    const overdueDetail: { invoice: string; client: string; lot: string; daysOverdue: number; amountDue: number }[] = [];
+    let totalOverdue = 0;
+
+    if (overdueInvoices.length > 0) {
+        const todayMs = Date.now();
+        const overdueLineIds = overdueInvoices.flatMap(inv => inv.invoice_line_ids || []);
+        const overdueLines = overdueLineIds.length > 0
+            ? await fetchOdoo(
+                "account.move.line",
+                "search_read",
+                [[["id", "in", overdueLineIds]]],
+                { fields: ["id", "product_id", "price_total", "move_id"] }
+            ) as OdooInvoiceLine[]
+            : [];
+        const overdueProductIds = new Set<number>();
+        overdueLines.forEach(l => { if (l.product_id) overdueProductIds.add(l.product_id[0]); });
+        const overdueProducts = overdueProductIds.size > 0
+            ? await fetchOdoo(
+                "product.product",
+                "search_read",
+                [[["id", "in", Array.from(overdueProductIds)]]],
+                { fields: ["id", "default_code", "x_mz"] }
+            ) as OdooProduct[]
+            : [];
+        const overdueProductMap: Record<number, OdooProduct> = {};
+        overdueProducts.forEach(p => overdueProductMap[p.id] = p);
+
+        for (const inv of overdueInvoices) {
+            const amountDue = inv.amount_residual || 0;
+            if (amountDue <= 0) continue;
+
+            const dueDateMs = inv.invoice_date_due ? new Date(inv.invoice_date_due).getTime() : todayMs;
+            const daysOverdue = Math.max(0, Math.floor((todayMs - dueDateMs) / 86400000));
+            const bucket = bucketFor(daysOverdue);
+
+            agingMap[bucket].totalAmount += amountDue;
+            agingMap[bucket].invoicesCount++;
+            totalOverdue += amountDue;
+
+            const invLines = overdueLines.filter(l => l.move_id && l.move_id[0] === inv.id);
+            let primaryLot: OdooProduct | null = null;
+            for (const line of invLines) {
+                if (line.product_id) {
+                    const prod = overdueProductMap[line.product_id[0]];
+                    if (prod && prod.default_code && prod.default_code.trim().length === 10) {
+                        primaryLot = prod;
+                        break;
+                    }
+                }
+            }
+
+            overdueDetail.push({
+                invoice: inv.name,
+                client: inv.partner_id ? inv.partner_id[1] : 'Desconocido',
+                lot: primaryLot?.default_code || 'S/N',
+                daysOverdue,
+                amountDue,
+            });
+        }
+    }
+
+    // Los más urgentes primero (más días vencidos)
+    overdueDetail.sort((a, b) => b.daysOverdue - a.daysOverdue);
+
+    const aging = AGING_BUCKETS.map((bucket) => ({
+        bucket,
+        totalAmount: agingMap[bucket].totalAmount,
+        invoicesCount: agingMap[bucket].invoicesCount,
+    }));
+
+    return { totalOverdue, aging, overdueDetail: overdueDetail.slice(0, 15) };
 }
 
 export async function GET(request: NextRequest) {
@@ -82,6 +198,11 @@ export async function GET(request: NextRequest) {
         if (startDate) domain.push(["invoice_date", ">=", startDate]);
         if (endDate) domain.push(["invoice_date", "<=", endDate]);
 
+        // Antigüedad de vencidos: independiente del filtro de fecha y del
+        // resultado de facturas pagadas — se calcula antes del early-return
+        // de abajo para no perderla si el período no tiene cobros.
+        const overdueData = await computeOverdueAging();
+
         // 1. Fetch all paid or partially paid posted invoices
         const invoices = await fetchOdoo(
             "account.move",
@@ -93,7 +214,7 @@ export async function GET(request: NextRequest) {
         ) as OdooInvoice[];
 
         if (!invoices || !Array.isArray(invoices) || invoices.length === 0) {
-            return NextResponse.json({ success: true, data: { totalCollected: 0, blocks: [], recentPayments: [] } });
+            return NextResponse.json({ success: true, data: { totalCollected: 0, blocks: [], recentPayments: [], ...overdueData } });
         }
 
         // Collect all line IDs
@@ -216,6 +337,7 @@ export async function GET(request: NextRequest) {
                 totalCollected,
                 blocks,
                 recentPayments,
+                ...overdueData,
                 dateRangeLabel
             }
         });
