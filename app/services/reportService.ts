@@ -100,10 +100,44 @@ function drawSectionHeader(
 ) {
     // Rectángulo indicador vertical con esquinas redondeadas
     drawRect(doc, x, y - 3.2, 1.8, 4.2, color, 0.4);
-    
+
     // Texto en gris oscuro/negro para alta legibilidad en fondo blanco
     setFont(doc, 8.5, BRAND.darkBg, 'bold');
     doc.text(title, x + 4, y);
+}
+
+// Dibuja un panel de "Resumen Ejecutivo": 2-3 líneas narrativas que
+// sintetizan el período en lenguaje natural, en vez de dejar que el
+// lector infiera la lectura solo a partir de tarjetas KPI sueltas.
+// Devuelve el nuevo cursor Y para continuar dibujando debajo del panel.
+function drawNarrativeSummary(
+    doc: jsPDF,
+    x: number,
+    y: number,
+    width: number,
+    paragraph: string,
+    accentColor: [number, number, number]
+): number {
+    const textX = x + 6;
+    const textWidth = width - 12;
+    const lines = doc.splitTextToSize(paragraph, textWidth) as string[];
+    const lineHeight = 4;
+    const titleAreaH = 8;
+    const boxH = titleAreaH + lines.length * lineHeight + 4;
+
+    doc.setFillColor(...BRAND.panelBg);
+    doc.roundedRect(x, y, width, boxH, 1.5, 1.5, 'F');
+    drawRect(doc, x, y, 1.8, boxH, accentColor);
+
+    setFont(doc, 6.5, accentColor, 'bold');
+    doc.text('RESUMEN EJECUTIVO', textX, y + 5.5);
+
+    setFont(doc, 7.8, BRAND.dark2);
+    lines.forEach((line, i) => {
+        doc.text(line, textX, y + titleAreaH + 3 + i * lineHeight);
+    });
+
+    return y + boxH + 8;
 }
 
 // ─── Reporte Individual del Vendedor ──────────────────────────────────────────
@@ -709,6 +743,15 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
     }
     y += 10;
 
+    // ── Resumen Ejecutivo Narrativo ────────────────────────────────────────────
+    const topAdvisor = data.advisorRanking.length > 0 ? data.advisorRanking[0] : null;
+    const unitsMoved = data.kpis.soldLots + data.kpis.reservedLots;
+    const generalNarrative =
+        `Durante el período ${data.dateRangeLabel || 'analizado'}, el proyecto registró ventas consolidadas por ${currency(data.kpis.totalSales)} sobre un valor comercial total de ${currency(data.kpis.projectValue)}, alcanzando una ocupación física del ${goalPct}% (${unitsMoved} de ${data.kpis.totalLots} lotes).` +
+        (topAdvisor ? ` El asesor líder del período fue ${topAdvisor.name}, con ${topAdvisor.lotsCount} lote${topAdvisor.lotsCount === 1 ? '' : 's'} vendido${topAdvisor.lotsCount === 1 ? '' : 's'} (${currency(topAdvisor.amountTotal)}).` : '') +
+        ` Quedan ${data.kpis.availableLots} lotes disponibles (${pct(data.kpis.availableLots, data.kpis.totalLots)}) para comercialización.`;
+    y = drawNarrativeSummary(doc, margin, y, contentW, generalNarrative, BRAND.green);
+
     // ── Sección: Tendencia Mensual Global ─────────────────────────────────────
     drawSectionHeader(doc, 'CURVA DE VENTAS MENSUALES DEL PROYECTO', margin, y, BRAND.purple);
     drawLine(doc, margin, y + 2.5, W - margin, y + 2.5, BRAND.borderLight, 0.15);
@@ -1051,6 +1094,24 @@ export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): 
     doc.text(currency(data.totalCollected), W - margin - 4, 43, { align: 'right' });
 
     let y = 62;
+
+    // ── Resumen Ejecutivo Narrativo ────────────────────────────────────────────
+    const topBlock = data.blocks.length > 0
+        ? data.blocks.reduce((max, b) => (b.totalAmount > max.totalAmount ? b : max), data.blocks[0])
+        : null;
+    const overdue90 = data.aging?.find(a => a.bucket === '90+');
+
+    let invoicesNarrative =
+        `Durante el período ${data.dateRangeLabel || 'analizado'}, se recaudaron ${currency(data.totalCollected)} en ${data.recentPayments.length} factura${data.recentPayments.length === 1 ? '' : 's'} pagada${data.recentPayments.length === 1 ? '' : 's'}` +
+        (topBlock ? `, concentradas principalmente en la Manzana ${topBlock.mz} (${pct(topBlock.totalAmount, data.totalCollected)} del total recaudado)` : '') + '.';
+    if (data.totalOverdue && data.totalOverdue > 0) {
+        invoicesNarrative +=
+            ` Adicionalmente, existen ${currency(data.totalOverdue)} en saldos vencidos a la fecha` +
+            (overdue90 && overdue90.totalAmount > 0 ? `, de los cuales ${currency(overdue90.totalAmount)} corresponden a mora mayor a 90 días y requieren atención prioritaria de cobranza` : '') + '.';
+    } else {
+        invoicesNarrative += ' No se registran saldos vencidos a la fecha de este reporte.';
+    }
+    y = drawNarrativeSummary(doc, margin, y, contentW, invoicesNarrative, BRAND.green);
 
     // ── Resumen de Recaudación por Manzanas
     drawSectionHeader(doc, 'RESUMEN FINANCIERO POR MANZANA (CASH FLOW REAL)', margin, y, BRAND.green);
