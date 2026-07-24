@@ -183,6 +183,29 @@ function drawDonutChart(
     doc.circle(cx, cy, radius, 'S');
 }
 
+// Dibuja una flecha de tendencia (▲/▼/―) como triángulo vectorial en vez
+// de un carácter Unicode: la fuente estándar "helvetica" de jsPDF solo
+// soporta WinAnsiEncoding (Latin-1) y no incluye glifos de flecha — un
+// triángulo dibujado con las mismas primitivas del donut es inmune a
+// ese problema de fuente/encoding.
+function drawTrendArrow(
+    doc: jsPDF,
+    x: number,
+    y: number,
+    size: number,
+    trend: 'up' | 'down' | 'stable',
+    color: [number, number, number]
+) {
+    doc.setFillColor(...color);
+    if (trend === 'up') {
+        doc.triangle(x, y - size, x - size / 2, y, x + size / 2, y, 'F');
+    } else if (trend === 'down') {
+        doc.triangle(x, y, x - size / 2, y - size, x + size / 2, y - size, 'F');
+    } else {
+        drawRect(doc, x - size / 2, y - size / 3, size, size * 0.35, color);
+    }
+}
+
 // ID de reporte único para trazabilidad (referenciable en auditorías o
 // reclamos de cliente sin necesitar volver a generar el PDF exacto).
 function generateReportId(prefix: string, date: Date): string {
@@ -688,6 +711,14 @@ export interface GeneralReportData {
     advisorRanking: { name: string; lotsCount: number; amountTotal: number; commission: number }[];
     recentActivity: { id: number; action: string; lot: string; advisor: string; date: string }[];
     dateRangeLabel?: string; // Etiqueta de periodo dinámico (ej. "Mayo 2026" o "01/04 - 30/04/2026")
+    // Comparación real vs. período anterior de igual duración (ausente hasta
+    // ahora en el PDF: los KPIs eran solo el número absoluto, sin indicar
+    // si mejoraron o empeoraron respecto al período previo).
+    comparison?: {
+        totalSales: { value: number; change: number; trend: 'up' | 'down' | 'stable' };
+        commission: { value: number; change: number; trend: 'up' | 'down' | 'stable' };
+        salesCount: { value: number; change: number; trend: 'up' | 'down' | 'stable' };
+    };
 }
 
 // ─── Reporte General Consolidado (Administrador) ──────────────────────────────
@@ -775,12 +806,16 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
 
     const goalPct = data.kpis.occupationRate;
 
-    const kpiCards = [
+    const kpiCards: {
+        label: string; value: string; sub: string; color: [number, number, number];
+        comparison?: { change: number; trend: 'up' | 'down' | 'stable' };
+    }[] = [
         {
             label: 'VENTAS CONSOLIDADAS',
             value: currency(data.kpis.totalSales),
             sub: 'Facturación confirmada',
             color: BRAND.greenLight,
+            comparison: data.comparison?.totalSales,
         },
         {
             label: 'VALOR COMERCIAL',
@@ -793,6 +828,7 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
             value: currency(data.kpis.commission),
             sub: 'Tasa: 6% global',
             color: BRAND.indigo,
+            comparison: data.comparison?.commission,
         },
         {
             label: 'OCUPACIÓN FÍSICA',
@@ -802,6 +838,7 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
         },
     ];
 
+    const cardH = 32;
     const cardW = (contentW - 6) / 4;
     kpiCards.forEach((card, i) => {
         const cx = margin + i * (cardW + 2);
@@ -809,7 +846,7 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
         doc.setFillColor(...BRAND.panelBg);
         doc.setDrawColor(...BRAND.borderLight);
         doc.setLineWidth(0.3);
-        doc.roundedRect(cx, y, cardW, 28, 2, 2, 'FD');
+        doc.roundedRect(cx, y, cardW, cardH, 2, 2, 'FD');
 
         // — barra superior de color
         drawRect(doc, cx, y, cardW, 1.5, card.color, 0);
@@ -822,8 +859,18 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
         // — sub
         setFont(doc, 6, card.color);
         doc.text(card.sub, cx + 4, y + 24);
+
+        // — comparativo vs. período anterior (solo si aplica a esta tarjeta)
+        if (card.comparison) {
+            const { change, trend } = card.comparison;
+            const deltaColor: [number, number, number] =
+                trend === 'up' ? BRAND.greenLight : trend === 'down' ? BRAND.red : BRAND.textMuted;
+            drawTrendArrow(doc, cx + 5.5, y + 29.5, 2.4, trend, deltaColor);
+            setFont(doc, 6, deltaColor, 'bold');
+            doc.text(`${Math.abs(change)}% vs. período anterior`, cx + 8.5, y + 30);
+        }
     });
-    y += 36;
+    y += cardH + 8;
 
     // — Barra de progreso de ocupación
     setFont(doc, 6.5, BRAND.textMuted);

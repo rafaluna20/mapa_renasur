@@ -202,9 +202,48 @@ export async function GET(request: NextRequest) {
             .sort((a, b) => b.amountTotal - a.amountTotal);
 
         // Occupation rate
-        const occupationRate = totalLots > 0 
+        const occupationRate = totalLots > 0
             ? Math.round(((soldLots + reservedLots) / totalLots) * 100)
             : 0;
+
+        // Comparación real contra el período anterior de igual duración
+        // (mismo patrón ya usado en stats/detailed para el dashboard en
+        // vivo). El Reporte General en PDF mostraba los KPIs como números
+        // absolutos sin indicar si mejoraron o empeoraron vs. el período
+        // previo — solo se compara lo que tiene sentido temporal real
+        // (ventas/comisión/N° de órdenes); ocupación y valor comercial son
+        // fotos de inventario actual, no series por período, así que no
+        // se les fabrica una comparación sin sentido.
+        const periodMs = new Date(endDate).getTime() - new Date(startDate).getTime();
+        const prevEndDate = new Date(new Date(startDate).getTime() - 1000);
+        const prevStartDate = new Date(prevEndDate.getTime() - periodMs);
+        const prevStartStr = prevStartDate.toISOString().slice(0, 19).replace('T', ' ');
+        const prevEndStr = prevEndDate.toISOString().slice(0, 19).replace('T', ' ');
+
+        const prevSalesAgg = await fetchOdoo(
+            "sale.order",
+            "read_group",
+            [[
+                ["state", "in", ["sale", "done"]],
+                ["date_order", ">=", prevStartStr],
+                ["date_order", "<=", prevEndStr]
+            ]],
+            { fields: ["amount_total"], groupby: [] }
+        ) as { __count?: number; amount_total?: number }[];
+        const prevTotalSales = prevSalesAgg[0]?.amount_total || 0;
+        const prevSalesCount = prevSalesAgg[0]?.__count || 0;
+        const prevCommission = prevTotalSales * 0.06;
+
+        const pctChange = (curr: number, prev: number): number => {
+            if (prev === 0) return curr > 0 ? 100 : 0;
+            return Math.round(((curr - prev) / prev) * 100);
+        };
+        const trendOf = (change: number): 'up' | 'down' | 'stable' =>
+            change > 0 ? 'up' : change < 0 ? 'down' : 'stable';
+
+        const totalSalesChange = pctChange(totalSales, prevTotalSales);
+        const commissionChange = pctChange(commission, prevCommission);
+        const salesCountChange = pctChange(globalOrders.length, prevSalesCount);
 
         // 3. RECENT ACTIVITY GLOBAL (Last 10 Orders)
         const recentOrders = await fetchOdoo(
@@ -290,7 +329,12 @@ export async function GET(request: NextRequest) {
                 manzanasDistribution,
                 salesTrend,
                 advisorRanking,
-                recentActivity
+                recentActivity,
+                comparison: {
+                    totalSales: { value: totalSales, change: totalSalesChange, trend: trendOf(totalSalesChange) },
+                    commission: { value: commission, change: commissionChange, trend: trendOf(commissionChange) },
+                    salesCount: { value: globalOrders.length, change: salesCountChange, trend: trendOf(salesCountChange) }
+                }
             }
         });
 
