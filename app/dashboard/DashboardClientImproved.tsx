@@ -74,6 +74,13 @@ const formatHoursElapsed = (hours: number): string => {
     return `Hace ${years} ${years === 1 ? 'año' : 'años'}`;
 };
 
+// "En Proceso" = cotización activa o reservado (Separado) — NO cualquier
+// cosa que no sea "Vendido". Antes usaba `status !== 'Vendido'`, así que
+// un lote cuya cotización quedó vieja y hoy volvió a estar "Disponible"
+// en Odoo (la reserva se liberó, o la cotización nunca se confirmó)
+// seguía apareciendo acá como si tuviera algo activo encima.
+const isLotEnProceso = (status: string): boolean => status === 'Cotización' || status === 'Separado';
+
 type PeriodFilter = '7d' | '30d' | '90d' | '180d' | 'ytd' | 'custom';
 type ChartView = 'simple' | 'detailed';
 
@@ -1245,7 +1252,7 @@ export default function DashboardClientImproved() {
                         </div>
                         <div className="flex items-center gap-3">
                             <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-3.5 py-1 rounded-full text-xs font-bold tracking-wide">
-                                {stats.assignedLots.filter(lot => lot.status !== 'Vendido').length} En Proceso
+                                {stats.assignedLots.filter(lot => isLotEnProceso(lot.status)).length} En Proceso
                             </span>
                             <button
                                 onClick={() => router.push('/')}
@@ -1268,7 +1275,7 @@ export default function DashboardClientImproved() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-900">
-                                {stats.assignedLots.filter(lot => lot.status !== 'Vendido').length === 0 ? (
+                                {stats.assignedLots.filter(lot => isLotEnProceso(lot.status)).length === 0 ? (
                                     <tr>
                                         <td colSpan={5} className="px-6 py-12 text-center text-slate-500 text-sm">
                                             No tienes lotes en proceso. ¡Todas tus transacciones están completadas!
@@ -1276,7 +1283,7 @@ export default function DashboardClientImproved() {
                                     </tr>
                                 ) : (
                                     stats.assignedLots
-                                        .filter(lot => lot.status !== 'Vendido')
+                                        .filter(lot => isLotEnProceso(lot.status))
                                         .map((item, idx) => (
                                         <tr key={idx} className="hover:bg-slate-900/20 transition-colors">
                                             <td className="px-6 py-4">
@@ -1322,10 +1329,10 @@ export default function DashboardClientImproved() {
 
                     {/* Vista Mobile: tarjetas adaptadas */}
                     <div className="block sm:hidden divide-y divide-slate-900">
-                        {stats.assignedLots.filter(lot => lot.status !== 'Vendido').length === 0 ? (
+                        {stats.assignedLots.filter(lot => isLotEnProceso(lot.status)).length === 0 ? (
                             <p className="p-6 text-center text-slate-500 text-sm">No tienes lotes en proceso activos.</p>
                         ) : (
-                            stats.assignedLots.filter(lot => lot.status !== 'Vendido').map((item, idx) => (
+                            stats.assignedLots.filter(lot => isLotEnProceso(lot.status)).map((item, idx) => (
                                 <div key={idx} className="p-4 hover:bg-slate-900/20 transition-colors">
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="flex items-center gap-3">
