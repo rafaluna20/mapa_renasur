@@ -1206,6 +1206,12 @@ export interface PaidInvoicesReportData {
     totalOverdue?: number;
     aging?: { bucket: '0-30' | '31-60' | '61-90' | '90+'; totalAmount: number; invoicesCount: number }[];
     overdueDetail?: { invoice: string; client: string; lot: string; daysOverdue: number; amountDue: number }[];
+    // Comparación real vs. período anterior de igual duración (solo presente
+    // cuando el reporte tiene un rango de fechas explícito).
+    comparison?: {
+        totalCollected: { value: number; change: number; trend: 'up' | 'down' | 'stable' };
+        invoicesCount: { value: number; change: number; trend: 'up' | 'down' | 'stable' };
+    };
 }
 
 export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): Promise<void> {
@@ -1259,14 +1265,26 @@ export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): 
     }
 
     // Kpi Recaudación Total
+    const kpiBoxH = data.comparison ? 24 : 20;
     doc.setFillColor(...BRAND.white);
     doc.setDrawColor(...BRAND.greenLight);
     doc.setLineWidth(0.5);
-    doc.roundedRect(W - margin - 75, 28, 75, 20, 2, 2, 'FD');
+    doc.roundedRect(W - margin - 75, 28, 75, kpiBoxH, 2, 2, 'FD');
     setFont(doc, 8, BRAND.greenLight, 'bold');
     doc.text('TOTAL RECAUDADO EFECTIVO', W - margin - 4, 34, { align: 'right' });
     setFont(doc, 14, BRAND.darkBg, 'bold');
     doc.text(currency(data.totalCollected), W - margin - 4, 43, { align: 'right' });
+
+    if (data.comparison) {
+        const { change, trend } = data.comparison.totalCollected;
+        const deltaColor: [number, number, number] =
+            trend === 'up' ? BRAND.greenLight : trend === 'down' ? BRAND.red : BRAND.textMuted;
+        const deltaLabel = `${Math.abs(change)}% vs. período anterior`;
+        setFont(doc, 6.5, deltaColor, 'bold');
+        const rightEdge = W - margin - 4;
+        doc.text(deltaLabel, rightEdge, 49.5, { align: 'right' });
+        drawTrendArrow(doc, rightEdge - doc.getTextWidth(deltaLabel) - 4, 49, 2.2, trend, deltaColor);
+    }
 
     let y = 62;
 

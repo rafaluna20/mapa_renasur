@@ -170,6 +170,54 @@ async function computeOverdueAging() {
     return { totalOverdue, aging, overdueDetail: overdueDetail.slice(0, 15) };
 }
 
+function pctChange(curr: number, prev: number): number {
+    if (prev === 0) return curr > 0 ? 100 : 0;
+    return Math.round(((curr - prev) / prev) * 100);
+}
+function trendOf(change: number): 'up' | 'down' | 'stable' {
+    return change > 0 ? 'up' : change < 0 ? 'down' : 'stable';
+}
+
+/**
+ * Totales de recaudación del período anterior de igual duración, para
+ * comparar contra el período actual (mismo patrón ya usado en
+ * stats/general y stats/detailed). Se llama ANTES del early-return de
+ * "sin facturas pagadas" para que un período sin cobros pero con un
+ * período anterior real igual pueda mostrar la caída del 100%.
+ * Devuelve null cuando no hay `startDate` explícito: sin él, el rango
+ * es "todo el histórico" y no existe una duración de período coherente
+ * contra la cual comparar.
+ */
+async function computePreviousPeriodTotals(startDate: string | null, endDate: string | null) {
+    if (!startDate) return null;
+
+    const effectiveEndStr = endDate || new Date().toISOString().slice(0, 10);
+    const startD = new Date(startDate + 'T00:00:00Z');
+    const endD = new Date(effectiveEndStr + 'T00:00:00Z');
+    const periodMs = endD.getTime() - startD.getTime();
+    const prevEndD = new Date(startD.getTime() - 86400000);
+    const prevStartD = new Date(prevEndD.getTime() - periodMs);
+    const toDateStr = (d: Date) => d.toISOString().slice(0, 10);
+
+    const prevAgg = await fetchOdoo(
+        "account.move",
+        "read_group",
+        [[
+            ["move_type", "=", "out_invoice"],
+            ["state", "=", "posted"],
+            ["payment_state", "in", ["paid", "in_payment"]],
+            ["invoice_date", ">=", toDateStr(prevStartD)],
+            ["invoice_date", "<=", toDateStr(prevEndD)]
+        ]],
+        { fields: ["amount_total", "amount_residual"], groupby: [] }
+    ) as { __count?: number; amount_total?: number; amount_residual?: number }[];
+
+    return {
+        prevTotalCollected: (prevAgg[0]?.amount_total || 0) - (prevAgg[0]?.amount_residual || 0),
+        prevInvoicesCount: prevAgg[0]?.__count || 0,
+    };
+}
+
 export async function GET(request: NextRequest) {
     const auth = await requireStaffSession(request);
     if (auth.response) return auth.response;
@@ -202,6 +250,17 @@ export async function GET(request: NextRequest) {
         // resultado de facturas pagadas — se calcula antes del early-return
         // de abajo para no perderla si el período no tiene cobros.
         const overdueData = await computeOverdueAging();
+        const prevPeriodTotals = await computePreviousPeriodTotals(startDate, endDate);
+
+        const buildComparison = (currentTotalCollected: number, currentInvoicesCount: number) => {
+            if (!prevPeriodTotals) return undefined;
+            const totalCollectedChange = pctChange(currentTotalCollected, prevPeriodTotals.prevTotalCollected);
+            const invoicesCountChange = pctChange(currentInvoicesCount, prevPeriodTotals.prevInvoicesCount);
+            return {
+                totalCollected: { value: currentTotalCollected, change: totalCollectedChange, trend: trendOf(totalCollectedChange) },
+                invoicesCount: { value: currentInvoicesCount, change: invoicesCountChange, trend: trendOf(invoicesCountChange) },
+            };
+        };
 
         // 1. Fetch all paid or partially paid posted invoices
         const invoices = await fetchOdoo(
@@ -214,7 +273,10 @@ export async function GET(request: NextRequest) {
         ) as OdooInvoice[];
 
         if (!invoices || !Array.isArray(invoices) || invoices.length === 0) {
-            return NextResponse.json({ success: true, data: { totalCollected: 0, blocks: [], recentPayments: [], ...overdueData } });
+            return NextResponse.json({
+                success: true,
+                data: { totalCollected: 0, blocks: [], recentPayments: [], ...overdueData, comparison: buildComparison(0, 0) }
+            });
         }
 
         // Collect all line IDs
@@ -338,7 +400,8 @@ export async function GET(request: NextRequest) {
                 blocks,
                 recentPayments,
                 ...overdueData,
-                dateRangeLabel
+                dateRangeLabel,
+                comparison: buildComparison(totalCollected, recentPayments.length)
             }
         });
 
