@@ -140,6 +140,95 @@ function drawNarrativeSummary(
     return y + boxH + 8;
 }
 
+// Dibuja un gráfico de dona (pie con hueco central) aproximando cada
+// porción con abanicos de triángulos delgados desde el centro — jsPDF no
+// trae un primitivo de arco relleno, pero triángulos de ~3° son
+// visualmente indistinguibles de una curva real a escala de impresión.
+function drawDonutChart(
+    doc: jsPDF,
+    cx: number,
+    cy: number,
+    radius: number,
+    slices: { value: number; color: [number, number, number] }[]
+) {
+    const total = slices.reduce((s, sl) => s + sl.value, 0);
+    if (total <= 0) {
+        doc.setFillColor(...BRAND.borderLight);
+        doc.circle(cx, cy, radius, 'F');
+    } else {
+        let angleStart = 0;
+        const stepDeg = 3;
+        slices.forEach(slice => {
+            if (slice.value <= 0) return;
+            const angleEnd = angleStart + (slice.value / total) * 360;
+            doc.setFillColor(...slice.color);
+            for (let a = angleStart; a < angleEnd; a += stepDeg) {
+                const a2 = Math.min(a + stepDeg, angleEnd);
+                const r1 = (a * Math.PI) / 180;
+                const r2 = (a2 * Math.PI) / 180;
+                const x1 = cx + radius * Math.sin(r1);
+                const y1 = cy - radius * Math.cos(r1);
+                const x2 = cx + radius * Math.sin(r2);
+                const y2 = cy - radius * Math.cos(r2);
+                doc.triangle(cx, cy, x1, y1, x2, y2, 'F');
+            }
+            angleStart = angleEnd;
+        });
+    }
+    // Hueco central (efecto dona) + borde exterior
+    doc.setFillColor(...BRAND.white);
+    doc.circle(cx, cy, radius * 0.55, 'F');
+    doc.setDrawColor(...BRAND.borderLight);
+    doc.setLineWidth(0.3);
+    doc.circle(cx, cy, radius, 'S');
+}
+
+// ID de reporte único para trazabilidad (referenciable en auditorías o
+// reclamos de cliente sin necesitar volver a generar el PDF exacto).
+function generateReportId(prefix: string, date: Date): string {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `RPT-${prefix}-${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+}
+
+// Dibuja el bloque de cierre de "Trazabilidad y Aprobación": el ID único
+// del documento y 3 líneas en blanco para firma manual (Elaborado /
+// Revisado / Aprobado) — estándar en reportes financieros/contables
+// corporativos, ausente hasta ahora en estos PDFs.
+function drawTraceabilitySection(
+    doc: jsPDF,
+    x: number,
+    y: number,
+    width: number,
+    reportId: string
+): number {
+    drawSectionHeader(doc, 'TRAZABILIDAD Y APROBACIÓN', x, y, BRAND.dark2);
+    drawLine(doc, x, y + 2.5, x + width, y + 2.5, BRAND.borderLight, 0.15);
+    y += 8;
+
+    setFont(doc, 6.5, BRAND.textMuted);
+    doc.text(`ID de Reporte: ${reportId}`, x, y);
+    y += 4;
+    const lines = doc.splitTextToSize(
+        'Documento generado automáticamente por el Sistema Financiero Terra Lima. Requiere validación y firma según el flujo de aprobación interno.',
+        width
+    ) as string[];
+    doc.text(lines, x, y);
+    y += lines.length * 3.6 + 10;
+
+    const colW = width / 3;
+    const labels = ['ELABORADO POR', 'REVISADO POR', 'APROBADO POR'];
+    labels.forEach((label, i) => {
+        const cx = x + i * colW;
+        drawLine(doc, cx + 6, y, cx + colW - 6, y, BRAND.dark3, 0.3);
+        setFont(doc, 6, BRAND.textMuted, 'bold');
+        doc.text(label, cx + colW / 2, y + 5, { align: 'center' });
+        setFont(doc, 5.5, BRAND.textMuted);
+        doc.text('Nombre y firma', cx + colW / 2, y + 9, { align: 'center' });
+    });
+
+    return y + 14;
+}
+
 // ─── Reporte Individual del Vendedor ──────────────────────────────────────────
 export async function generateEnterpriseReport(data: ReportData): Promise<void> {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -615,6 +704,7 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
     });
     const timeLabel = now.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
     const year = now.getFullYear();
+    const reportId = generateReportId('GEN', now);
 
     // ══════════════════════════════════════════════════════════════════════════
     // PÁGINA 1 — PORTADA + KPIs GLOBALES + TENDENCIA
@@ -648,9 +738,11 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
 
     // — Información de empresa (derecha)
     setFont(doc, 7, BRAND.textMuted);
-    doc.text('Sistema de Gestión Inmobiliaria', W - margin, 11, { align: 'right' });
-    doc.text('Portal GIS · Renasur', W - margin, 16, { align: 'right' });
-    doc.text(`Generado: ${dateLabel} · ${timeLabel}`, W - margin, 21, { align: 'right' });
+    doc.text('Sistema de Gestión Inmobiliaria', W - margin, 9, { align: 'right' });
+    doc.text('Portal GIS · Renasur', W - margin, 13, { align: 'right' });
+    doc.text(`Generado: ${dateLabel} · ${timeLabel}`, W - margin, 17, { align: "right" });
+    setFont(doc, 6, BRAND.textMuted);
+    doc.text(`ID: ${reportId}`, W - margin, 21, { align: "right" });
 
     // — Separador
     drawLine(doc, margin, 26, W - margin, 26, BRAND.borderLight, 0.2);
@@ -841,6 +933,35 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
     drawLine(doc, margin, y + 2.5, W - margin, y + 2.5, BRAND.borderLight, 0.15);
     y += 4;
 
+    // ── Donut de distribución (lectura visual a un vistazo) ──────────────────
+    const donutRadius = 15;
+    const donutCx = margin + donutRadius + 3;
+    const donutCy = y + donutRadius + 3;
+    const invSlices = [
+        { label: 'Vendidos', value: data.kpis.soldLots, color: BRAND.greenLight },
+        { label: 'Separados/Reservados', value: data.kpis.reservedLots, color: BRAND.amber },
+        { label: 'Disponibles', value: data.kpis.availableLots, color: BRAND.indigo },
+    ];
+    drawDonutChart(doc, donutCx, donutCy, donutRadius, invSlices);
+
+    setFont(doc, 8, BRAND.darkBg, 'bold');
+    doc.text(`${data.kpis.totalLots}`, donutCx, donutCy - 1, { align: 'center' });
+    setFont(doc, 5, BRAND.textMuted);
+    doc.text('LOTES', donutCx, donutCy + 3.5, { align: 'center' });
+
+    let legendY = y + 4;
+    const legendX = donutCx + donutRadius + 12;
+    invSlices.forEach(slice => {
+        drawRect(doc, legendX, legendY - 3, 3, 3, slice.color);
+        setFont(doc, 7, BRAND.darkBg, 'bold');
+        doc.text(slice.label, legendX + 5, legendY);
+        setFont(doc, 6.5, BRAND.textMuted);
+        doc.text(`${slice.value} unidades (${pct(slice.value, data.kpis.totalLots)})`, legendX + 5, legendY + 4);
+        legendY += 10;
+    });
+
+    y += donutRadius * 2 + 10;
+
     const inventoryRows = [
         ['Lotes Vendidos', `${data.kpis.soldLots} unidades`, pct(data.kpis.soldLots, data.kpis.totalLots), 'Estado comercial de cierre absoluto'],
         ['Lotes Separados/Reservados', `${data.kpis.reservedLots} unidades`, pct(data.kpis.reservedLots, data.kpis.totalLots), 'Con órdenes de venta en borrador/reserva'],
@@ -955,6 +1076,7 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
     if (data.recentActivity.length === 0) {
         setFont(doc, 7, BRAND.textMuted);
         doc.text('Sin actividad reciente.', margin, y + 6);
+        y += 14;
     } else {
         autoTable(doc, {
             startY: y,
@@ -992,7 +1114,10 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
             },
             margin: { left: margin, right: margin },
         });
+        y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
     }
+
+    y = drawTraceabilitySection(doc, margin, y, contentW, reportId);
 
     // ── Pies de Página Globales ───────────────────────────────────────────────
     const totalGeneralPages = doc.getNumberOfPages();
@@ -1047,6 +1172,7 @@ export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): 
     const dateLabel = now.toLocaleDateString('es-PE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     const timeLabel = now.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
     const year = now.getFullYear();
+    const reportId = generateReportId('REC', now);
 
     // Fondo y cabecera principal
     drawRect(doc, 0, 0, W, H, BRAND.pageBg);
@@ -1071,6 +1197,8 @@ export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): 
     setFont(doc, 7, BRAND.textMuted);
     doc.text('Sistema Financiero y Contable', W - margin, 11, { align: 'right' });
     doc.text(`Generado: ${dateLabel} · ${timeLabel}`, W - margin, 16, { align: 'right' });
+    setFont(doc, 6, BRAND.textMuted);
+    doc.text(`ID: ${reportId}`, W - margin, 20, { align: 'right' });
 
     setFont(doc, 22, BRAND.darkBg, 'bold');
     doc.text('REPORTE DE RECAUDACIÓN', margin, 40);
@@ -1171,12 +1299,19 @@ export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): 
         },
         margin: { left: margin, right: margin },
     });
+    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
 
     // ══════════════════════════════════════════════════════════════════════════
     // PÁGINA 2 — ANTIGÜEDAD DE SALDOS VENCIDOS (AGING, FOTO A HOY)
     // ══════════════════════════════════════════════════════════════════════════
+    // Se registra desde qué página física arranca esta sección: el pie de
+    // página necesita saber cuáles páginas son "de riesgo/vencidos" (banda
+    // roja) vs "de cash flow" (banda verde) — antes la banda de páginas 2+
+    // era siempre verde aunque su contenido fuera sobre deuda vencida.
+    let agingStartPage: number | null = null;
     if (data.aging && data.aging.length > 0) {
         doc.addPage();
+        agingStartPage = doc.getNumberOfPages();
         drawRect(doc, 0, 0, W, H, BRAND.pageBg);
         y = 22;
 
@@ -1247,8 +1382,11 @@ export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): 
                 },
                 margin: { left: margin, right: margin },
             });
+            y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
         }
     }
+
+    y = drawTraceabilitySection(doc, margin, y, contentW, reportId);
 
     // ── Post Procesamiento
     const totalPages = doc.getNumberOfPages();
@@ -1260,11 +1398,21 @@ export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): 
         doc.text(`Pág. ${p} / ${totalPages}`, W - margin, H - 10, { align: 'right' });
 
         if (p > 1) {
+            // Banda roja en las páginas de antigüedad/vencidos, verde en el
+            // resto — antes esta banda era siempre verde sin importar que
+            // la página tratara de deuda vencida (contradecía sus propias
+            // secciones en rojo).
+            const isAgingPage = agingStartPage !== null && p >= agingStartPage;
+            const bannerColor = isAgingPage ? BRAND.red : BRAND.greenLight;
+            const bannerLabel = isAgingPage
+                ? 'Terra Lima · Antigüedad de Saldos Vencidos'
+                : 'Terra Lima · Reporte de Recaudación (Facturas Pagadas)';
+
             drawRect(doc, 0, 0, W, 16, BRAND.panelBg);
             drawLine(doc, 0, 16, W, 16, BRAND.borderLight, 0.3);
-            drawRect(doc, 0, 0, W, 1.5, BRAND.greenLight);
+            drawRect(doc, 0, 0, W, 1.5, bannerColor);
             setFont(doc, 7, BRAND.textMuted);
-            doc.text(`Terra Lima · Reporte de Recaudación (Facturas Pagadas)`, margin, 10);
+            doc.text(bannerLabel, margin, 10);
             doc.text(`Pág. ${p}`, W - margin, 10, { align: 'right' });
         }
     }
