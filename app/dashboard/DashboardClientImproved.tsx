@@ -445,6 +445,19 @@ export default function DashboardClientImproved() {
         if (!stats || !authUser || generatingPdf) return;
         setGeneratingPdf(true);
         try {
+            // Igual que handleDownloadGeneralReport: el PDF individual del
+            // asesor antes nunca decía qué período estaba mostrando (el
+            // filtro sí afectaba los números vía `stats`, pero el reporte
+            // no dejaba constancia de cuál era el rango). La plantilla
+            // (reportService.ts) ya soporta `dateRangeLabel` -- solo faltaba
+            // llenarlo acá.
+            let dateRangeLabel: string | undefined;
+            if (activeDateRange.start || activeDateRange.end) {
+                const startLabel = formatToDDMMYY(activeDateRange.start) || 'Inicio';
+                const endLabel = formatToDDMMYY(activeDateRange.end) || 'Hoy';
+                dateRangeLabel = `${startLabel} al ${endLabel}`;
+            }
+
             const reportData: ReportData = {
                 advisor: {
                     name: authUser.name,
@@ -456,6 +469,7 @@ export default function DashboardClientImproved() {
                 competedLots: stats.competedLots,
                 recentActivity: stats.recentActivity,
                 salesCount,
+                dateRangeLabel,
             };
             await generateEnterpriseReport(reportData);
         } catch (err) {
@@ -464,7 +478,7 @@ export default function DashboardClientImproved() {
         } finally {
             setGeneratingPdf(false);
         }
-    }, [stats, authUser, generatingPdf, salesCount]);
+    }, [stats, authUser, generatingPdf, salesCount, activeDateRange]);
 
     const handleDownloadGeneralReport = useCallback(async () => {
         if (!authUser || !authUser.is_system || generatingGeneralPdf) return;
