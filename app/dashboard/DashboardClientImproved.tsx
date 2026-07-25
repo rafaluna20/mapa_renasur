@@ -8,7 +8,7 @@ import {
 import {
     DollarSign, TrendingUp, Users, Target, ArrowUpRight, ArrowDownRight,
     MapPin, Clock, Loader2, Award, Zap, FileDown, Calendar, Filter,
-    AlertTriangle, Sparkles, TrendingDown, Activity, BarChart3
+    AlertTriangle, Sparkles, TrendingDown, Activity, BarChart3, FileSpreadsheet
 } from 'lucide-react';
 import { useAuth } from '@/app/context/AuthContext';
 import { odooService } from '@/app/services/odooService';
@@ -341,6 +341,9 @@ export default function DashboardClientImproved() {
     const [generatingPdf, setGeneratingPdf] = useState(false);
     const [generatingGeneralPdf, setGeneratingGeneralPdf] = useState(false);
     const [generatingInvoicesPdf, setGeneratingInvoicesPdf] = useState(false);
+    const [generatingReportCsv, setGeneratingReportCsv] = useState(false);
+    const [generatingGeneralCsv, setGeneratingGeneralCsv] = useState(false);
+    const [generatingInvoicesCsv, setGeneratingInvoicesCsv] = useState(false);
     
     // Filtro de fechas personalizadas
     const [customStartDate, setCustomStartDate] = useState<string>('');
@@ -489,6 +492,38 @@ export default function DashboardClientImproved() {
         }
     }, [stats, authUser, generatingPdf, salesCount, activeDateRange]);
 
+    const handleExportReportCsv = useCallback(async () => {
+        if (!stats || !authUser || generatingReportCsv) return;
+        setGeneratingReportCsv(true);
+        try {
+            let dateRangeLabel: string | undefined;
+            if (activeDateRange.start || activeDateRange.end) {
+                const startLabel = formatToDDMMYY(activeDateRange.start) || 'Inicio';
+                const endLabel = formatToDDMMYY(activeDateRange.end) || 'Hoy';
+                dateRangeLabel = `${startLabel} al ${endLabel}`;
+            }
+
+            const reportData: ReportData = {
+                advisor: { name: authUser.name, username: authUser.username },
+                kpis: stats.kpis,
+                salesTrend: stats.salesTrend,
+                assignedLots: stats.assignedLots,
+                competedLots: stats.competedLots,
+                recentActivity: stats.recentActivity,
+                salesCount,
+                dateRangeLabel,
+                comparison: stats.comparison,
+            };
+            const { exportIndividualReportToCsv } = await import('@/app/services/csvExportService');
+            exportIndividualReportToCsv(reportData);
+        } catch (err) {
+            console.error('Error exporting CSV report:', err);
+            alert('Error al exportar el CSV. Inténtelo de nuevo.');
+        } finally {
+            setGeneratingReportCsv(false);
+        }
+    }, [stats, authUser, generatingReportCsv, salesCount, activeDateRange]);
+
     const handleDownloadGeneralReport = useCallback(async () => {
         if (!authUser || !authUser.is_system || generatingGeneralPdf) return;
         setGeneratingGeneralPdf(true);
@@ -528,6 +563,40 @@ export default function DashboardClientImproved() {
         }
     }, [authUser, generatingGeneralPdf, activeDateRange]);
 
+    const handleExportGeneralCsv = useCallback(async () => {
+        if (!authUser || !authUser.is_system || generatingGeneralCsv) return;
+        setGeneratingGeneralCsv(true);
+        try {
+            let url = '/api/odoo/stats/general';
+            if (activeDateRange.start || activeDateRange.end) {
+                const params = new URLSearchParams();
+                if (activeDateRange.start) params.append('startDate', activeDateRange.start);
+                if (activeDateRange.end) params.append('endDate', activeDateRange.end);
+                url += `?${params.toString()}`;
+            }
+
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.success && data.stats) {
+                if (activeDateRange.start || activeDateRange.end) {
+                    const startLabel = formatToDDMMYY(activeDateRange.start) || 'Inicio';
+                    const endLabel = formatToDDMMYY(activeDateRange.end) || 'Hoy';
+                    data.stats.dateRangeLabel = `${startLabel} al ${endLabel}`;
+                }
+                const { exportGeneralReportToCsv } = await import('@/app/services/csvExportService');
+                exportGeneralReportToCsv(data.stats);
+            } else {
+                throw new Error(data.error || 'Failed to fetch general stats');
+            }
+        } catch (err) {
+            console.error('Error exporting general CSV report:', err);
+            alert('Error al exportar el CSV del proyecto. Inténtelo de nuevo.');
+        } finally {
+            setGeneratingGeneralCsv(false);
+        }
+    }, [authUser, generatingGeneralCsv, activeDateRange]);
+
     const handleDownloadInvoicesReport = useCallback(async () => {
         if (!authUser || !authUser.is_system || generatingInvoicesPdf) return;
         setGeneratingInvoicesPdf(true);
@@ -565,6 +634,39 @@ export default function DashboardClientImproved() {
             setGeneratingInvoicesPdf(false);
         }
     }, [authUser, generatingInvoicesPdf, activeDateRange]);
+
+    const handleExportInvoicesCsv = useCallback(async () => {
+        if (!authUser || !authUser.is_system || generatingInvoicesCsv) return;
+        setGeneratingInvoicesCsv(true);
+        try {
+            let url = '/api/odoo/stats/invoices';
+            if (activeDateRange.start || activeDateRange.end) {
+                const params = new URLSearchParams();
+                if (activeDateRange.start) params.append('startDate', activeDateRange.start);
+                if (activeDateRange.end) params.append('endDate', activeDateRange.end);
+                url += `?${params.toString()}`;
+            }
+
+            const response = await fetch(url);
+            const data = await response.json();
+            if (data.success && data.data) {
+                if (activeDateRange.start || activeDateRange.end) {
+                    const startLabel = formatToDDMMYY(activeDateRange.start) || 'Inicio';
+                    const endLabel = formatToDDMMYY(activeDateRange.end) || 'Hoy';
+                    data.data.dateRangeLabel = `${startLabel} al ${endLabel}`;
+                }
+                const { exportInvoicesReportToCsv } = await import('@/app/services/csvExportService');
+                exportInvoicesReportToCsv(data.data);
+            } else {
+                throw new Error(data.error || 'Failed to fetch invoices');
+            }
+        } catch (err) {
+            console.error('Error exporting invoices CSV report:', err);
+            alert('Error al exportar el CSV de recaudación. Inténtelo de nuevo.');
+        } finally {
+            setGeneratingInvoicesCsv(false);
+        }
+    }, [authUser, generatingInvoicesCsv, activeDateRange]);
 
     // Cálculos memoizados
     const displayedSalesTrend = useMemo(() => {
@@ -724,7 +826,7 @@ export default function DashboardClientImproved() {
                             <MapPin size={18} /> Mapa
                         </button>
                         
-                        <button 
+                        <button
                             onClick={handleDownloadReport}
                             disabled={generatingPdf}
                             className="bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 disabled:from-indigo-800 disabled:to-indigo-900 disabled:cursor-wait text-white px-5 py-2.5 rounded-xl font-semibold transition-all flex items-center gap-2"
@@ -735,10 +837,18 @@ export default function DashboardClientImproved() {
                                 <><FileDown size={16} /> Reporte</>
                             )}
                         </button>
+                        <button
+                            onClick={handleExportReportCsv}
+                            disabled={generatingReportCsv}
+                            title="Exportar datos crudos a CSV (Excel)"
+                            className="bg-slate-900 hover:bg-slate-800 border border-indigo-500/30 text-indigo-300 hover:text-indigo-200 disabled:opacity-50 disabled:cursor-wait px-3 py-2.5 rounded-xl font-semibold transition-all flex items-center gap-2"
+                        >
+                            {generatingReportCsv ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
+                        </button>
 
                         {authUser?.is_system && (
                             <>
-                                <button 
+                                <button
                                     onClick={handleDownloadGeneralReport}
                                     disabled={generatingGeneralPdf}
                                     className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 disabled:from-purple-800 disabled:to-purple-900 text-white px-5 py-2.5 rounded-xl font-semibold transition-all flex items-center gap-2"
@@ -749,7 +859,15 @@ export default function DashboardClientImproved() {
                                         <><Award size={16} /> Proyecto</>
                                     )}
                                 </button>
-                                <button 
+                                <button
+                                    onClick={handleExportGeneralCsv}
+                                    disabled={generatingGeneralCsv}
+                                    title="Exportar datos crudos a CSV (Excel)"
+                                    className="bg-slate-900 hover:bg-slate-800 border border-purple-500/30 text-purple-300 hover:text-purple-200 disabled:opacity-50 disabled:cursor-wait px-3 py-2.5 rounded-xl font-semibold transition-all flex items-center gap-2"
+                                >
+                                    {generatingGeneralCsv ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
+                                </button>
+                                <button
                                     onClick={handleDownloadInvoicesReport}
                                     disabled={generatingInvoicesPdf}
                                     className="bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 disabled:from-emerald-800 disabled:to-emerald-900 text-white px-5 py-2.5 rounded-xl font-semibold transition-all flex items-center gap-2"
@@ -759,6 +877,14 @@ export default function DashboardClientImproved() {
                                     ) : (
                                         <><DollarSign size={16} /> Recaudación</>
                                     )}
+                                </button>
+                                <button
+                                    onClick={handleExportInvoicesCsv}
+                                    disabled={generatingInvoicesCsv}
+                                    title="Exportar datos crudos a CSV (Excel)"
+                                    className="bg-slate-900 hover:bg-slate-800 border border-emerald-500/30 text-emerald-300 hover:text-emerald-200 disabled:opacity-50 disabled:cursor-wait px-3 py-2.5 rounded-xl font-semibold transition-all flex items-center gap-2"
+                                >
+                                    {generatingInvoicesCsv ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
                                 </button>
                             </>
                         )}
