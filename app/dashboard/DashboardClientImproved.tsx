@@ -477,6 +477,7 @@ export default function DashboardClientImproved() {
                 recentActivity: stats.recentActivity,
                 salesCount,
                 dateRangeLabel,
+                comparison: stats.comparison,
             };
             await generateEnterpriseReport(reportData);
         } catch (err) {

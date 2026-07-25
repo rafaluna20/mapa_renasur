@@ -26,6 +26,14 @@ export interface ReportData {
     recentActivity: { id: number; action: string; lot: string; date: string }[];
     salesCount: number;
     dateRangeLabel?: string; // Etiqueta de periodo dinámico (ej. "Mayo 2026" o "01/04 - 30/04/2026")
+    // Comparación real vs. período anterior de igual duración — ya se calcula
+    // en stats/detailed para el dashboard en vivo, ahora también se refleja
+    // en el PDF individual del asesor.
+    comparison?: {
+        totalSales: { value: number; change: number; trend: 'up' | 'down' | 'stable' };
+        commission: { value: number; change: number; trend: 'up' | 'down' | 'stable' };
+        salesCount: { value: number; change: number; trend: 'up' | 'down' | 'stable' };
+    };
 }
 
 // ─── Paleta corporativa Terra Lima (Diseño Light Premium para Ahorro de Tinta) ───
@@ -266,6 +274,7 @@ export async function generateEnterpriseReport(data: ReportData): Promise<void> 
     });
     const timeLabel = now.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
     const year = now.getFullYear();
+    const reportId = generateReportId('IND', now);
 
     // ══════════════════════════════════════════════════════════════════════════
     // PÁGINA 1 — PORTADA + KPIs
@@ -299,9 +308,11 @@ export async function generateEnterpriseReport(data: ReportData): Promise<void> 
 
     // — Información de empresa (derecha)
     setFont(doc, 7, BRAND.textMuted);
-    doc.text('Sistema de Gestión Inmobiliaria', W - margin, 11, { align: 'right' });
-    doc.text('Portal GIS · Renasur', W - margin, 16, { align: 'right' });
-    doc.text(`Generado: ${dateLabel} · ${timeLabel}`, W - margin, 21, { align: 'right' });
+    doc.text('Sistema de Gestión Inmobiliaria', W - margin, 9, { align: 'right' });
+    doc.text('Portal GIS · Renasur', W - margin, 13, { align: 'right' });
+    doc.text(`Generado: ${dateLabel} · ${timeLabel}`, W - margin, 17, { align: 'right' });
+    setFont(doc, 6, BRAND.textMuted);
+    doc.text(`ID: ${reportId}`, W - margin, 21, { align: 'right' });
 
     // — Separador
     drawLine(doc, margin, 26, W - margin, 26, BRAND.borderLight, 0.2);
@@ -336,12 +347,16 @@ export async function generateEnterpriseReport(data: ReportData): Promise<void> 
         ? Math.min(100, Math.round((data.kpis.totalSales / data.kpis.monthlyGoal) * 100))
         : 0;
 
-    const kpiCards = [
+    const kpiCards: {
+        label: string; value: string; sub: string; color: [number, number, number];
+        comparison?: { change: number; trend: 'up' | 'down' | 'stable' };
+    }[] = [
         {
             label: `VENTAS ${year}`,
             value: currency(data.kpis.totalSales),
             sub: `${data.salesCount} lotes confirmados`,
             color: BRAND.greenLight,
+            comparison: data.comparison?.totalSales,
         },
         {
             label: 'META ANUAL',
@@ -354,6 +369,7 @@ export async function generateEnterpriseReport(data: ReportData): Promise<void> 
             value: currency(data.kpis.commission),
             sub: 'Tasa: 6% sobre ventas',
             color: BRAND.indigo,
+            comparison: data.comparison?.commission,
         },
         {
             label: 'COTIZACIONES ACTIVAS',
@@ -363,6 +379,7 @@ export async function generateEnterpriseReport(data: ReportData): Promise<void> 
         },
     ];
 
+    const cardH = 32;
     const cardW = (contentW - 6) / 4;
     kpiCards.forEach((card, i) => {
         const cx = margin + i * (cardW + 2);
@@ -370,7 +387,7 @@ export async function generateEnterpriseReport(data: ReportData): Promise<void> 
         doc.setFillColor(...BRAND.panelBg);
         doc.setDrawColor(...BRAND.borderLight);
         doc.setLineWidth(0.3);
-        doc.roundedRect(cx, y, cardW, 28, 2, 2, 'FD');
+        doc.roundedRect(cx, y, cardW, cardH, 2, 2, 'FD');
 
         // — barra superior de color
         drawRect(doc, cx, y, cardW, 1.5, card.color, 0);
@@ -383,8 +400,18 @@ export async function generateEnterpriseReport(data: ReportData): Promise<void> 
         // — sub
         setFont(doc, 6, card.color);
         doc.text(card.sub, cx + 4, y + 24);
+
+        // — comparativo vs. período anterior (solo si aplica a esta tarjeta)
+        if (card.comparison) {
+            const { change, trend } = card.comparison;
+            const deltaColor: [number, number, number] =
+                trend === 'up' ? BRAND.greenLight : trend === 'down' ? BRAND.red : BRAND.textMuted;
+            drawTrendArrow(doc, cx + 5.5, y + 29.5, 2.4, trend, deltaColor);
+            setFont(doc, 6, deltaColor, 'bold');
+            doc.text(`${Math.abs(change)}% vs. período anterior`, cx + 8.5, y + 30);
+        }
     });
-    y += 36;
+    y += cardH + 8;
 
     // — Barra de progreso de meta
     setFont(doc, 6.5, BRAND.textMuted);
@@ -395,6 +422,15 @@ export async function generateEnterpriseReport(data: ReportData): Promise<void> 
         drawRect(doc, margin, y, contentW * goalPct / 100, 3, BRAND.amber, 1);
     }
     y += 10;
+
+    // ── Resumen Ejecutivo Narrativo ────────────────────────────────────────────
+    const individualNarrative =
+        `Durante el período ${data.dateRangeLabel || 'analizado'}, ${data.advisor.name} registró ventas por ${currency(data.kpis.totalSales)} (${data.salesCount} lote${data.salesCount === 1 ? '' : 's'} confirmado${data.salesCount === 1 ? '' : 's'}), alcanzando el ${goalPct}% de la meta ${year} de ${currency(data.kpis.monthlyGoal)}.` +
+        ` La comisión devengada en el período es de ${currency(data.kpis.commission)}, con ${data.kpis.pendingLeads} ${data.kpis.pendingLeads === 1 ? 'cotización activa' : 'cotizaciones activas'} en cartera.` +
+        (data.competedLots.length > 0
+            ? ` Atención: ${data.competedLots.length} lote${data.competedLots.length === 1 ? '' : 's'} en cartera tiene${data.competedLots.length === 1 ? '' : 'n'} cotizaciones paralelas de otros asesores.`
+            : ' Sin conflictos de cotizaciones paralelas en la cartera actual.');
+    y = drawNarrativeSummary(doc, margin, y, contentW, individualNarrative, BRAND.green);
 
     // ── Sección: Tendencia de Facturación ─────────────────────────────────────
     drawSectionHeader(doc, 'TENDENCIA DE FACTURACIÓN — AÑO ' + year, margin, y, BRAND.purple);
@@ -657,6 +693,9 @@ export async function generateEnterpriseReport(data: ReportData): Promise<void> 
         },
         margin: { left: margin, right: margin },
     });
+    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
+
+    y = drawTraceabilitySection(doc, margin, y, contentW, reportId);
 
     // ── Post-procesamiento: Cabeceras y Pies de Página ───────────────────────
     const totalPages = doc.getNumberOfPages();
