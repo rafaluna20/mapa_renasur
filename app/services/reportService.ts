@@ -347,6 +347,12 @@ export async function generateEnterpriseReport(data: ReportData): Promise<void> 
         ? Math.min(100, Math.round((data.kpis.totalSales / data.kpis.monthlyGoal) * 100))
         : 0;
 
+    // Tasa implícita = comisión real / ventas reales — no se asume 6% fijo:
+    // cada asesor puede tener su propia tasa acordada (ver commissionRates.ts).
+    const impliedCommissionRate = data.kpis.totalSales > 0
+        ? Math.round((data.kpis.commission / data.kpis.totalSales) * 100)
+        : 6;
+
     const kpiCards: {
         label: string; value: string; sub: string; color: [number, number, number];
         comparison?: { change: number; trend: 'up' | 'down' | 'stable' };
@@ -367,7 +373,7 @@ export async function generateEnterpriseReport(data: ReportData): Promise<void> 
         {
             label: 'COMISIÓN DEVENGADA',
             value: currency(data.kpis.commission),
-            sub: 'Tasa: 6% sobre ventas',
+            sub: `Tasa: ${impliedCommissionRate}% sobre ventas`,
             color: BRAND.indigo,
             comparison: data.comparison?.commission,
         },
@@ -660,7 +666,7 @@ export async function generateEnterpriseReport(data: ReportData): Promise<void> 
     const financialRows = [
         ['Total Facturado ' + year,     currency(data.kpis.totalSales),      pct(data.kpis.totalSales, data.kpis.monthlyGoal) + ' de meta'],
         ['Meta Comercial Anual',          currency(data.kpis.monthlyGoal),     '—'],
-        ['Comisión Devengada (6%)',        currency(data.kpis.commission),      'Sobre ventas confirmadas'],
+        [`Comisión Devengada (${impliedCommissionRate}%)`, currency(data.kpis.commission), 'Sobre ventas confirmadas'],
         ['Cotizaciones en Cartera',        `${data.kpis.pendingLeads} órdenes`, 'Estado: Borrador activo'],
         ['Lotes Vendidos Confirmados',     `${data.salesCount} lotes`,          'Estado: sale / done'],
     ];
@@ -845,6 +851,13 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
 
     const goalPct = data.kpis.occupationRate;
 
+    // Tasa promedio ponderada = comisión real / ventas reales — cada asesor
+    // puede tener su propia tasa acordada (ver commissionRates.ts), así que
+    // ya no es necesariamente un 6% uniforme para todo el equipo.
+    const impliedCommissionRate = data.kpis.totalSales > 0
+        ? Math.round((data.kpis.commission / data.kpis.totalSales) * 100)
+        : 6;
+
     const kpiCards: {
         label: string; value: string; sub: string; color: [number, number, number];
         comparison?: { change: number; trend: 'up' | 'down' | 'stable' };
@@ -865,7 +878,7 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
         {
             label: 'COMISIONES ASESORES',
             value: currency(data.kpis.commission),
-            sub: 'Tasa: 6% global',
+            sub: `Tasa promedio: ${impliedCommissionRate}%`,
             color: BRAND.indigo,
             comparison: data.comparison?.commission,
         },

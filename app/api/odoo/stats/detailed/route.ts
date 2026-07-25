@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchOdoo } from '@/app/services/odooService';
 import { requireStaffSession } from '@/app/lib/staffAuth';
+import { getCommissionRate } from '@/app/lib/commissionRates';
 
 interface OdooOrder {
     id: number;
@@ -99,8 +100,9 @@ export async function GET(request: NextRequest) {
             ]]
         ) as number;
 
-        // C. Calculate dynamic commission (6% dynamic real estate fee)
-        const commission = totalValue * 0.06;
+        // C. Calculate dynamic commission (tasa acordada por asesor, 6% por defecto)
+        const commissionRate = getCommissionRate(uid);
+        const commission = totalValue * commissionRate;
 
         // D. Monthly goal — configurable via env var, fallback a S/200,000
         const monthlyGoal = parseInt(process.env.SALES_MONTHLY_GOAL || '200000', 10);
@@ -160,7 +162,7 @@ export async function GET(request: NextRequest) {
             { fields: ["amount_total"], groupby: ["user_id"] }
         ) as { amount_total?: number }[];
         const prevTotalValue = prevSalesData[0]?.amount_total || 0;
-        const prevCommission = prevTotalValue * 0.06;
+        const prevCommission = prevTotalValue * commissionRate;
 
         const prevSalesCount = await fetchOdoo(
             "sale.order",
@@ -249,7 +251,7 @@ export async function GET(request: NextRequest) {
 
         // Calcular la comisión de forma dinámica para cada punto de tendencia
         for (const point of salesTrend) {
-            point.comision = Math.round(point.ventas * 0.06);
+            point.comision = Math.round(point.ventas * commissionRate);
         }
 
         // 3. RECENT ACTIVITY & ASSIGNED LOTS
@@ -459,6 +461,7 @@ export async function GET(request: NextRequest) {
                     totalSales: totalValue,
                     monthlyGoal,
                     commission,
+                    commissionRate,
                     pendingLeads: draftCount,
                     pipelineValue,
                     conversionRate

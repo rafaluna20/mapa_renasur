@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchOdoo } from '@/app/services/odooService';
 import { requireStaffSession } from '@/app/lib/staffAuth';
+import { getCommissionRate } from '@/app/lib/commissionRates';
 
 interface OdooOrder {
     id: number;
@@ -188,18 +189,21 @@ export async function GET(request: NextRequest) {
             }
         }
 
-        // Compute commissions globally (6% dynamic real estate fee)
-        const commission = totalSales * 0.06;
-
-        // Formulate Advisor Leaderboard
-        const advisorRanking = Object.values(advisorSales)
-            .map(adv => ({
+        // Formulate Advisor Leaderboard — cada asesor con su propia tasa
+        // acordada (ver commissionRates.ts), no un 6% plano para todos.
+        const advisorRanking = Object.entries(advisorSales)
+            .map(([userIdStr, adv]) => ({
                 name: adv.name,
                 lotsCount: adv.lotsCount,
                 amountTotal: adv.amountTotal,
-                commission: adv.amountTotal * 0.06
+                commission: adv.amountTotal * getCommissionRate(parseInt(userIdStr, 10))
             }))
             .sort((a, b) => b.amountTotal - a.amountTotal);
+
+        // Comisión global = suma de las comisiones reales por asesor (no
+        // totalSales * tasa fija) — así el total sigue siendo correcto
+        // incluso cuando las tasas difieren entre asesores.
+        const commission = advisorRanking.reduce((sum, adv) => sum + adv.commission, 0);
 
         // Occupation rate
         const occupationRate = totalLots > 0
@@ -220,6 +224,8 @@ export async function GET(request: NextRequest) {
         const prevStartStr = prevStartDate.toISOString().slice(0, 19).replace('T', ' ');
         const prevEndStr = prevEndDate.toISOString().slice(0, 19).replace('T', ' ');
 
+        // Agrupado por asesor (no un solo agregado global) para poder aplicar
+        // la tasa de comisión de cada uno también en el período anterior.
         const prevSalesAgg = await fetchOdoo(
             "sale.order",
             "read_group",
@@ -228,11 +234,19 @@ export async function GET(request: NextRequest) {
                 ["date_order", ">=", prevStartStr],
                 ["date_order", "<=", prevEndStr]
             ]],
-            { fields: ["amount_total"], groupby: [] }
-        ) as { __count?: number; amount_total?: number }[];
-        const prevTotalSales = prevSalesAgg[0]?.amount_total || 0;
-        const prevSalesCount = prevSalesAgg[0]?.__count || 0;
-        const prevCommission = prevTotalSales * 0.06;
+            { fields: ["amount_total"], groupby: ["user_id"] }
+        ) as { __count?: number; amount_total?: number; user_id?: [number, string] | false }[];
+
+        let prevTotalSales = 0;
+        let prevSalesCount = 0;
+        let prevCommission = 0;
+        for (const group of prevSalesAgg) {
+            const amt = group.amount_total || 0;
+            prevTotalSales += amt;
+            prevSalesCount += group.__count || 0;
+            const prevUserId = group.user_id ? group.user_id[0] : null;
+            prevCommission += amt * getCommissionRate(prevUserId);
+        }
 
         const pctChange = (curr: number, prev: number): number => {
             if (prev === 0) return curr > 0 ? 100 : 0;

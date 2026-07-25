@@ -23,6 +23,7 @@ interface EnhancedStats {
     kpis: {
         monthlyGoal: number;
         commission: number;
+        commissionRate: number;
         pendingLeads: number;
         totalSales: number;
         // Nuevos KPIs
@@ -856,7 +857,7 @@ export default function DashboardClientImproved() {
                         color="purple"
                         change={stats.comparison.commission.change}
                         trend={stats.comparison.commission.trend}
-                        subtitle="Tasa 6% sobre ventas"
+                        subtitle={`Tasa ${Math.round(stats.kpis.commissionRate * 100)}% sobre ventas`}
                     />
                     
                     <KPICard
@@ -1093,7 +1094,7 @@ export default function DashboardClientImproved() {
                                     <th className="px-6 py-4 text-left">Lote</th>
                                     <th className="px-6 py-4 text-left">Cliente</th>
                                     <th className="px-6 py-4 text-right">Precio Venta</th>
-                                    <th className="px-6 py-4 text-right">Comisión 6%</th>
+                                    <th className="px-6 py-4 text-right">Comisión {Math.round(stats.kpis.commissionRate * 100)}%</th>
                                     <th className="px-6 py-4 text-center">Acciones</th>
                                 </tr>
                             </thead>
@@ -1141,9 +1142,9 @@ export default function DashboardClientImproved() {
                                                 <td className="px-6 py-4 text-right">
                                                     <div className="flex flex-col items-end">
                                                         <span className="text-sm font-bold text-emerald-400">
-                                                            S/ {Math.round(item.price * 0.06).toLocaleString('es-PE')}
+                                                            S/ {Math.round(item.price * stats.kpis.commissionRate).toLocaleString('es-PE')}
                                                         </span>
-                                                        <span className="text-[10px] text-emerald-500/60">Tasa 6%</span>
+                                                        <span className="text-[10px] text-emerald-500/60">Tasa {Math.round(stats.kpis.commissionRate * 100)}%</span>
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-center">
@@ -1180,7 +1181,7 @@ export default function DashboardClientImproved() {
                                         </div>
                                         <div className="text-right shrink-0">
                                             <p className="text-sm font-bold text-emerald-300">S/ {item.price.toLocaleString('es-PE')}</p>
-                                            <p className="text-[10px] text-emerald-500 mt-0.5">Com. S/ {Math.round(item.price * 0.06).toLocaleString('es-PE')}</p>
+                                            <p className="text-[10px] text-emerald-500 mt-0.5">Com. S/ {Math.round(item.price * stats.kpis.commissionRate).toLocaleString('es-PE')}</p>
                                         </div>
                                     </div>
                                     <div className="flex items-center justify-between mt-3">
@@ -1219,7 +1220,7 @@ export default function DashboardClientImproved() {
                                         <p className="text-lg font-bold text-emerald-300">
                                             S/ {Math.round(stats.assignedLots
                                                 .filter(lot => lot.status === 'Vendido')
-                                                .reduce((sum, lot) => sum + (lot.price * 0.06), 0))
+                                                .reduce((sum, lot) => sum + (lot.price * stats.kpis.commissionRate), 0))
                                                 .toLocaleString('es-PE')}
                                         </p>
                                     </div>
