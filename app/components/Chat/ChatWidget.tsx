@@ -1,8 +1,19 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Loader2, MapPin, Sparkles } from 'lucide-react';
+import { MessageCircle, X, Send, Loader2, MapPin, Sparkles, MessageCircleMore } from 'lucide-react';
 import { SHADOW_FLOATING, BORDER_FLOATING } from '@/app/lib/designTokens';
+
+// Número de ventas para el enlace "Consultar con asesor" en lotes sin
+// precio publicado. Si la variable de entorno no está configurada, el
+// enlace no se muestra (mejor ocultar el CTA que llevar a un número roto).
+const WHATSAPP_SALES_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_SALES_NUMBER;
+
+function buildWhatsAppLink(lote: LoteChatResultado): string | null {
+    if (!WHATSAPP_SALES_NUMBER) return null;
+    const mensaje = `Hola, quiero información sobre el lote ${lote.codigo} (Mz ${lote.manzana}, ${lote.areaM2}m²)`;
+    return `https://wa.me/${WHATSAPP_SALES_NUMBER}?text=${encodeURIComponent(mensaje)}`;
+}
 
 interface LoteChatResultado {
     codigo: string;
@@ -130,11 +141,16 @@ export default function ChatWidget({ onSelectLot }: ChatWidgetProps) {
 
                                     {msg.lotes && msg.lotes.length > 0 && (
                                         <div className="mt-2.5 space-y-2">
-                                            {msg.lotes.slice(0, 8).map((lote) => (
-                                                <button
+                                            {msg.lotes.slice(0, 8).map((lote) => {
+                                                const waLink = lote.precio == null ? buildWhatsAppLink(lote) : null;
+                                                return (
+                                                <div
                                                     key={lote.codigo}
+                                                    role="button"
+                                                    tabIndex={0}
                                                     onClick={() => handleSelectLot(lote.codigo)}
-                                                    className="w-full text-left bg-slate-50 dark:bg-slate-900 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-700 rounded-xl p-2.5 transition-colors group"
+                                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleSelectLot(lote.codigo); }}
+                                                    className="w-full text-left bg-slate-50 dark:bg-slate-900 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-700 rounded-xl p-2.5 transition-colors group cursor-pointer"
                                                 >
                                                     <div className="flex items-center justify-between">
                                                         <span className="font-bold text-slate-800 dark:text-slate-100 text-xs flex items-center gap-1.5">
@@ -155,12 +171,29 @@ export default function ChatWidget({ onSelectLot }: ChatWidgetProps) {
                                                     </div>
                                                     <div className="flex items-center justify-between mt-1 text-[11px] text-slate-500 dark:text-slate-400">
                                                         <span>{lote.areaM2}m² · Mz {lote.manzana}</span>
-                                                        <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                                                            {lote.precio != null ? currency(lote.precio) : 'Consultar con asesor'}
-                                                        </span>
+                                                        {lote.precio != null ? (
+                                                            <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                                                                {currency(lote.precio)}
+                                                            </span>
+                                                        ) : waLink ? (
+                                                            <a
+                                                                href={waLink}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                onClick={(e) => e.stopPropagation()}
+                                                                className="font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 hover:underline flex items-center gap-1"
+                                                            >
+                                                                <MessageCircleMore size={12} /> Consultar con asesor
+                                                            </a>
+                                                        ) : (
+                                                            <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                                                                Consultar con asesor
+                                                            </span>
+                                                        )}
                                                     </div>
-                                                </button>
-                                            ))}
+                                                </div>
+                                                );
+                                            })}
                                         </div>
                                     )}
                                 </div>
