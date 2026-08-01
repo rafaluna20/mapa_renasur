@@ -25,6 +25,7 @@ interface MapContainerProps {
     userLocation?: [number, number] | null;
     preferCanvas?: boolean;
     showMeasurements?: boolean;
+    onPhotoPointClick?: (elemento: ElementoUrbano) => void;
 }
 
 export default function MapContainerWrapper(props: MapContainerProps) {

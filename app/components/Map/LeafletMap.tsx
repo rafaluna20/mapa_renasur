@@ -1,6 +1,6 @@
 'use client';
 
-import { MapContainer, TileLayer, Polygon, Polyline, useMap, Tooltip, Circle, CircleMarker, ImageOverlay } from 'react-leaflet';
+import { MapContainer, TileLayer, Polygon, Polyline, useMap, Tooltip, Circle, CircleMarker, ImageOverlay, Marker } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.css';
 import 'leaflet-defaulticon-compatibility';
@@ -30,6 +30,30 @@ interface LeafletMapProps {
     userLocation?: [number, number] | null;
     preferCanvas?: boolean;
     showMeasurements?: boolean;
+    onPhotoPointClick?: (elemento: ElementoUrbano) => void;
+}
+
+// Ícono de cámara para los puntos de interés fotográfico (capa "foto") —
+// un div-icon en vez de imagen, para no depender de un asset extra y para
+// poder tintarlo con el color de la capa (editable en Odoo).
+function crearIconoFoto(color: string): L.DivIcon {
+    return L.divIcon({
+        className: '',
+        html: `<div style="
+            width: 30px; height: 30px; border-radius: 9999px;
+            background: ${color}; border: 2px solid white;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+        ">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>
+                <circle cx="12" cy="13" r="3"/>
+            </svg>
+        </div>`,
+        iconSize: [30, 30],
+        iconAnchor: [15, 15],
+    });
 }
 
 function MapController({ lots, selectedLotId, onZoomChange }: { lots: Lot[], selectedLotId: string | null, onZoomChange: (z: number) => void }) {
@@ -258,7 +282,7 @@ function MeasurementController({ selectedLotId, lots }: { selectedLotId: string 
     return <SideMeasurementTooltips lot={selectedLot} map={map} />;
 }
 
-export default function LeafletMap({ lots, elementosUrbanos = [], selectedLotId, onLotSelect, mapType, userLocation, preferCanvas = true, showMeasurements = true }: LeafletMapProps) {
+export default function LeafletMap({ lots, elementosUrbanos = [], selectedLotId, onLotSelect, mapType, userLocation, preferCanvas = true, showMeasurements = true, onPhotoPointClick }: LeafletMapProps) {
     const center: [number, number] = [-12.0464, -77.0428];
     const [zoom, setZoom] = useState(17.5);
     const [isMobile, setIsMobile] = useState(false);
@@ -442,6 +466,23 @@ export default function LeafletMap({ lots, elementosUrbanos = [], selectedLotId,
                 const color = elemento.color || COLOR_ELEMENTO_URBANO_FALLBACK;
 
                 if (item.kind === 'circulo') {
+                    // Punto de interés fotográfico: ícono de cámara clickeable
+                    // en vez del círculo relleno genérico — no aplica el
+                    // radio real (sería casi invisible al zoom normal, ya
+                    // que estos puntos suelen tener radio ~1m solo para
+                    // marcar la ubicación).
+                    if (elemento.tipo === 'foto' && elemento.fotos && elemento.fotos.length > 0) {
+                        return (
+                            <Marker
+                                key={`urbano-${elemento.codigo}`}
+                                position={item.center}
+                                icon={crearIconoFoto(color)}
+                                eventHandlers={{
+                                    click: () => onPhotoPointClick?.(elemento),
+                                }}
+                            />
+                        );
+                    }
                     return (
                         <Circle
                             key={`urbano-${elemento.codigo}`}

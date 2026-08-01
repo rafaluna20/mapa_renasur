@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import MapContainerWrapper from './MapContainer';
 import LotDetailModal from '../UI/LotDetailModal';
+import PhotoPointModal from './PhotoPointModal';
 import { Lot } from '@/app/data/lotsData';
 import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 import { odooService, OdooUser } from '@/app/services/odooService';
@@ -41,6 +42,7 @@ export default function MapArea({
     onExport, onExportPdf
 }: MapAreaProps) {
     const [activeQuotes, setActiveQuotes] = useState<{ count: number; quotes: { orderId: number; clientName: string; vendorName: string }[] } | null>(null);
+    const [selectedPhotoPoint, setSelectedPhotoPoint] = useState<ElementoUrbano | null>(null);
 
     // Fetch active quotes when a lot is selected
     useEffect(() => {
@@ -216,6 +218,7 @@ export default function MapArea({
                     userLocation={userLocation}
                     preferCanvas={preferCanvas}
                     showMeasurements={showMeasurements}
+                    onPhotoPointClick={setSelectedPhotoPoint}
                 />
             </div>
 
@@ -228,6 +231,14 @@ export default function MapArea({
                 activeQuotes={activeQuotes || undefined}
                 currentUser={currentUser}
             />
+
+            {/* Galería de fotos de un punto de interés (capa "foto") */}
+            {selectedPhotoPoint && (
+                <PhotoPointModal
+                    elemento={selectedPhotoPoint}
+                    onClose={() => setSelectedPhotoPoint(null)}
+                />
+            )}
 
         </div>
     );

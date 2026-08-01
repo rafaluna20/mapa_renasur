@@ -32,6 +32,12 @@ export interface ElementoUrbano {
     arcos?: ArcoMetadata[];
     /** Presente solo si el elemento es un círculo completo (reemplaza a "points"). */
     circulo?: { centro: [number, number]; radio: number };
+    /**
+     * URLs de fotos (solo presente en elementos de la capa "foto" — puntos
+     * de interés fotográfico, ej. vista del parque). Cada URL apunta a
+     * /api/odoo/photo/[attachmentId] (server-side, nunca directo a Odoo).
+     */
+    fotos?: string[];
 }
 
 // Respaldo estático (mismo rol que geometries.json para lotes no migrados a

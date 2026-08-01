@@ -119,6 +119,10 @@ interface OdooElementoUrbano {
     x_geometry_utm: [number, number][] | false;
     x_geometry_arcos: ArcoMetadata[] | false;
     x_geometry_circulo: { centro: [number, number]; radio: number } | false;
+    // IDs de ir.attachment (Many2many) — solo poblado en elementos de la
+    // capa "foto". Se resuelven a URLs de /api/odoo/photo/[id] más abajo,
+    // nunca se exponen los IDs crudos de Odoo al cliente.
+    x_fotos: number[];
 }
 
 // Registro crudo del modelo Odoo 'elemento.urbano.capa' — capas estilo
@@ -158,7 +162,7 @@ export async function fetchElementosUrbanos(): Promise<ElementoUrbano[]> {
             // círculos) desde que se agregó el operador '|' acá.
             [[['active', '=', true], '|', ['x_geometry_utm', '!=', false], ['x_geometry_circulo', '!=', false]]],
             {
-                fields: ['id', 'name', 'codigo', 'capa_id', 'x_geometry_utm', 'x_geometry_arcos', 'x_geometry_circulo'],
+                fields: ['id', 'name', 'codigo', 'capa_id', 'x_geometry_utm', 'x_geometry_arcos', 'x_geometry_circulo', 'x_fotos'],
                 limit: 500,
             }
         );
@@ -196,6 +200,9 @@ export async function fetchElementosUrbanos(): Promise<ElementoUrbano[]> {
                     points: (r.x_geometry_utm || []) as [number, number][],
                     ...(r.x_geometry_arcos ? { arcos: r.x_geometry_arcos } : {}),
                     ...(r.x_geometry_circulo ? { circulo: r.x_geometry_circulo } : {}),
+                    ...(Array.isArray(r.x_fotos) && r.x_fotos.length > 0
+                        ? { fotos: r.x_fotos.map((attachmentId) => `/api/odoo/photo/${attachmentId}`) }
+                        : {}),
                 };
             })
             .filter((e): e is ElementoUrbano => e !== null);
