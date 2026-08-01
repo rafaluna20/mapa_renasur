@@ -27,6 +27,7 @@ interface EnrichedGeometry {
 const geometriesJson = geometriesEnrichedRaw as unknown as Record<string, EnrichedGeometry>;
 import { Menu, Filter, Loader2, WifiOff } from 'lucide-react';
 import { useAuth } from '@/app/context/AuthContext';
+import { useTheme } from '@/app/context/ThemeContext';
 import { useRouter } from 'next/navigation';
 
 // Componentes Refactorizados (Modularizados)
@@ -61,6 +62,7 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, e
 
     // Hooks de Contexto y Enrutamiento
     const { user, loading } = useAuth(); // Obtiene el usuario autenticado
+    const { theme } = useTheme();
     const router = useRouter();          // Para redirecciones
 
     // DEBUG: Ver que llega desde el servidor
@@ -112,6 +114,20 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, e
             setSidebarOpen(true); // Abierto por defecto solo en escritorio
         }
     }, []);
+
+    // Enlazar el tipo de mapa con el tema claro/oscuro: el toggle principal
+    // del header debe cambiar TODA la pantalla, no solo el sidebar/chrome —
+    // si no, el mapa (la parte más grande de la pantalla) sigue brillante
+    // en modo oscuro, que era justo el problema que se quería resolver.
+    // Solo actúa sobre los valores por defecto (street/dark) para no pisar
+    // una elección manual de satélite o fondo blanco.
+    useEffect(() => {
+        setMapType((prev) => {
+            if (theme === 'dark' && prev === 'street') return 'dark';
+            if (theme === 'light' && prev === 'dark') return 'street';
+            return prev;
+        });
+    }, [theme]);
 
     // Ubicación del usuario (Geolocalización)
     const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
