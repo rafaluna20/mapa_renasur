@@ -205,6 +205,98 @@ export async function fetchElementosUrbanos(): Promise<ElementoUrbano[]> {
     }
 }
 
+// --- Chatbot IA: búsqueda de lotes (solo lectura) ---
+
+export interface LoteChatFiltros {
+    areaMin?: number;
+    areaMax?: number;
+    manzana?: string;
+    etapa?: string;
+    precioMax?: number;
+    estado?: 'disponible' | 'reservado' | 'vendido';
+}
+
+export interface LoteChatResultado {
+    codigo: string;
+    areaM2: number;
+    manzana: string;
+    etapa: string;
+    // null = sin precio publicado en Odoo (list_price=0). El chatbot debe
+    // mostrar "Consultar con asesor", nunca "S/ 0" — inventar un precio de
+    // 0 sería tan grave como inventar cualquier otro dato.
+    precio: number | null;
+    ubicacion: string | null;
+}
+
+interface OdooLoteChatRaw {
+    id: number;
+    default_code: string | false;
+    x_area: number | false;
+    x_mz: string | false;
+    x_etapa: string | false;
+    x_statu: string | false;
+    list_price: number;
+    x_ubicacion: string | false;
+}
+
+/**
+ * Búsqueda de lotes para el chatbot — SOLO LECTURA, sin excepciones.
+ * Nunca debe usarse para escribir en Odoo. Filtra por defecto a
+ * estado='disponible' (a menos que se pida explícitamente otro estado):
+ * un chatbot público que sugiere lotes ya vendidos como si estuvieran
+ * libres es un problema comercial real, no un detalle.
+ *
+ * IMPORTANTE (ver auditoría de datos previa a este código): la proximidad
+ * a parques/calles NO está soportada — el módulo elemento.urbano no tiene
+ * datos reales cargados en producción todavía (0 parques activos). No se
+ * agrega un filtro de proximidad aquí a propósito.
+ */
+export async function buscarLotesParaChat(filtros: LoteChatFiltros): Promise<LoteChatResultado[]> {
+    const domain: unknown[] = [
+        ['default_code', '!=', false],
+        ['active', '=', true],
+    ];
+
+    domain.push(['x_statu', '=', filtros.estado || 'disponible']);
+
+    if (filtros.areaMin != null) domain.push(['x_area', '>=', filtros.areaMin]);
+    if (filtros.areaMax != null) domain.push(['x_area', '<=', filtros.areaMax]);
+    if (filtros.manzana) domain.push(['x_mz', '=ilike', filtros.manzana]);
+    if (filtros.etapa) domain.push(['x_etapa', 'ilike', filtros.etapa]);
+    // Un lote con list_price=0 significa "sin precio publicado", no "gratis"
+    // — nunca debe aparecer como si costara menos que el máximo pedido.
+    if (filtros.precioMax != null) {
+        domain.push(['list_price', '<=', filtros.precioMax]);
+        domain.push(['list_price', '>', 0]);
+    }
+
+    const registros: OdooLoteChatRaw[] = await fetchOdoo(
+        'product.product',
+        'search_read',
+        [domain],
+        {
+            fields: ['id', 'default_code', 'x_area', 'x_mz', 'x_etapa', 'x_statu', 'list_price', 'x_ubicacion'],
+            // Código de lote real = 10 caracteres exactos (ej. E01MZD148P) —
+            // mismo criterio usado en los endpoints de stats para excluir
+            // "otros productos" (materiales, servicios, etc.).
+            limit: 200,
+            order: 'list_price asc',
+        }
+    );
+
+    return registros
+        .filter((r) => r.default_code && typeof r.default_code === 'string' && r.default_code.trim().length === 10)
+        .slice(0, 20)
+        .map((r) => ({
+            codigo: r.default_code as string,
+            areaM2: r.x_area || 0,
+            manzana: r.x_mz || 'S/M',
+            etapa: r.x_etapa || 'S/E',
+            precio: r.list_price > 0 ? r.list_price : null,
+            ubicacion: r.x_ubicacion || null,
+        }));
+}
+
 // --- Client-Side Auth Service ---
 export const odooService = {
     async login(login: string, pass: string): Promise<OdooUser> {

@@ -34,6 +34,7 @@ import FilterBar from './Dashboard/FilterBar';       // Barra de filtros lateral
 import ProductDashboard from './Dashboard/ProductDashboard'; // Resumen de estadisticas (footer sidebar)
 import FloatingControls from './UI/FloatingControls'; // Menú flotante para móviles
 import MapArea from './Map/MapArea';                 // Área del mapa y sus controles
+import ChatWidget from './Chat/ChatWidget';           // Asistente conversacional de búsqueda de lotes
 import { exportToSvg } from '@/app/utils/svgExporter'; // Utilidad para exportar SVG
 import { exportToPdf } from '@/app/utils/pdfExporter'; // Utilidad para exportar PDF
 
@@ -498,6 +499,19 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, e
                     statusFilter={statusFilter}
                     onStatusChange={setStatusFilter}
                     onOpenSidebar={() => setSidebarOpen(true)}
+                />
+
+                {/*
+                  ASISTENTE DE CHAT (IA)
+                  Búsqueda conversacional de lotes — al elegir un resultado,
+                  reutiliza la búsqueda/sidebar existente en vez de duplicar
+                  la lógica de selección de lote.
+                */}
+                <ChatWidget
+                    onSelectLot={(codigo) => {
+                        setSearchQuery(codigo);
+                        setSidebarOpen(true);
+                    }}
                 />
 
             </div>
