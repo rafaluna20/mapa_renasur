@@ -36,7 +36,7 @@ const STATUS_CONFIG: Record<string, StatusConfigItem> = {
 export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotation, activeQuotes, currentUser }: LotDetailModalProps) {
     const [showReservationModal, setShowReservationModal] = useState(false);
     const [showRefundModal, setShowRefundModal] = useState(false);
-    const [reservationOwner, setReservationOwner] = useState<{ id: number; name: string; partnerId?: number; clientName?: string; totalInstallments?: number; orderId?: number; separationAmount?: number | null } | null>(null);
+    const [reservationOwner, setReservationOwner] = useState<{ id: number; name: string; partnerId?: number; clientName?: string; clientPhone?: string | null; totalInstallments?: number; orderId?: number; separationAmount?: number | null } | null>(null);
     const [activeTab, setActiveTab] = useState<'info' | 'pagos'>('info');
     const [invoices, setInvoices] = useState<{ id: number; name: string; ref?: string; payment_reference?: string; invoice_date: string; invoice_date_due: string; amount_total: number; amount_residual: number; payment_state: string }[]>([]);
     const [loadingInvoices, setLoadingInvoices] = useState(false);
@@ -126,6 +126,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                     name: ownerData.ownerName,
                     partnerId: ownerData.partnerId,
                     clientName: ownerData.clientName,
+                    clientPhone: ownerData.clientPhone,
                     totalInstallments: ownerData.totalInstallments,
                     orderId: ownerData.orderId,
                     separationAmount: ownerData.separationAmount
@@ -282,6 +283,40 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
     const totalOverdueAmount = overdueInvoices.reduce((sum, inv) => sum + (inv.amount_residual || 0), 0);
 
     const sortedInvoices = [...invoices].sort((a, b) => new Date(a.invoice_date).getTime() - new Date(b.invoice_date).getTime());
+
+    // ─── Recordatorio de mora por WhatsApp ────────────────────────────────────
+    // Normaliza a formato internacional para wa.me: quita todo lo que no sea
+    // dígito y, si quedan los 9 dígitos típicos de un celular peruano (9...),
+    // antepone el código de país 51. Best-effort: si el número ya viene con
+    // código de país o en otro formato, se usa tal cual.
+    function normalizarTelefonoPeru(raw: string): string {
+        const digitos = raw.replace(/\D/g, '');
+        if (digitos.length === 9 && digitos.startsWith('9')) return `51${digitos}`;
+        return digitos;
+    }
+
+    function buildRecordatorioMoraLink(): string | null {
+        if (!reservationOwner?.clientPhone) return null;
+        const telefono = normalizarTelefonoPeru(reservationOwner.clientPhone);
+        if (!telefono) return null;
+
+        const lineasCuotas = overdueInvoices
+            .sort((a, b) => new Date(a.invoice_date_due).getTime() - new Date(b.invoice_date_due).getTime())
+            .map((inv) => {
+                const { label } = parseCuotaLabel(inv);
+                const fecha = new Date(inv.invoice_date_due).toLocaleDateString('es-PE');
+                return `• ${label} — ${formatMoney(inv.amount_residual)} (venció ${fecha})`;
+            })
+            .join('\n');
+
+        const nombreCliente = reservationOwner.clientName || 'estimado cliente';
+        const codigoLote = lot?.default_code || '';
+        const mensaje = `Hola ${nombreCliente}, le escribimos de Terra Lima para recordarle el estado de sus pagos del lote ${codigoLote}:\n\n${lineasCuotas}\n\nTotal pendiente: ${formatMoney(totalOverdueAmount)}\n\nQuedamos atentos para coordinar el pago.`;
+
+        return `https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`;
+    }
+
+    const recordatorioMoraLink = buildRecordatorioMoraLink();
 
     return (
         <>
@@ -584,10 +619,26 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
 
                         {/* Action Buttons Contextuales */}
                         {isOverdue ? (
-                            <button className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-sm shadow-lg shadow-red-200 flex items-center justify-center gap-2 transition-transform active:scale-95">
-                                <AlertTriangle size={16} />
-                                Reclamar Mora (WhatsApp)
-                            </button>
+                            recordatorioMoraLink ? (
+                                <a
+                                    href={recordatorioMoraLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-sm shadow-lg shadow-red-200 flex items-center justify-center gap-2 transition-transform active:scale-95"
+                                >
+                                    <AlertTriangle size={16} />
+                                    Recordar (WhatsApp)
+                                </a>
+                            ) : (
+                                <button
+                                    disabled
+                                    title="El cliente no tiene teléfono registrado en Odoo"
+                                    className="w-full py-3 bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-lg font-bold text-sm flex items-center justify-center gap-2 cursor-not-allowed"
+                                >
+                                    <AlertTriangle size={16} />
+                                    Recordar (sin teléfono registrado)
+                                </button>
+                            )
                         ) : (
                             <button className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-transform active:scale-95">
                                 <FileText size={16} />

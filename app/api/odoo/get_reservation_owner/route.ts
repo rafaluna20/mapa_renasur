@@ -65,12 +65,28 @@ export async function POST(request: Request) {
         const totalInstallments = order.x_plazo_meses ? parseInt(order.x_plazo_meses) : 72;
         const separationAmount = order.x_separacion ? parseFloat(order.x_separacion) : null;
 
+        // Teléfono del cliente (para el recordatorio de pago por WhatsApp) —
+        // se prefiere mobile sobre phone porque es el que normalmente tiene
+        // WhatsApp activo.
+        let clientPhone: string | null = null;
+        if (partnerId) {
+            const partners = await fetchOdoo(
+                'res.partner',
+                'read',
+                [[partnerId]],
+                { fields: ['phone', 'mobile'] }
+            );
+            const partner = partners && partners[0];
+            clientPhone = (partner?.mobile || partner?.phone || null) as string | null;
+        }
+
         return NextResponse.json({
             success: true,
             ownerId, // Salesperson User ID
             ownerName,
             partnerId,
             clientName,
+            clientPhone,
             totalInstallments,
             orderDate: order.date_order,
             orderId: order.id, // Actual Sale Order ID

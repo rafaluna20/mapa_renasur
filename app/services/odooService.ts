@@ -835,7 +835,7 @@ export const odooService = {
     },
 
     // Get the owner of a reserved lot (Salesperson who confirmed the order)
-    async getReservationOwner(defaultCode: string): Promise<{ ownerId: number; ownerName: string; partnerId: number; clientName: string; totalInstallments: number; orderId: number; separationAmount?: number | null } | null> {
+    async getReservationOwner(defaultCode: string): Promise<{ ownerId: number; ownerName: string; partnerId: number; clientName: string; clientPhone: string | null; totalInstallments: number; orderId: number; separationAmount?: number | null } | null> {
         try {
             const response = await apiFetch('/api/odoo/get_reservation_owner', {
                 method: 'POST',
@@ -849,6 +849,7 @@ export const odooService = {
                 ownerName: result.ownerName,
                 partnerId: result.partnerId,
                 clientName: result.clientName,
+                clientPhone: result.clientPhone || null,
                 totalInstallments: result.totalInstallments || 72,
                 orderId: result.orderId,
                 separationAmount: result.separationAmount
