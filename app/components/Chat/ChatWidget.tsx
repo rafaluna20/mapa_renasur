@@ -180,7 +180,7 @@ export default function ChatWidget({ onSelectLot }: ChatWidgetProps) {
                             placeholder="Ej. lotes de 90m² en la manzana D..."
                             disabled={loading}
                             maxLength={1000}
-                            className="flex-1 px-3 py-2 bg-slate-100 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-300 disabled:opacity-60"
+                            className="flex-1 px-3 py-2 bg-slate-100 text-slate-800 placeholder-slate-400 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-300 disabled:opacity-60"
                         />
                         <button
                             onClick={sendMessage}
