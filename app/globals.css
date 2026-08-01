@@ -1,15 +1,22 @@
 @import "tailwindcss";
 
+/* Modo oscuro activado por la clase .dark en <html> (ver ThemeContext.tsx),
+   NUNCA automáticamente por prefers-color-scheme del sistema operativo.
+   Antes este archivo tenía un @media (prefers-color-scheme: dark) que
+   cambiaba --foreground a casi-blanco según el SO, sin que el resto de la
+   app estuviera preparada para eso — causó un bug real (texto del chat
+   invisible en un input que heredaba ese color sin querer). El toggle
+   manual es explícito: nada cambia de tema sin que el usuario lo pida. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root.dark {
+  --background: #0f172a;
+  --foreground: #e2e8f0;
 }
 
 body {

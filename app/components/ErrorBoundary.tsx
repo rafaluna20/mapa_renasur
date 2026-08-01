@@ -62,27 +62,27 @@ export class MapErrorBoundary extends Component<Props, State> {
 
       // UI por defecto de error
       return (
-        <div className="flex h-full w-full items-center justify-center bg-slate-50 p-8">
+        <div className="flex h-full w-full items-center justify-center bg-slate-50 dark:bg-slate-900 p-8">
           <div className="max-w-md text-center">
-            <div className="mb-6 inline-flex items-center justify-center w-20 h-20 rounded-full bg-red-100">
-              <AlertTriangle className="text-red-600" size={40} />
+            <div className="mb-6 inline-flex items-center justify-center w-20 h-20 rounded-full bg-red-100 dark:bg-red-950/50">
+              <AlertTriangle className="text-red-600 dark:text-red-400" size={40} />
             </div>
-            
-            <h2 className="text-2xl font-bold text-slate-800 mb-3">
+
+            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100 mb-3">
               Error al cargar el mapa
             </h2>
-            
-            <p className="text-slate-600 mb-6">
-              Ocurrió un problema inesperado al cargar el mapa interactivo. 
+
+            <p className="text-slate-600 dark:text-slate-400 mb-6">
+              Ocurrió un problema inesperado al cargar el mapa interactivo.
               Por favor, intenta recargar la página.
             </p>
 
             {process.env.NODE_ENV === 'development' && this.state.error && (
               <details className="mb-6 text-left">
-                <summary className="cursor-pointer text-sm text-slate-500 hover:text-slate-700 mb-2">
+                <summary className="cursor-pointer text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 mb-2">
                   Detalles técnicos (solo en desarrollo)
                 </summary>
-                <pre className="text-xs bg-slate-100 p-4 rounded-lg overflow-auto max-h-60 text-red-600">
+                <pre className="text-xs bg-slate-100 dark:bg-slate-800 p-4 rounded-lg overflow-auto max-h-60 text-red-600 dark:text-red-400">
                   {this.state.error.toString()}
                   {this.state.errorInfo?.componentStack}
                 </pre>

@@ -1,5 +1,6 @@
-import { RefreshCw, LogOut, User, MapPin, TrendingUp, Award } from 'lucide-react';
+import { RefreshCw, LogOut, User, MapPin, TrendingUp, Award, Sun, Moon } from 'lucide-react';
 import { useAuth } from '@/app/context/AuthContext';
+import { useTheme } from '@/app/context/ThemeContext';
 import { useState } from 'react';
 import UserProfileModal from './UserProfileModal';
 import Image from 'next/image';
@@ -10,6 +11,7 @@ interface HeaderProps {
 
 export default function Header({ onSync }: HeaderProps) {
     const { user, salesCount, quotesCount, logout } = useAuth();
+    const { theme, toggleTheme } = useTheme();
     const [showProfile, setShowProfile] = useState(false);
 
     return (
@@ -106,6 +108,20 @@ export default function Header({ onSync }: HeaderProps) {
                                 <User size={18} className="text-slate-300 group-hover:text-[#A145F5] transition-colors" />
                             </button>
                         )}
+
+                        {/* Toggle de tema claro/oscuro */}
+                        <button
+                            onClick={toggleTheme}
+                            className="flex items-center justify-center bg-gradient-to-br from-slate-800 to-slate-700 hover:from-[#A145F5]/30 hover:to-[#2E7D5E]/30 w-10 h-10 rounded-xl border border-slate-700 hover:border-[#A145F5]/50 transition-all duration-300 group"
+                            title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+                            aria-label={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+                        >
+                            {theme === 'dark' ? (
+                                <Sun size={18} className="text-amber-300 group-hover:rotate-45 transition-transform duration-300" />
+                            ) : (
+                                <Moon size={18} className="text-slate-300 group-hover:text-[#A145F5] transition-colors" />
+                            )}
+                        </button>
 
                         {/* Sync Button */}
                         <button

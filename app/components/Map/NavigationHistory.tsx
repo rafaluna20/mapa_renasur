@@ -42,14 +42,14 @@ export default function NavigationHistory({
   }
 
   return (
-    <div className="absolute top-20 left-4 z-[400] hidden md:flex items-center bg-white/95 backdrop-blur-sm rounded-lg shadow-lg border border-slate-200 overflow-hidden">
+    <div className="absolute top-20 left-4 z-[400] hidden md:flex items-center bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm rounded-lg shadow-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
       <button
         onClick={handleBack}
         disabled={!canGoBack}
         className={`p-2 transition-colors ${
-          canGoBack 
-            ? 'hover:bg-slate-100 text-slate-700 cursor-pointer' 
-            : 'text-slate-300 cursor-not-allowed'
+          canGoBack
+            ? 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 cursor-pointer'
+            : 'text-slate-300 dark:text-slate-600 cursor-not-allowed'
         }`}
         title="Lote anterior"
         aria-label="Ir al lote anterior"
@@ -57,9 +57,9 @@ export default function NavigationHistory({
         <ChevronLeft size={20} />
       </button>
 
-      <div className="px-3 border-x border-slate-200 flex items-center gap-2">
-        <History size={14} className="text-slate-400" />
-        <span className="text-xs font-medium text-slate-600">
+      <div className="px-3 border-x border-slate-200 dark:border-slate-700 flex items-center gap-2">
+        <History size={14} className="text-slate-400 dark:text-slate-500" />
+        <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
           {currentIndex + 1} / {history.length}
         </span>
       </div>
@@ -68,9 +68,9 @@ export default function NavigationHistory({
         onClick={handleForward}
         disabled={!canGoForward}
         className={`p-2 transition-colors ${
-          canGoForward 
-            ? 'hover:bg-slate-100 text-slate-700 cursor-pointer' 
-            : 'text-slate-300 cursor-not-allowed'
+          canGoForward
+            ? 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 cursor-pointer'
+            : 'text-slate-300 dark:text-slate-600 cursor-not-allowed'
         }`}
         title="Lote siguiente"
         aria-label="Ir al siguiente lote"

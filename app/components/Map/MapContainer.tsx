@@ -21,7 +21,7 @@ interface MapContainerProps {
     elementosUrbanos?: ElementoUrbano[];
     selectedLotId: string | null;
     onLotSelect: (lot: Lot) => void;
-    mapType: 'street' | 'satellite' | 'blank';
+    mapType: 'street' | 'satellite' | 'blank' | 'dark';
     userLocation?: [number, number] | null;
     preferCanvas?: boolean;
     showMeasurements?: boolean;

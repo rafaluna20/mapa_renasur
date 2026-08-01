@@ -104,7 +104,7 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, e
 
     // Estado de UI
     const [isSidebarOpen, setSidebarOpen] = useState(false); // Controla si la barra lateral está visible (oculto por defecto para móvil)
-    const [mapType, setMapType] = useState<'street' | 'satellite' | 'blank'>('street'); // Tipo de mapa base
+    const [mapType, setMapType] = useState<'street' | 'satellite' | 'blank' | 'dark'>('street'); // Tipo de mapa base
 
     // Inicialización del sidebar según el dispositivo
     useEffect(() => {
@@ -284,8 +284,8 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, e
     // Renderizado de carga si estamos verificando sesión
     if (loading || !user) {
         return (
-            <div className="flex h-screen items-center justify-center bg-slate-50">
-                <Loader2 className="animate-spin text-blue-600" size={32} />
+            <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-900">
+                <Loader2 className="animate-spin text-blue-600 dark:text-blue-400" size={32} />
             </div>
         );
     }
@@ -293,16 +293,16 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, e
     // Pantalla de bloqueo: Fallo de conexión con Odoo
     if (hasConnectionError) {
         return (
-            <div className="flex flex-col h-screen bg-slate-50 font-sans">
+            <div className="flex flex-col h-screen bg-slate-50 dark:bg-slate-900 font-sans">
                 <Header onSync={handleSync} />
                 <div className="flex-1 flex items-center justify-center p-4">
-                    <div className="bg-white p-8 md:p-12 rounded-2xl shadow-xl max-w-lg w-full text-center border border-red-100">
-                        <div className="mx-auto w-20 h-20 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-6">
+                    <div className="bg-white dark:bg-slate-800 p-8 md:p-12 rounded-2xl shadow-xl max-w-lg w-full text-center border border-red-100 dark:border-red-900/50">
+                        <div className="mx-auto w-20 h-20 bg-red-100 dark:bg-red-950/50 text-red-500 dark:text-red-400 rounded-full flex items-center justify-center mb-6">
                             <WifiOff size={40} />
                         </div>
-                        <h2 className="text-2xl md:text-3xl font-bold text-slate-800 mb-4">Error de Conexión</h2>
-                        <p className="text-slate-600 mb-8 leading-relaxed">
-                            No pudimos establecer comunicación con el servidor central de inventario (Odoo). 
+                        <h2 className="text-2xl md:text-3xl font-bold text-slate-800 dark:text-slate-100 mb-4">Error de Conexión</h2>
+                        <p className="text-slate-600 dark:text-slate-400 mb-8 leading-relaxed">
+                            No pudimos establecer comunicación con el servidor central de inventario (Odoo).
                             Por seguridad e integridad de los datos, el portal ha sido bloqueado temporalmente.
                         </p>
                         <button 
@@ -321,7 +321,7 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, e
     // Renderizado Principal (JSX)
     // ------------------------------------------------------------------
     return (
-        <div className="flex flex-col h-screen bg-slate-50 overflow-hidden font-sans">
+        <div className="flex flex-col h-screen bg-slate-50 dark:bg-slate-900 overflow-hidden font-sans">
 
             {/* Cabecera Superior */}
             <Header onSync={handleSync} />
@@ -341,17 +341,17 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, e
                   Contiene: FilterBar, Lista de Lotes, y Dashboard
                 */}
                 <div className={`
-                  absolute inset-y-0 left-0 z-[500] w-80 max-w-[85vw] bg-white shadow-2xl transform transition-transform duration-300 ease-in-out border-r border-slate-200 flex flex-col
+                  absolute inset-y-0 left-0 z-[500] w-80 max-w-[85vw] bg-white dark:bg-slate-900 shadow-2xl transform transition-transform duration-300 ease-in-out border-r border-slate-200 dark:border-slate-800 flex flex-col
                   ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} // Animación de entrada/salida
                   md:absolute md:z-[500] md:shadow-xl     // Ahora es colapsable también en desktop
                 `}>
-                    
+
                     {/* Header del Sidebar con botón de cerrar */}
-                    <div className="flex items-center justify-between p-3 border-b border-stone-200 bg-white">
-                        <span className="font-bold text-slate-800 text-sm">Explorador</span>
-                        <button 
+                    <div className="flex items-center justify-between p-3 border-b border-stone-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                        <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">Explorador</span>
+                        <button
                             onClick={() => setSidebarOpen(false)}
-                            className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+                            className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
                             aria-label="Cerrar panel lateral"
                         >
                             ✕
@@ -392,11 +392,11 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, e
 
                     {/* Feedback visual de búsqueda */}
                     {hasActiveFilters && (
-                        <div className="px-3 py-2 bg-gradient-to-r from-blue-50 to-violet-50 border-b border-blue-100 flex items-center justify-between text-xs">
-                            <span className="text-blue-700 font-medium">
+                        <div className="px-3 py-2 bg-gradient-to-r from-blue-50 to-violet-50 dark:from-blue-950/40 dark:to-violet-950/40 border-b border-blue-100 dark:border-blue-900/40 flex items-center justify-between text-xs">
+                            <span className="text-blue-700 dark:text-blue-300 font-medium">
                                 {searchQuery ? `🔍 "${searchQuery}"` : '🎯 Filtros activos'}
                             </span>
-                            <span className="text-blue-600 font-bold">
+                            <span className="text-blue-600 dark:text-blue-400 font-bold">
                                 {filteredCount} resultado{filteredCount !== 1 ? 's' : ''}
                             </span>
                         </div>
@@ -405,7 +405,7 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, e
                     {/* Lista Renderizada de Tarjetas de Lote */}
                     <div className="flex-1 overflow-y-auto">
                         {filteredLots.length === 0 ? (
-                            <div className="p-8 text-center text-slate-400">
+                            <div className="p-8 text-center text-slate-400 dark:text-slate-500">
                                 <Filter size={32} className="mx-auto mb-2 opacity-50" />
                                 <p className="text-sm font-medium">
                                     {hasActiveFilters ? 'No se encontraron lotes con estos criterios' : 'Cargando lotes...'}
@@ -452,7 +452,7 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, e
                 {!isSidebarOpen && (
                     <button
                         onClick={() => setSidebarOpen(true)}
-                        className="absolute top-4 left-4 z-[400] bg-white p-2.5 rounded-xl shadow-lg text-slate-700 hover:text-indigo-600 transition-colors border border-slate-200"
+                        className="absolute top-4 left-4 z-[400] bg-white dark:bg-slate-800 p-2.5 rounded-xl shadow-lg text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors border border-slate-200 dark:border-slate-700"
                         title="Abrir filtros"
                     >
                         <Menu size={20} />

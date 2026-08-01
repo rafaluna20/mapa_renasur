@@ -18,16 +18,16 @@ export default function FloatingControls({
 }: FloatingControlsProps) {
     return (
         <div className="md:hidden fixed bottom-4 left-2 right-2 z-[600] animate-in slide-in-from-bottom-4 duration-300">
-            <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200 p-2">
+            <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 p-2">
                 {/* Filters Group */}
                 <div className="grid grid-cols-5 gap-1.5 items-center">
                     {/* Etapa */}
                     <div className="flex flex-col gap-0.5">
-                        <label className="text-[8px] font-bold text-blue-700 uppercase leading-none px-1 text-center">Etapa</label>
+                        <label className="text-[8px] font-bold text-blue-700 dark:text-blue-400 uppercase leading-none px-1 text-center">Etapa</label>
                         <select
                             value={etapaFilter}
                             onChange={(e) => onEtapaChange(e.target.value)}
-                            className="w-full px-1 py-1 bg-blue-50 border border-blue-100 rounded-lg text-[10px] font-semibold text-blue-900 outline-none appearance-none text-center"
+                            className="w-full px-1 py-1 bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/50 rounded-lg text-[10px] font-semibold text-blue-900 dark:text-blue-300 outline-none appearance-none text-center"
                         >
                             <option value="all">Todas</option>
                             <option value="1">1</option>
@@ -39,11 +39,11 @@ export default function FloatingControls({
 
                     {/* MZ */}
                     <div className="flex flex-col gap-0.5">
-                        <label className="text-[8px] font-bold text-blue-700 uppercase leading-none px-1 text-center">MZ</label>
+                        <label className="text-[8px] font-bold text-blue-700 dark:text-blue-400 uppercase leading-none px-1 text-center">MZ</label>
                         <select
                             value={manzanaFilter}
                             onChange={(e) => onManzanaChange(e.target.value)}
-                            className="w-full px-1 py-1 bg-blue-50 border border-blue-100 rounded-lg text-[10px] font-semibold text-blue-900 outline-none appearance-none text-center"
+                            className="w-full px-1 py-1 bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/50 rounded-lg text-[10px] font-semibold text-blue-900 dark:text-blue-300 outline-none appearance-none text-center"
                         >
                             <option value="all">Todas</option>
                             <option value="D">D</option>
@@ -69,11 +69,11 @@ export default function FloatingControls({
 
                     {/* Estado */}
                     <div className="flex flex-col gap-0.5">
-                        <label className="text-[8px] font-bold text-slate-600 uppercase leading-none px-1 text-center">Estado</label>
+                        <label className="text-[8px] font-bold text-slate-600 dark:text-slate-400 uppercase leading-none px-1 text-center">Estado</label>
                         <select
                             value={statusFilter}
                             onChange={(e) => onStatusChange(e.target.value)}
-                            className="w-full px-1 py-1 bg-slate-50 border border-slate-100 rounded-lg text-[10px] font-semibold text-slate-900 outline-none appearance-none text-center"
+                            className="w-full px-1 py-1 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-lg text-[10px] font-semibold text-slate-900 dark:text-slate-200 outline-none appearance-none text-center"
                         >
                             <option value="all">Todos</option>
                             <option value="libre">no vender</option>

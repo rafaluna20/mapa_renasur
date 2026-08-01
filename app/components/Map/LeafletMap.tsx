@@ -26,7 +26,7 @@ interface LeafletMapProps {
     elementosUrbanos?: ElementoUrbano[];
     selectedLotId: string | null;
     onLotSelect: (lot: Lot) => void;
-    mapType: 'street' | 'satellite' | 'blank';
+    mapType: 'street' | 'satellite' | 'blank' | 'dark';
     userLocation?: [number, number] | null;
     preferCanvas?: boolean;
     showMeasurements?: boolean;
@@ -378,7 +378,7 @@ export default function LeafletMap({ lots, elementosUrbanos = [], selectedLotId,
             maxZoom={22}
             scrollWheelZoom={true}
             preferCanvas={preferCanvas}
-            style={{ height: '100%', width: '100%', background: mapType === 'blank' ? '#ffffff' : '#ddd' }}
+            style={{ height: '100%', width: '100%', background: mapType === 'blank' ? '#ffffff' : mapType === 'dark' ? '#1e293b' : '#ddd' }}
             className="z-0"
         >
             {mapType === 'street' && (
@@ -394,6 +394,15 @@ export default function LeafletMap({ lots, elementosUrbanos = [], selectedLotId,
                 <TileLayer
                     attribution='Tiles &copy; Esri'
                     url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                    maxNativeZoom={19}
+                    updateWhenZooming={false}
+                    updateWhenIdle={true}
+                />
+            )}
+            {mapType === 'dark' && (
+                <TileLayer
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors'
+                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
                     maxNativeZoom={19}
                     updateWhenZooming={false}
                     updateWhenIdle={true}
@@ -488,7 +497,7 @@ export default function LeafletMap({ lots, elementosUrbanos = [], selectedLotId,
                         positions={positions}
                         smoothFactor={isMobile ? 1.5 : 1.0} // Simplificación de geometría adaptativa en móvil (Douglas-Peucker)
                         pathOptions={{
-                            color: isSelected ? '#2563EB' : (mapType === 'satellite' ? 'white' : '#64748b'),
+                            color: isSelected ? '#2563EB' : ((mapType === 'satellite' || mapType === 'dark') ? 'white' : '#64748b'),
                             fillColor: getColor(lot.x_statu),
                             fillOpacity: 0.6,
                             weight: isSelected ? 3 : 1,
@@ -517,7 +526,7 @@ export default function LeafletMap({ lots, elementosUrbanos = [], selectedLotId,
                                 layer.setStyle({
                                     weight: isSelected ? 3 : 1,
                                     fillOpacity: 0.6,
-                                    color: isSelected ? '#2563EB' : (mapType === 'satellite' ? 'white' : '#64748b')
+                                    color: isSelected ? '#2563EB' : ((mapType === 'satellite' || mapType === 'dark') ? 'white' : '#64748b')
                                 });
                             }
                         }}

@@ -23,9 +23,9 @@ export default function CompareSplitView({
 
   if (selectedLots.length === 0) {
     return (
-      <div className="fixed inset-0 z-[600] bg-white flex items-center justify-center">
+      <div className="fixed inset-0 z-[600] bg-white dark:bg-slate-900 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-slate-600 mb-4">Selecciona lotes para comparar</p>
+          <p className="text-slate-600 dark:text-slate-400 mb-4">Selecciona lotes para comparar</p>
           <button
             onClick={onClose}
             className="px-4 py-2 bg-[#A145F5] text-white rounded-lg hover:bg-[#8D32DF]"
@@ -38,21 +38,21 @@ export default function CompareSplitView({
   }
 
   return (
-    <div className="fixed inset-0 z-[600] bg-white overflow-auto">
+    <div className="fixed inset-0 z-[600] bg-white dark:bg-slate-900 overflow-auto">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm">
+      <div className="sticky top-0 z-10 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-slate-800">
+            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-100">
               Comparación de Lotes
             </h2>
-            <p className="text-sm text-slate-600 mt-1">
+            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
               Comparando {selectedLots.length} lote{selectedLots.length !== 1 ? 's' : ''}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
             aria-label="Cerrar comparación"
           >
             <X size={24} />
@@ -70,10 +70,10 @@ export default function CompareSplitView({
           {selectedLots.map((lot, index) => (
             <div
               key={lot.id}
-              className="bg-white border-2 border-slate-200 rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-shadow"
+              className="bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-shadow"
             >
               {/* Mini Map */}
-              <div className="h-64 relative bg-slate-100">
+              <div className="h-64 relative bg-slate-100 dark:bg-slate-700">
                 <MapContainerWrapper
                   lots={[lot]}
                   selectedLotId={lot.id}
@@ -91,7 +91,7 @@ export default function CompareSplitView({
                 {/* Botón remover */}
                 <button
                   onClick={() => onRemoveLot(lot.id)}
-                  className="absolute top-2 right-2 p-1.5 bg-white hover:bg-red-50 text-slate-600 hover:text-red-600 rounded-full shadow-md transition-colors"
+                  className="absolute top-2 right-2 p-1.5 bg-white dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950/40 text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 rounded-full shadow-md transition-colors"
                   aria-label={`Remover ${lot.name} de la comparación`}
                 >
                   <X size={16} />
@@ -100,10 +100,10 @@ export default function CompareSplitView({
 
               {/* Info */}
               <div className="p-4">
-                <h3 className="text-lg font-bold text-slate-800 mb-1">
+                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-1">
                   {lot.name}
                 </h3>
-                <p className="text-sm text-slate-500 mb-4">
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
                   Código: {lot.default_code}
                 </p>
 
@@ -157,7 +157,7 @@ export default function CompareSplitView({
 
                 {/* Mostrar mejor valor en algunas métricas */}
                 {selectedLots.length > 1 && (
-                  <div className="mt-4 pt-4 border-t border-slate-200">
+                  <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
                     <BestValueIndicators lot={lot} allLots={selectedLots} />
                   </div>
                 )}
@@ -168,43 +168,43 @@ export default function CompareSplitView({
 
         {/* Summary Table Below */}
         {selectedLots.length > 1 && (
-          <div className="mt-8 bg-slate-50 rounded-xl p-6 border border-slate-200">
-            <h3 className="text-xl font-bold text-slate-800 mb-4">
+          <div className="mt-8 bg-slate-50 dark:bg-slate-800 rounded-xl p-6 border border-slate-200 dark:border-slate-700">
+            <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-4">
               Resumen Comparativo
             </h3>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b-2 border-slate-300">
-                    <th className="text-left py-3 px-2 font-semibold text-slate-700">Métrica</th>
+                  <tr className="border-b-2 border-slate-300 dark:border-slate-600">
+                    <th className="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-300">Métrica</th>
                     {selectedLots.map((lot, idx) => (
-                      <th key={lot.id} className="text-center py-3 px-2 font-semibold text-slate-700">
+                      <th key={lot.id} className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-300">
                         Lote #{idx + 1}
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  <tr className="border-b border-slate-200">
-                    <td className="py-3 px-2 font-medium text-slate-600">Área Total</td>
+                  <tr className="border-b border-slate-200 dark:border-slate-700">
+                    <td className="py-3 px-2 font-medium text-slate-600 dark:text-slate-400">Área Total</td>
                     {selectedLots.map(lot => (
-                      <td key={lot.id} className="text-center py-3 px-2">
+                      <td key={lot.id} className="text-center py-3 px-2 text-slate-700 dark:text-slate-300">
                         {lot.x_area.toFixed(2)} m²
                       </td>
                     ))}
                   </tr>
-                  <tr className="border-b border-slate-200 bg-white">
-                    <td className="py-3 px-2 font-medium text-slate-600">Precio Total</td>
+                  <tr className="border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+                    <td className="py-3 px-2 font-medium text-slate-600 dark:text-slate-400">Precio Total</td>
                     {selectedLots.map(lot => (
-                      <td key={lot.id} className="text-center py-3 px-2">
+                      <td key={lot.id} className="text-center py-3 px-2 text-slate-700 dark:text-slate-300">
                         S/ {lot.list_price.toLocaleString('es-PE')}
                       </td>
                     ))}
                   </tr>
-                  <tr className="border-b border-slate-200">
-                    <td className="py-3 px-2 font-medium text-slate-600">Precio por m²</td>
+                  <tr className="border-b border-slate-200 dark:border-slate-700">
+                    <td className="py-3 px-2 font-medium text-slate-600 dark:text-slate-400">Precio por m²</td>
                     {selectedLots.map(lot => (
-                      <td key={lot.id} className="text-center py-3 px-2">
+                      <td key={lot.id} className="text-center py-3 px-2 text-slate-700 dark:text-slate-300">
                         S/ {(lot.list_price / lot.x_area).toFixed(2)}
                       </td>
                     ))}
@@ -231,10 +231,10 @@ function CompareRow({
 }) {
   return (
     <div className={`flex justify-between items-center py-2 px-3 rounded-lg ${
-      highlight ? 'bg-blue-50' : 'bg-slate-50'
+      highlight ? 'bg-blue-50 dark:bg-blue-950/40' : 'bg-slate-50 dark:bg-slate-900'
     }`}>
-      <span className="text-sm font-medium text-slate-600">{label}:</span>
-      <span className="text-sm font-bold text-slate-800">{value}</span>
+      <span className="text-sm font-medium text-slate-600 dark:text-slate-400">{label}:</span>
+      <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{value}</span>
     </div>
   );
 }

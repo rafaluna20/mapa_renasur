@@ -97,7 +97,7 @@ export default function ChatWidget({ onSelectLot }: ChatWidgetProps) {
 
             {isOpen && (
                 <div
-                    className={`fixed inset-x-2 bottom-2 top-20 md:inset-auto md:bottom-6 md:right-6 md:w-96 md:h-[32rem] z-[1000] bg-white rounded-2xl ${SHADOW_FLOATING} ${BORDER_FLOATING} flex flex-col overflow-hidden animate-in slide-in-from-bottom-8 fade-in duration-200`}
+                    className={`fixed inset-x-2 bottom-2 top-20 md:inset-auto md:bottom-6 md:right-6 md:w-96 md:h-[32rem] z-[1000] bg-white dark:bg-slate-900 rounded-2xl ${SHADOW_FLOATING} ${BORDER_FLOATING} dark:border-slate-700 flex flex-col overflow-hidden animate-in slide-in-from-bottom-8 fade-in duration-200`}
                 >
                     {/* Cabecera */}
                     <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 text-white px-4 py-3 flex items-center justify-between shrink-0">
@@ -115,14 +115,14 @@ export default function ChatWidget({ onSelectLot }: ChatWidgetProps) {
                     </div>
 
                     {/* Mensajes */}
-                    <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-3 bg-slate-50">
+                    <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-3 bg-slate-50 dark:bg-slate-950">
                         {messages.map((msg, i) => (
                             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                 <div
                                     className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm whitespace-pre-wrap ${
                                         msg.role === 'user'
                                             ? 'bg-indigo-600 text-white rounded-br-sm'
-                                            : 'bg-white text-slate-800 border border-slate-200 rounded-bl-sm'
+                                            : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-bl-sm'
                                     }`}
                                 >
                                     {msg.content}
@@ -133,17 +133,17 @@ export default function ChatWidget({ onSelectLot }: ChatWidgetProps) {
                                                 <button
                                                     key={lote.codigo}
                                                     onClick={() => handleSelectLot(lote.codigo)}
-                                                    className="w-full text-left bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 rounded-xl p-2.5 transition-colors group"
+                                                    className="w-full text-left bg-slate-50 dark:bg-slate-900 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-700 rounded-xl p-2.5 transition-colors group"
                                                 >
                                                     <div className="flex items-center justify-between">
-                                                        <span className="font-bold text-slate-800 text-xs">{lote.codigo}</span>
-                                                        <span className="text-[10px] text-indigo-600 font-semibold flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <span className="font-bold text-slate-800 dark:text-slate-100 text-xs">{lote.codigo}</span>
+                                                        <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                                             <MapPin size={10} /> Ver en el mapa
                                                         </span>
                                                     </div>
-                                                    <div className="flex items-center justify-between mt-1 text-[11px] text-slate-500">
+                                                    <div className="flex items-center justify-between mt-1 text-[11px] text-slate-500 dark:text-slate-400">
                                                         <span>{lote.areaM2}m² · Mz {lote.manzana}</span>
-                                                        <span className="font-bold text-emerald-600">
+                                                        <span className="font-bold text-emerald-600 dark:text-emerald-400">
                                                             {lote.precio != null ? currency(lote.precio) : 'Consultar con asesor'}
                                                         </span>
                                                     </div>
@@ -157,7 +157,7 @@ export default function ChatWidget({ onSelectLot }: ChatWidgetProps) {
 
                         {loading && (
                             <div className="flex justify-start">
-                                <div className="bg-white border border-slate-200 rounded-2xl rounded-bl-sm px-3.5 py-2.5">
+                                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl rounded-bl-sm px-3.5 py-2.5">
                                     <Loader2 size={16} className="animate-spin text-indigo-500" />
                                 </div>
                             </div>
@@ -165,13 +165,13 @@ export default function ChatWidget({ onSelectLot }: ChatWidgetProps) {
 
                         {error && (
                             <div className="flex justify-center">
-                                <span className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5">{error}</span>
+                                <span className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 rounded-lg px-3 py-1.5">{error}</span>
                             </div>
                         )}
                     </div>
 
                     {/* Input */}
-                    <div className="p-2.5 border-t border-slate-200 bg-white flex items-center gap-2 shrink-0">
+                    <div className="p-2.5 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center gap-2 shrink-0">
                         <input
                             type="text"
                             value={input}
@@ -180,7 +180,7 @@ export default function ChatWidget({ onSelectLot }: ChatWidgetProps) {
                             placeholder="Ej. lotes de 90m² en la manzana D..."
                             disabled={loading}
                             maxLength={1000}
-                            className="flex-1 px-3 py-2 bg-slate-100 text-slate-800 placeholder-slate-400 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-300 disabled:opacity-60"
+                            className="flex-1 px-3 py-2 bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-300 disabled:opacity-60"
                         />
                         <button
                             onClick={sendMessage}

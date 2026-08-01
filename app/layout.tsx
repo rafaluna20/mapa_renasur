@@ -72,6 +72,19 @@ export default function RootLayout({
         {/* Favicon */}
         <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192x192.png" />
         <link rel="shortcut icon" href="/icons/icon-192x192.png" />
+
+        {/* Aplica el tema oscuro ANTES del primer paint (evita el parpadeo
+            claro->oscuro al cargar). Solo respeta una elección explícita
+            guardada en localStorage — nunca sigue prefers-color-scheme del
+            sistema operativo automáticamente, a propósito: eso fue lo que
+            causó el bug del texto invisible en el chat (un componente
+            heredaba el color oscuro del sistema sin que nadie lo hubiera
+            revisado para ese caso). */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{if(localStorage.getItem('theme')==='dark'){document.documentElement.classList.add('dark')}}catch(e){}`,
+          }}
+        />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
