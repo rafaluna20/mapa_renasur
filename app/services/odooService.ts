@@ -214,6 +214,15 @@ export interface LoteChatFiltros {
     etapa?: string;
     precioMax?: number;
     estado?: 'disponible' | 'reservado' | 'vendido';
+    // Número de lote (ej. "92" o "092") para búsquedas puntuales tipo
+    // "manzana D lote 92". Se compara contra x_lote sin ceros a la
+    // izquierda — NO se reconstruye el código completo (E01MZD092P):
+    // eso obligaría a adivinar la etapa y el sufijo de partición (P vs
+    // 1/2), que no son deducibles solo de "lote 92".
+    numeroLote?: string;
+    // Código de lote completo o parcial (ej. "E01MZD092P"), para cuando
+    // el usuario pega el código directamente. Búsqueda por substring.
+    codigo?: string;
 }
 
 export interface LoteChatResultado {
@@ -226,6 +235,7 @@ export interface LoteChatResultado {
     // 0 sería tan grave como inventar cualquier otro dato.
     precio: number | null;
     ubicacion: string | null;
+    estado: string;
 }
 
 interface OdooLoteChatRaw {
@@ -234,6 +244,7 @@ interface OdooLoteChatRaw {
     x_area: number | false;
     x_mz: string | false;
     x_etapa: string | false;
+    x_lote: string | false;
     x_statu: string | false;
     list_price: number;
     x_ubicacion: string | false;
@@ -246,6 +257,13 @@ interface OdooLoteChatRaw {
  * un chatbot público que sugiere lotes ya vendidos como si estuvieran
  * libres es un problema comercial real, no un detalle.
  *
+ * EXCEPCIÓN al filtro de disponibilidad: cuando la búsqueda es puntual
+ * (numeroLote o codigo — "quiero el lote 92", "busco E01MZD092P"), NO se
+ * filtra por estado a menos que se pida explícitamente. Alguien
+ * preguntando por un lote específico puede estar consultando el suyo
+ * propio, ya vendido o reservado — ocultarlo sería peor que mostrarlo
+ * con su estado real.
+ *
  * IMPORTANTE (ver auditoría de datos previa a este código): la proximidad
  * a parques/calles NO está soportada — el módulo elemento.urbano no tiene
  * datos reales cargados en producción todavía (0 parques activos). No se
@@ -257,7 +275,12 @@ export async function buscarLotesParaChat(filtros: LoteChatFiltros): Promise<Lot
         ['active', '=', true],
     ];
 
-    domain.push(['x_statu', '=', filtros.estado || 'disponible']);
+    const esBusquedaPuntual = !!(filtros.numeroLote || filtros.codigo);
+    if (filtros.estado) {
+        domain.push(['x_statu', '=', filtros.estado]);
+    } else if (!esBusquedaPuntual) {
+        domain.push(['x_statu', '=', 'disponible']);
+    }
 
     if (filtros.areaMin != null) domain.push(['x_area', '>=', filtros.areaMin]);
     if (filtros.areaMax != null) domain.push(['x_area', '<=', filtros.areaMax]);
@@ -269,13 +292,24 @@ export async function buscarLotesParaChat(filtros: LoteChatFiltros): Promise<Lot
         domain.push(['list_price', '<=', filtros.precioMax]);
         domain.push(['list_price', '>', 0]);
     }
+    // x_lote se guarda sin ceros a la izquierda (ej. "92", no "092") — se
+    // normaliza la entrada del usuario para no fallar por "092" vs "92".
+    // NO se reconstruye el código completo (evita tener que adivinar
+    // etapa/sufijo de partición).
+    if (filtros.numeroLote) {
+        const numeroNormalizado = filtros.numeroLote.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+        if (numeroNormalizado) domain.push(['x_lote', '=', numeroNormalizado]);
+    }
+    if (filtros.codigo) {
+        domain.push(['default_code', 'ilike', filtros.codigo.trim()]);
+    }
 
     const registros: OdooLoteChatRaw[] = await fetchOdoo(
         'product.product',
         'search_read',
         [domain],
         {
-            fields: ['id', 'default_code', 'x_area', 'x_mz', 'x_etapa', 'x_statu', 'list_price', 'x_ubicacion'],
+            fields: ['id', 'default_code', 'x_area', 'x_mz', 'x_etapa', 'x_lote', 'x_statu', 'list_price', 'x_ubicacion'],
             // Código de lote real = 10 caracteres exactos (ej. E01MZD148P) —
             // mismo criterio usado en los endpoints de stats para excluir
             // "otros productos" (materiales, servicios, etc.).
@@ -294,6 +328,7 @@ export async function buscarLotesParaChat(filtros: LoteChatFiltros): Promise<Lot
             etapa: r.x_etapa || 'S/E',
             precio: r.list_price > 0 ? r.list_price : null,
             ubicacion: r.x_ubicacion || null,
+            estado: r.x_statu || 'desconocido',
         }));
 }
 

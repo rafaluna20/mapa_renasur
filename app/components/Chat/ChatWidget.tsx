@@ -11,6 +11,7 @@ interface LoteChatResultado {
     etapa: string;
     precio: number | null;
     ubicacion: string | null;
+    estado?: string;
 }
 
 interface ChatMessage {
@@ -136,7 +137,18 @@ export default function ChatWidget({ onSelectLot }: ChatWidgetProps) {
                                                     className="w-full text-left bg-slate-50 dark:bg-slate-900 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-700 rounded-xl p-2.5 transition-colors group"
                                                 >
                                                     <div className="flex items-center justify-between">
-                                                        <span className="font-bold text-slate-800 dark:text-slate-100 text-xs">{lote.codigo}</span>
+                                                        <span className="font-bold text-slate-800 dark:text-slate-100 text-xs flex items-center gap-1.5">
+                                                            {lote.codigo}
+                                                            {lote.estado && lote.estado !== 'disponible' && (
+                                                                <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                                                                    lote.estado === 'vendido'
+                                                                        ? 'bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-300'
+                                                                        : 'bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300'
+                                                                }`}>
+                                                                    {lote.estado}
+                                                                </span>
+                                                            )}
+                                                        </span>
                                                         <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                                             <MapPin size={10} /> Ver en el mapa
                                                         </span>
