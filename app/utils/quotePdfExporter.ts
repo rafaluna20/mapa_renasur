@@ -54,6 +54,10 @@ export interface ClientPdfDetails {
     email?: string;
     vat?: string;
     address?: string;
+    // Segundo cliente (cónyuge/conviviente) cuando la compra es a nombre
+    // de los dos — solo nombre + DNI/RUC, ver LocalQuoteClient.
+    secondClientName?: string;
+    secondClientVat?: string;
 }
 
 export const exportQuoteToPdf = async (
@@ -69,7 +73,9 @@ export const exportQuoteToPdf = async (
     // sola fila "PAGO INICIAL").
     initialPaymentBreakdown?: { amount: number; date: Date }[]
 ): Promise<Blob | void> => {
-    const clientName = clientDetails?.name;
+    const clientName = clientDetails?.secondClientName?.trim()
+        ? `${clientDetails.name} y ${clientDetails.secondClientName}`
+        : clientDetails?.name;
     const doc = new jsPDF({
         orientation: 'p',
         unit: 'mm',
@@ -198,23 +204,34 @@ export const exportQuoteToPdf = async (
         doc.setTextColor(...COLORS.primary.dark);
         doc.text('DATOS DEL CLIENTE', margin, clientInfoY);
 
+        const val = (v?: string) => (v && v.trim() ? v : '---');
+
+        // Segundo cliente (cónyuge/conviviente): solo si se cargó nombre o
+        // DNI — agrega una fila extra a la caja, que por eso crece de 32 a
+        // 39mm para seguir cubriendo todo el contenido con el fondo verde.
+        const hasSecondClient = !!(clientDetails.secondClientName?.trim() || clientDetails.secondClientVat?.trim());
+        const clientBoxHeight = hasSecondClient ? 39 : 32;
+
         const clientBoxY = clientInfoY + 3;
         doc.setFillColor(...COLORS.primary.veryLight);
         doc.setDrawColor(...COLORS.primary.main);
         doc.setLineWidth(0.5);
-        doc.rect(margin, clientBoxY, pageWidth - (2 * margin) - 12, 32, 'FD');
+        doc.rect(margin, clientBoxY, pageWidth - (2 * margin) - 12, clientBoxHeight, 'FD');
 
-        const val = (v?: string) => (v && v.trim() ? v : '---');
+        const clientBody: any[][] = [
+            ['Nombre:', val(clientDetails.name), 'DNI/RUC:', val(clientDetails.vat)],
+            ['Teléfono:', val(clientDetails.phone), 'Email:', val(clientDetails.email)],
+            ['Dirección:', { content: val(clientDetails.address), colSpan: 3 } as any],
+        ];
+        if (hasSecondClient) {
+            clientBody.push(['Cónyuge/Conviviente:', val(clientDetails.secondClientName), 'DNI/RUC:', val(clientDetails.secondClientVat)]);
+        }
 
         autoTable(doc, {
             startY: clientBoxY + 2,
             margin: { left: margin + 3, right: margin + 15 },
             theme: 'plain',
-            body: [
-                ['Nombre:', val(clientDetails.name), 'DNI/RUC:', val(clientDetails.vat)],
-                ['Teléfono:', val(clientDetails.phone), 'Email:', val(clientDetails.email)],
-                ['Dirección:', { content: val(clientDetails.address), colSpan: 3 } as any],
-            ],
+            body: clientBody,
             styles: {
                 fontSize: 9,
                 cellPadding: 1.5,
@@ -229,12 +246,12 @@ export const exportQuoteToPdf = async (
             }
         });
 
-        // Usar el borde INFERIOR de la caja dibujada (clientBoxY + 32), no
-        // el finalY de la tabla: la caja tiene alto fijo, así que si el
-        // contenido de la tabla (nombre/teléfono/etc. cortos, sin wrap) mide
-        // menos que esos 32mm, el próximo título ("DETALLE FINANCIERO")
-        // terminaba dibujándose pegado o encima del borde de la caja.
-        const clientBoxBottom = clientBoxY + 32;
+        // Usar el borde INFERIOR de la caja dibujada, no el finalY de la
+        // tabla: la caja tiene alto fijo, así que si el contenido de la
+        // tabla (nombre/teléfono/etc. cortos, sin wrap) mide menos que eso,
+        // el próximo título ("DETALLE FINANCIERO") terminaba dibujándose
+        // pegado o encima del borde de la caja.
+        const clientBoxBottom = clientBoxY + clientBoxHeight;
         const tableBottom = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
         clientSectionY = Math.max(clientBoxBottom, tableBottom);
     }

@@ -231,6 +231,13 @@ export default function QuotePage({ params }: QuotePageProps) {
     const [isCreatingClient, setIsCreatingClient] = useState(false);
     const [newClientData, setNewClientData] = useState({ name: '', vat: '', phone: '', email: '' });
 
+    // Segundo cliente (cónyuge/conviviente): solo nombre + DNI/RUC, solo
+    // informativo para pantalla y PDF — no crea un res.partner en Odoo ni
+    // reemplaza al titular del sale.order, ver comentario en LocalQuoteClient.
+    const [showSecondClient, setShowSecondClient] = useState(false);
+    const [secondClientName, setSecondClientName] = useState('');
+    const [secondClientVat, setSecondClientVat] = useState('');
+
     // Autocompletar nombre por DNI/RUC (RENIEC/SUNAT) al crear cliente nuevo
     const { lookup: lookupDoc, result: docLookup, isLoading: isLookingUpDoc, error: docLookupError, reset: resetDocLookup } = useDniRucLookup();
     useEffect(() => {
@@ -257,6 +264,9 @@ export default function QuotePage({ params }: QuotePageProps) {
             if (draft.selectedClient) setSelectedClient(draft.selectedClient);
             if (draft.showCreateClient) setShowCreateClient(draft.showCreateClient);
             if (draft.newClientData) setNewClientData(draft.newClientData);
+            if (draft.showSecondClient) setShowSecondClient(draft.showSecondClient);
+            if (draft.secondClientName) setSecondClientName(draft.secondClientName);
+            if (draft.secondClientVat) setSecondClientVat(draft.secondClientVat);
         } catch {
             // Borrador corrupto, se ignora
         } finally {
@@ -270,11 +280,12 @@ export default function QuotePage({ params }: QuotePageProps) {
             sessionStorage.setItem(QUOTE_DRAFT_KEY, JSON.stringify({
                 discountPercent, discountAmount, initialPayment, extraInitialPayments, numInstallments,
                 scheduleType, selectedClient, showCreateClient, newClientData,
+                showSecondClient, secondClientName, secondClientVat,
             }));
         };
         window.addEventListener(STAFF_SESSION_EXPIRED_EVENT, handleSessionExpired);
         return () => window.removeEventListener(STAFF_SESSION_EXPIRED_EVENT, handleSessionExpired);
-    }, [QUOTE_DRAFT_KEY, discountPercent, discountAmount, initialPayment, extraInitialPayments, numInstallments, scheduleType, selectedClient, showCreateClient, newClientData]);
+    }, [QUOTE_DRAFT_KEY, discountPercent, discountAmount, initialPayment, extraInitialPayments, numInstallments, scheduleType, selectedClient, showCreateClient, newClientData, showSecondClient, secondClientName, secondClientVat]);
 
     // Local Quote State
     const [currentQuoteId, setCurrentQuoteId] = useState<string | null>(null);
@@ -321,6 +332,26 @@ export default function QuotePage({ params }: QuotePageProps) {
         setSearchTerm(client.name);
         setSearchResults([]);
     };
+
+    // Datos combinados de cliente(s) para el PDF y para el guardado local —
+    // centralizado acá para no repetir la misma forma en handleSaveQuote y
+    // handleConfirmQuote. El segundo cliente solo se incluye si se activó
+    // el bloque y se cargó al menos nombre o DNI.
+    const clientPdfDetails = useMemo(() => {
+        if (!selectedClient) return undefined;
+        const hasSecondClient = showSecondClient && (secondClientName.trim() || secondClientVat.trim());
+        return {
+            name: selectedClient.name,
+            phone: selectedClient.phone || selectedClient.mobile,
+            email: selectedClient.email,
+            vat: selectedClient.vat,
+            address: selectedClient.street,
+            ...(hasSecondClient ? {
+                secondClientName: secondClientName.trim(),
+                secondClientVat: secondClientVat.trim(),
+            } : {}),
+        };
+    }, [selectedClient, showSecondClient, secondClientName, secondClientVat]);
 
     const handleCreateClient = async () => {
         const { name, vat, phone, email } = newClientData;
@@ -458,6 +489,10 @@ export default function QuotePage({ params }: QuotePageProps) {
                 clientData: selectedClient ? {
                     name: selectedClient.name,
                     // If we had more client data, we'd put it here
+                    ...(clientPdfDetails?.secondClientName || clientPdfDetails?.secondClientVat ? {
+                        secondClientName: clientPdfDetails.secondClientName,
+                        secondClientVat: clientPdfDetails.secondClientVat,
+                    } : {}),
                 } : null,
                 terms: {
                     originalPrice: lot.list_price,
@@ -490,13 +525,7 @@ export default function QuotePage({ params }: QuotePageProps) {
                 lot,
                 calculations,
                 user?.name || 'No especificado',
-                selectedClient ? {
-                    name: selectedClient.name,
-                    phone: selectedClient.phone || selectedClient.mobile,
-                    email: selectedClient.email,
-                    vat: selectedClient.vat,
-                    address: selectedClient.street,
-                } : undefined,
+                clientPdfDetails,
                 false,
                 includeSchedule,
                 initialPaymentBreakdownForPdf
@@ -536,13 +565,7 @@ export default function QuotePage({ params }: QuotePageProps) {
                 lot,
                 calculations,
                 user?.name || 'Vendedor',
-                {
-                    name: selectedClient.name,
-                    phone: selectedClient.phone || selectedClient.mobile,
-                    email: selectedClient.email,
-                    vat: selectedClient.vat,
-                    address: selectedClient.street,
-                },
+                clientPdfDetails,
                 true, // Request Blob return instead of download
                 true, // Incluir cronograma (comportamiento previo, sin flag propio acá)
                 initialPaymentBreakdownForPdf
@@ -563,7 +586,10 @@ export default function QuotePage({ params }: QuotePageProps) {
                     name: selectedClient.name,
                 },
                 lot.list_price, // Use full list price
-                `Cotización para ${lot.name}. Inicial: ${initialPaymentTotal}. Plazo: ${numInstallments} meses.`,
+                `Cotización para ${lot.name}. Inicial: ${initialPaymentTotal}. Plazo: ${numInstallments} meses.`
+                    + (clientPdfDetails?.secondClientName || clientPdfDetails?.secondClientVat
+                        ? ` Cónyuge/Conviviente: ${clientPdfDetails.secondClientName || 'N/D'}${clientPdfDetails.secondClientVat ? ` (DNI/RUC: ${clientPdfDetails.secondClientVat})` : ''}.`
+                        : ''),
                 {
                     installments: Number(numInstallments) || 0,
                     downPayment: initialPaymentTotal,
@@ -975,6 +1001,58 @@ export default function QuotePage({ params }: QuotePageProps) {
                                             </div>
                                         )}
                                     </div>
+
+                                    {/* Segundo cliente (cónyuge/conviviente): solo visual/PDF, no crea
+                                        un res.partner ni cambia el titular del pedido en Odoo — ver
+                                        comentario en clientPdfDetails. Solo tiene sentido una vez que
+                                        hay un cliente principal seleccionado. */}
+                                    {selectedClient && (
+                                        showSecondClient ? (
+                                            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 animate-in fade-in slide-in-from-top-2">
+                                                <div className="flex justify-between items-center mb-3 text-xs font-bold text-slate-500 uppercase">
+                                                    <span>Cónyuge / Conviviente</span>
+                                                    <button
+                                                        onClick={() => {
+                                                            setShowSecondClient(false);
+                                                            setSecondClientName('');
+                                                            setSecondClientVat('');
+                                                        }}
+                                                        className="text-slate-400 hover:text-slate-600"
+                                                    >
+                                                        <X size={14} />
+                                                    </button>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Nombre completo"
+                                                        className="w-full px-2 py-1.5 text-sm border rounded bg-white text-slate-800 placeholder:text-slate-500"
+                                                        value={secondClientName}
+                                                        onChange={e => setSecondClientName(e.target.value)}
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        inputMode="numeric"
+                                                        maxLength={11}
+                                                        placeholder="DNI (8) / RUC (11)"
+                                                        className="w-full px-2 py-1.5 text-sm border rounded bg-white text-slate-800 placeholder:text-slate-500"
+                                                        value={secondClientVat}
+                                                        onChange={e => setSecondClientVat(e.target.value.replace(/\D/g, ''))}
+                                                    />
+                                                </div>
+                                                <p className="text-[11px] text-slate-400 mt-2">
+                                                    Aparecerá junto al cliente principal en la cotización y el PDF. No requiere ser un cliente registrado en Odoo.
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <button
+                                                onClick={() => setShowSecondClient(true)}
+                                                className="w-full py-2 border border-dashed border-slate-300 rounded-lg text-xs font-bold text-slate-500 hover:bg-slate-50 hover:text-slate-700 hover:border-slate-400 transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                <Plus size={14} /> Agregar cónyuge / conviviente
+                                            </button>
+                                        )
+                                    )}
 
                                     {/* Descuento Dual — tarjeta gris, separada de la cuota inicial
                                         (verde) y del financiamiento mensual (azul, más abajo). */}

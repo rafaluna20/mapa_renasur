@@ -27,6 +27,12 @@ export interface LocalQuoteClient {
     vat?: string;
     phone?: string;
     email?: string;
+    // Segundo cliente (cónyuge/conviviente) cuando el lote se compra a
+    // nombre de los dos. Solo informativo — no crea un res.partner en
+    // Odoo, no es el titular del sale.order (eso lo sigue siendo el
+    // cliente principal de arriba); solo aparece en pantalla y en el PDF.
+    secondClientName?: string;
+    secondClientVat?: string;
 }
 
 export interface LocalQuote {
