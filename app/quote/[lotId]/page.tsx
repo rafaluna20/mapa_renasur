@@ -245,6 +245,15 @@ export default function QuotePage({ params }: QuotePageProps) {
         setNewClientData(prev => ({ ...prev, name: docLookup.name }));
     }, [docLookup]);
 
+    // Misma consulta RENIEC/SUNAT, instancia independiente para el cónyuge/
+    // conviviente (useDniRucLookup guarda su estado por llamada, así que no
+    // pisa el resultado de la búsqueda del cliente principal).
+    const { lookup: lookupDoc2, result: docLookup2, isLoading: isLookingUpDoc2, error: docLookupError2, reset: resetDocLookup2 } = useDniRucLookup();
+    useEffect(() => {
+        if (!docLookup2) return;
+        setSecondClientName(docLookup2.name);
+    }, [docLookup2]);
+
     // Preservar trabajo en curso si la sesión de staff expira a mitad de la
     // cotización (ver AuthContext: al recibir staff-session-expired, guarda
     // esto y redirige a login; al reloguearse, vuelve a esta misma página).
@@ -1016,6 +1025,7 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                             setShowSecondClient(false);
                                                             setSecondClientName('');
                                                             setSecondClientVat('');
+                                                            resetDocLookup2();
                                                         }}
                                                         className="text-slate-400 hover:text-slate-600"
                                                     >
@@ -1023,21 +1033,52 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                     </button>
                                                 </div>
                                                 <div className="space-y-2">
+                                                    <div>
+                                                        <div className="flex gap-2">
+                                                            <input
+                                                                type="text"
+                                                                inputMode="numeric"
+                                                                maxLength={11}
+                                                                placeholder="DNI (8) / RUC (11)"
+                                                                className="w-full px-2 py-1.5 text-sm border rounded bg-white text-slate-800 placeholder:text-slate-500"
+                                                                value={secondClientVat}
+                                                                onChange={e => {
+                                                                    setSecondClientVat(e.target.value.replace(/\D/g, ''));
+                                                                    resetDocLookup2();
+                                                                }}
+                                                                onKeyDown={e => {
+                                                                    if (e.key === 'Enter') {
+                                                                        e.preventDefault();
+                                                                        lookupDoc2(secondClientVat);
+                                                                    }
+                                                                }}
+                                                            />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => lookupDoc2(secondClientVat)}
+                                                                disabled={isLookingUpDoc2}
+                                                                className="shrink-0 px-2.5 py-1.5 text-xs font-bold bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition-colors disabled:opacity-50 flex items-center gap-1"
+                                                            >
+                                                                {isLookingUpDoc2 ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
+                                                                Buscar
+                                                            </button>
+                                                        </div>
+                                                        {isLookingUpDoc2 && (
+                                                            <p className="text-[11px] text-slate-400 mt-0.5">Buscando en RENIEC/SUNAT...</p>
+                                                        )}
+                                                        {!isLookingUpDoc2 && docLookupError2 && (
+                                                            <p className="text-[11px] text-amber-600 mt-0.5">{docLookupError2}. Completa el nombre manualmente.</p>
+                                                        )}
+                                                        {!isLookingUpDoc2 && docLookup2 && (
+                                                            <p className="text-[11px] text-emerald-600 mt-0.5">✓ {docLookup2.name}</p>
+                                                        )}
+                                                    </div>
                                                     <input
                                                         type="text"
                                                         placeholder="Nombre completo"
                                                         className="w-full px-2 py-1.5 text-sm border rounded bg-white text-slate-800 placeholder:text-slate-500"
                                                         value={secondClientName}
                                                         onChange={e => setSecondClientName(e.target.value)}
-                                                    />
-                                                    <input
-                                                        type="text"
-                                                        inputMode="numeric"
-                                                        maxLength={11}
-                                                        placeholder="DNI (8) / RUC (11)"
-                                                        className="w-full px-2 py-1.5 text-sm border rounded bg-white text-slate-800 placeholder:text-slate-500"
-                                                        value={secondClientVat}
-                                                        onChange={e => setSecondClientVat(e.target.value.replace(/\D/g, ''))}
                                                     />
                                                 </div>
                                                 <p className="text-[11px] text-slate-400 mt-2">
