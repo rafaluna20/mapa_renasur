@@ -48,6 +48,21 @@ export const getOdooVal = (v: unknown, fallback: string): string => {
     return v.toString();
 };
 
+/**
+ * Corrige el área embebida como texto en el "name" de Odoo (ej. "Etapa 2 Mz
+ * V Lote 1  Area=100.18m2") para que coincida con x_area, el campo numérico
+ * real que usan los cálculos, la etiqueta del mapa y el PDF. El texto de
+ * "name" se escribe a mano al crear el lote y puede quedar desactualizado
+ * si luego se corrige el área (geometría/fusión de lotes) sin editar
+ * también el nombre — ver incidente lote E02MZV001P, ago 2026, donde x_area
+ * ya estaba en 401.96 pero el name seguía diciendo "Area=100.18m2".
+ */
+export const syncAreaInLotName = (name: string, area: number): string => {
+    if (!name || !Number.isFinite(area)) return name;
+    if (!/Area=[\d.,]+\s*m2/i.test(name)) return name;
+    return name.replace(/Area=[\d.,]+\s*m2/i, `Area=${area.toFixed(2)}m2`);
+};
+
 export const parseVal = (v: unknown, fallback: number): number => {
     if (v === undefined || v === null || v === false || v === '') return fallback;
     if (typeof v === 'number') return v;
@@ -114,13 +129,14 @@ export function mergeLotsData(
             integratedIds.add(odooMatch.id.toString());
 
             const mappedStatus = mapOdooStatus(odooMatch.x_statu);
+            const resolvedArea = parseVal(odooMatch.x_area, lot.x_area);
             return {
                 ...lot,
                 id: odooMatch.id.toString(),
-                name: odooMatch.name || lot.name,
+                name: syncAreaInLotName(odooMatch.name || lot.name, resolvedArea),
                 x_statu: mappedStatus || lot.x_statu,
                 list_price: parseVal(odooMatch.list_price, lot.list_price),
-                x_area: parseVal(odooMatch.x_area, lot.x_area),
+                x_area: resolvedArea,
                 x_mz: getOdooVal(odooMatch.x_mz, lot.x_mz),
                 x_etapa: getOdooVal(odooMatch.x_etapa, lot.x_etapa),
                 x_lote: getOdooVal(odooMatch.x_lote, lot.x_lote),
@@ -154,12 +170,13 @@ export function mergeLotsData(
             if (geometry) {
                 integratedCodes.add(code);
                 integratedIds.add(odooId);
+                const resolvedArea = parseVal(odooMatch.x_area, 0);
                 dynamicLots.push({
                     id: odooId,
-                    name: odooMatch.name || `Lote ${code}`,
+                    name: syncAreaInLotName(odooMatch.name || `Lote ${code}`, resolvedArea),
                     x_statu: mapOdooStatus(odooMatch.x_statu) || 'libre',
                     list_price: parseVal(odooMatch.list_price, 0),
-                    x_area: parseVal(odooMatch.x_area, 0),
+                    x_area: resolvedArea,
                     x_mz: getOdooVal(odooMatch.x_mz, ''),
                     x_etapa: getOdooVal(odooMatch.x_etapa, ''),
                     x_cliente: getOdooVal(odooMatch.x_cliente, ''),
