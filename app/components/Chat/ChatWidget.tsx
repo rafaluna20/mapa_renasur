@@ -11,7 +11,7 @@ const WHATSAPP_SALES_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_SALES_NUMBER;
 
 function buildWhatsAppLink(lote: LoteChatResultado): string | null {
     if (!WHATSAPP_SALES_NUMBER) return null;
-    const mensaje = `Hola, quiero información sobre el lote ${lote.codigo} (Mz ${lote.manzana}, ${lote.areaM2}m²)`;
+    const mensaje = `Hola, quiero información sobre el lote ${lote.codigo} (Mz ${lote.manzana}, ${lote.areaM2.toFixed(2)}m²)`;
     return `https://wa.me/${WHATSAPP_SALES_NUMBER}?text=${encodeURIComponent(mensaje)}`;
 }
 
@@ -170,7 +170,7 @@ export default function ChatWidget({ onSelectLot }: ChatWidgetProps) {
                                                         </span>
                                                     </div>
                                                     <div className="flex items-center justify-between mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                                                        <span>{lote.areaM2}m² · Mz {lote.manzana}</span>
+                                                        <span>{lote.areaM2.toFixed(2)}m² · Mz {lote.manzana}</span>
                                                         {lote.precio != null ? (
                                                             <span className="font-bold text-emerald-600 dark:text-emerald-400">
                                                                 {currency(lote.precio)}

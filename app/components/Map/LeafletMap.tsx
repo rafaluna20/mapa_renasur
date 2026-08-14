@@ -586,7 +586,7 @@ export default function LeafletMap({ lots, elementosUrbanos = [], selectedLotId,
                                     </span>
                                     <div className="h-[0.5px] w-full bg-slate-100 my-0.5"></div>
                                     <span className="text-blue-600 text-[8px] font-bold tracking-wide">
-                                        {Number(lot.x_area).toFixed(1)} m²
+                                        {Number(lot.x_area).toFixed(2)} m²
                                     </span>
                                 </div>
                             </Tooltip>
