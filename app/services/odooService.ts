@@ -135,6 +135,7 @@ interface OdooElementoUrbanoCapa {
     mostrar_etiqueta: boolean;
     es_area: boolean;
     sin_relleno: boolean;
+    sin_borde: boolean;
 }
 
 /**
@@ -183,7 +184,7 @@ export async function fetchElementosUrbanos(): Promise<ElementoUrbano[]> {
             'elemento.urbano.capa',
             'search_read',
             [[['id', 'in', capaIds]]],
-            { fields: ['id', 'codigo', 'color', 'mostrar_etiqueta', 'es_area', 'sin_relleno'] }
+            { fields: ['id', 'codigo', 'color', 'mostrar_etiqueta', 'es_area', 'sin_relleno', 'sin_borde'] }
         );
         const capaPorId = new Map(capas.map((c) => [c.id, c]));
 
@@ -199,6 +200,7 @@ export async function fetchElementosUrbanos(): Promise<ElementoUrbano[]> {
                     mostrarEtiqueta: capa.mostrar_etiqueta,
                     esArea: capa.es_area,
                     sinRelleno: !!capa.sin_relleno,
+                    sinBorde: !!capa.sin_borde,
                     points: (r.x_geometry_utm || []) as [number, number][],
                     ...(r.x_geometry_arcos ? { arcos: r.x_geometry_arcos } : {}),
                     ...(r.x_geometry_circulo ? { circulo: r.x_geometry_circulo } : {}),

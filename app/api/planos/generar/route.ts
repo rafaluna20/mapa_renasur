@@ -210,6 +210,7 @@ export async function POST(request: NextRequest) {
       mostrarEtiqueta: e.mostrarEtiqueta,
       esArea: e.esArea,
       sinRelleno: e.sinRelleno,
+      sinBorde: e.sinBorde,
       codigo: e.codigo,
       texto: e.nombre,
       estado: '',
