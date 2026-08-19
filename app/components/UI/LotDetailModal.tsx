@@ -1,8 +1,9 @@
 import { Lot } from '@/app/data/lotsData';
-import { X, User, FileText, Users, Receipt, Calendar, RotateCcw, AlertTriangle, CheckCircle, TrendingUp, DollarSign, Map, Download, Loader2 } from 'lucide-react';
+import { X, User, FileText, Users, Receipt, Calendar, RotateCcw, AlertTriangle, CheckCircle, TrendingUp, DollarSign, Map, Download, Loader2, BarChart3 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import ReservationModal from './ReservationModal';
 import RefundModal from './RefundModal';
+import DescargasStatsModal from './DescargasStatsModal';
 import { odooService, OdooUser } from '@/app/services/odooService';
 import { SHADOW_FLOATING, BORDER_FLOATING } from '@/app/lib/designTokens';
 
@@ -49,6 +50,13 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
         dxfUrl?: string;
         error?: string;
     }>({ status: 'idle' });
+
+    // Documento "resumen" (solo linderos + copia del plano) — disponible para
+    // cualquier staff, no solo administradores. A diferencia de planoState,
+    // no hay polling: plan_pro lo genera y responde en la misma request, así
+    // que solo hace falta saber si está en curso o si falló.
+    const [resumenState, setResumenState] = useState<{ status: 'idle' | 'generando' | 'error'; error?: string }>({ status: 'idle' });
+    const [showStatsModal, setShowStatsModal] = useState(false);
 
     // 🎯 ENTERPRISE SOLUTION: Use refs to track current lot and prevent stale updates
     const currentLotIdRef = useRef<string | null>(null);
@@ -235,6 +243,38 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
         return () => clearInterval(interval);
     }, [planoState.status, planoState.planoId]);
 
+    // Descarga directa del PDF "resumen": la ruta responde el binario en la
+    // misma request (sin Plano/jobId que consultar), así que solo hace falta
+    // convertirlo a blob y disparar la descarga en el navegador.
+    const handleDescargarResumen = async () => {
+        if (!lot?.default_code) return;
+        setResumenState({ status: 'generando' });
+        try {
+            const res = await fetch('/api/planos/generar-resumen', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ defaultCode: lot.default_code }),
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => null);
+                setResumenState({ status: 'error', error: data?.error?.message || 'No se pudo generar el resumen' });
+                return;
+            }
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `resumen_${lot.default_code}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            setResumenState({ status: 'idle' });
+        } catch (error) {
+            setResumenState({ status: 'error', error: error instanceof Error ? error.message : 'Error de red' });
+        }
+    };
+
     if (!lot) return null;
     const config = STATUS_CONFIG[lot.x_statu?.toLowerCase()] || STATUS_CONFIG.libre;
 
@@ -393,15 +433,30 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                             </div>
                         </div>
 
-                        {/* Plano y Memoria Descriptiva — temporalmente solo para administradores
-                            mientras se termina de afinar el generador */}
-                        {currentUser?.is_system && (
+                        {/* Plano y Memoria Descriptiva: el expediente completo sigue siendo
+                            solo para administradores mientras se termina de afinar el
+                            generador; el documento "resumen" (linderos + copia del plano)
+                            está disponible para cualquier staff con sesión. */}
+                        {currentUser && (
                         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
-                            <div className="bg-slate-50 dark:bg-slate-800/60 px-3 py-2 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2">
-                                <Map size={14} className="text-slate-500 dark:text-slate-400" />
-                                <span className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Plano y Memoria</span>
+                            <div className="bg-slate-50 dark:bg-slate-800/60 px-3 py-2 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                    <Map size={14} className="text-slate-500 dark:text-slate-400" />
+                                    <span className="text-xs font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Plano y Memoria</span>
+                                </div>
+                                {currentUser.is_system && (
+                                    <button
+                                        onClick={() => setShowStatsModal(true)}
+                                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                                        title="Ver estadísticas de descargas"
+                                    >
+                                        <BarChart3 size={14} />
+                                    </button>
+                                )}
                             </div>
-                            <div className="p-3">
+                            <div className="p-3 space-y-3">
+                                {currentUser.is_system && (
+                                <div>
                                 {planoState.status === 'idle' && (
                                     <button
                                         onClick={handleGenerarPlano}
@@ -466,8 +521,40 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                                         </button>
                                     </div>
                                 )}
+                                </div>
+                                )}
+
+                                {/* Resumen (linderos + copia del plano): visible para todo staff.
+                                    El admin también la ve, para poder probarla. */}
+                                <div className={currentUser.is_system ? 'pt-3 border-t border-slate-200 dark:border-slate-700' : ''}>
+                                    {currentUser.is_system && (
+                                        <p className="text-[10px] text-slate-400 uppercase font-bold mb-1.5">Resumen (linderos + copia)</p>
+                                    )}
+                                    <button
+                                        onClick={handleDescargarResumen}
+                                        disabled={resumenState.status === 'generando'}
+                                        className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-600/60 disabled:cursor-not-allowed text-white rounded-lg font-bold text-xs uppercase tracking-wide transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        {resumenState.status === 'generando' ? (
+                                            <Loader2 size={14} className="animate-spin" />
+                                        ) : (
+                                            <Download size={14} />
+                                        )}
+                                        {resumenState.status === 'generando' ? 'Generando resumen...' : 'Descargar Resumen (Linderos)'}
+                                    </button>
+                                    {resumenState.status === 'error' && (
+                                        <div className="flex items-start gap-2 text-red-600 dark:text-red-400 text-xs mt-2">
+                                            <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                                            <span>{resumenState.error}</span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
+                        )}
+
+                        {showStatsModal && (
+                            <DescargasStatsModal onClose={() => setShowStatsModal(false)} />
                         )}
 
                         {/* Reservation Owner Info */}
