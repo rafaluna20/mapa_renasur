@@ -109,6 +109,22 @@ function anguloEntreAristas(
 // medio natural entre paralelo (0°) y perpendicular (90°).
 const UMBRAL_PARALELO_GRADOS = 45;
 
+// Área con signo (fórmula del shoelace, sin dividir entre 2: el signo es lo
+// único que importa acá). Con Este=x creciendo al este y Norte=y creciendo
+// al norte (UTM estándar), un polígono digitalizado en sentido antihorario
+// da signo positivo — pero el sentido real de digitalización varía entre
+// lotes (depende de cómo se trazó cada uno en Odoo/el editor), así que NO
+// se puede asumir un sentido fijo: hay que calcularlo por lote.
+function areaConSigno(pts: [number, number][]): number {
+    let suma = 0;
+    for (let i = 0; i < pts.length; i++) {
+        const [x1, y1] = pts[i];
+        const [x2, y2] = pts[(i + 1) % pts.length];
+        suma += x1 * y2 - x2 * y1;
+    }
+    return suma;
+}
+
 /**
  * Deriva colindancias (qué hay en cada lado: otro lote, calle o área verde)
  * y las dimensiones con nomenclatura frente/fondo/derecha/izquierda a
@@ -148,6 +164,16 @@ const UMBRAL_PARALELO_GRADOS = 45;
  * Si NINGUNA arista cae dentro del umbral (polígono muy irregular), se usa
  * la de ángulo más chico como único fondo, para garantizar que "fondo"
  * nunca quede vacío (dimensiones.fondo es un número, no un arreglo).
+ *
+ * Excepción de frente partido en tramos: si la calle del frente es curva o
+ * poligonal, puede haber más de una arista contra ELLA MISMA — todas esas
+ * aristas se reportan como "frente" sin importar en qué tramo de la máquina
+ * de estados cayeron por ángulo (comparación por código del elemento
+ * urbano, no solo por tipo "calle"). Un lote de esquina real entre DOS
+ * calles distintas sigue teniendo un solo frente: el lado de la otra calle
+ * se clasifica como derecha/fondo/izquierda igual que un lote normal. Ver
+ * lote E02MZV001P: 4 tramos sobre "Calle 15" (curva) son frente, pero el
+ * tramo sobre "Calle 16" es un lado normal (izquierda).
  *
  * Para lotes de esquina o polígonos irregulares (más de 4 lados) puede
  * haber más de una colindancia por lado — es intencional, el schema de
@@ -224,6 +250,9 @@ export function derivarColindanciasYDimensiones(
     let ladoDerechoLongitud = 0;
     let ladoIzquierdoLongitud = 0;
     let fondoLongitud = 0;
+    // Tramos de frente adicionales al principal, en lotes de esquina con más
+    // de un lado dando a la vía pública (ver más abajo).
+    let frenteLongitudExtra = 0;
     const colindancias: ColindanciaDerivada[] = [];
 
     const agregarColindancia = (edge: Edge, lado: ColindanciaDerivada['lado']) => {
@@ -262,27 +291,59 @@ export function derivarColindanciasYDimensiones(
 
     agregarColindancia(frente, 'frente');
 
+    // "Derecha"/"izquierda" son relativos a alguien parado en el frente,
+    // mirando hacia adentro del lote — no al orden en que Odoo/el editor
+    // haya digitalizado los vértices, que varía de lote a lote. Con
+    // Este=x/Norte=y (UTM), recorrer un polígono antihorario en orden
+    // creciente de índice pasa primero por el lado derecho de esa persona;
+    // uno horario pasa primero por el izquierdo. Por eso el punto de
+    // partida de la máquina de estados se decide por el signo del área
+    // (antihorario = signo positivo), en vez de asumir siempre "derecha".
+    const esAntihorario = areaConSigno(pts) > 0;
+    const [primerLado, segundoLado]: [ColindanciaDerivada['lado'], ColindanciaDerivada['lado']] =
+        esAntihorario ? ['derecha', 'izquierda'] : ['izquierda', 'derecha'];
+
     // Máquina de estados recorriendo el polígono en orden desde el frente:
-    // empieza en "derecha", pasa a "fondo" en cuanto aparece la primera
-    // arista candidata (paralela), y a "izquierda" en cuanto esa racha
-    // termina. Así fondo/derecha/izquierda admiten cada uno varias aristas
-    // contiguas (varios vecinos), no solo una.
-    let estado: ColindanciaDerivada['lado'] = 'derecha';
+    // empieza en el primer lado (según el sentido de digitalización, ver
+    // arriba), pasa a "fondo" en cuanto aparece la primera arista candidata
+    // (paralela), y al segundo lado en cuanto esa racha termina. Así
+    // fondo/derecha/izquierda admiten cada uno varias aristas contiguas
+    // (varios vecinos), no solo una.
+    let estado: ColindanciaDerivada['lado'] = primerLado;
     ordenDesdeFrente.forEach((idx) => {
         const edge = edges[idx];
         const esFondoCandidata = indicesFondo.has(idx);
 
-        if (estado === 'derecha' && esFondoCandidata) {
+        if (estado === primerLado && esFondoCandidata) {
             estado = 'fondo';
         } else if (estado === 'fondo' && !esFondoCandidata) {
-            estado = 'izquierda';
+            estado = segundoLado;
         }
 
-        if (estado === 'derecha') ladoDerechoLongitud += edge.longitud;
-        else if (estado === 'fondo') fondoLongitud += edge.longitud;
+        // Lote con el frente sobre una calle curva/poligonal: si esta arista
+        // da a la MISMA calle que el frente principal (mismo elemento
+        // urbano, comparado por código), se reporta como frente también,
+        // sin importar su posición topológica — así se redacta una memoria
+        // descriptiva real cuando el frente está partido en varios tramos
+        // rectos que aproximan una curva. Ver lote E02MZV001P: los 4 tramos
+        // sobre "Calle 15" (curva) son todos frente.
+        //
+        // Importante: esto NO aplica si la arista da a una calle DISTINTA
+        // (lote de esquina real entre dos calles distintas, ej. "Calle 16"
+        // en el mismo lote) — ese lado sigue la clasificación normal de la
+        // máquina de estados (derecha/fondo/izquierda), porque un lote de
+        // esquina entre dos calles tiene un solo frente, no dos.
+        const mismaCalleQueFrente =
+            frente.vecinoUrbano?.tipo === 'calle' &&
+            edge.vecinoUrbano?.codigo === frente.vecinoUrbano.codigo;
+        const ladoFinal: ColindanciaDerivada['lado'] = mismaCalleQueFrente ? 'frente' : estado;
+
+        if (ladoFinal === 'frente') frenteLongitudExtra += edge.longitud;
+        else if (ladoFinal === 'derecha') ladoDerechoLongitud += edge.longitud;
+        else if (ladoFinal === 'fondo') fondoLongitud += edge.longitud;
         else ladoIzquierdoLongitud += edge.longitud;
 
-        agregarColindancia(edge, estado);
+        agregarColindancia(edge, ladoFinal);
     });
 
     const area = lote.measurements?.area ?? lote.x_area;
@@ -291,7 +352,7 @@ export function derivarColindanciasYDimensiones(
     return {
         colindancias,
         dimensiones: {
-            frente: parseFloat(frente.longitud.toFixed(2)),
+            frente: parseFloat((frente.longitud + frenteLongitudExtra).toFixed(2)),
             fondo: parseFloat(fondoLongitud.toFixed(2)),
             ladoDerecho: parseFloat(ladoDerechoLongitud.toFixed(2)),
             ladoIzquierdo: parseFloat(ladoIzquierdoLongitud.toFixed(2)),
