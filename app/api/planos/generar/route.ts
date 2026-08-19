@@ -209,6 +209,7 @@ export async function POST(request: NextRequest) {
       color: e.color,
       mostrarEtiqueta: e.mostrarEtiqueta,
       esArea: e.esArea,
+      sinRelleno: e.sinRelleno,
       codigo: e.codigo,
       texto: e.nombre,
       estado: '',

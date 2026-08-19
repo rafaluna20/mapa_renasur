@@ -488,7 +488,7 @@ export default function LeafletMap({ lots, elementosUrbanos = [], selectedLotId,
                             key={`urbano-${elemento.codigo}`}
                             center={item.center}
                             radius={item.radiusMeters}
-                            pathOptions={{ color, fillColor: color, fillOpacity: 0.5, weight: 1, interactive: false }}
+                            pathOptions={{ color, fillColor: color, fillOpacity: elemento.sinRelleno ? 0 : 0.5, weight: 1, interactive: false }}
                         />
                     );
                 }
@@ -512,7 +512,7 @@ export default function LeafletMap({ lots, elementosUrbanos = [], selectedLotId,
                         pathOptions={{
                             color,
                             fillColor: color,
-                            fillOpacity: 0.5,
+                            fillOpacity: elemento.sinRelleno ? 0 : 0.5,
                             weight: 1,
                             interactive: false,
                         }}

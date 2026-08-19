@@ -27,6 +27,8 @@ export interface ElementoUrbano {
     mostrarEtiqueta: boolean;
     /** Si la capa es un área (polígono relleno) o una línea (trazo abierto, sin relleno). */
     esArea: boolean;
+    /** Solo relevante si esArea=true: si el polígono se dibuja sin color de relleno (solo borde). */
+    sinRelleno: boolean;
     points: [number, number][];
     /** Lados curvos del polígono (points), si el elemento tiene alguno. */
     arcos?: ArcoMetadata[];
