@@ -1,11 +1,15 @@
-import { Search, Layers, Map as MapIcon, DollarSign, Maximize2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, Layers, Map as MapIcon, DollarSign, Maximize2, ChevronDown, ChevronUp, Building2 } from 'lucide-react';
 import { useState } from 'react';
+import { Proyecto } from '@/app/services/odooService';
 
 interface FilterBarProps {
     searchQuery: string;
     onSearchChange: (val: string) => void;
     statusFilter: string;
     onStatusChange: (val: string) => void;
+    proyectos: Proyecto[];
+    proyectoFilter: string;
+    onProyectoChange: (val: string) => void;
     manzanaFilter: string;
     onManzanaChange: (val: string) => void;
     etapaFilter: string;
@@ -27,6 +31,7 @@ interface FilterBarProps {
 export default function FilterBar({
     searchQuery, onSearchChange,
     statusFilter, onStatusChange,
+    proyectos, proyectoFilter, onProyectoChange,
     manzanaFilter, onManzanaChange,
     etapaFilter, onEtapaChange,
     filteredCount, searchMatchCount, onClearFilters,
@@ -80,6 +85,31 @@ export default function FilterBar({
             <p id="search-help" className="sr-only">
                 Busca lotes por nombre, código (ej: E01MZD100), manzana, cliente o número de lote
             </p>
+
+            {/* Proyecto Selector — lista dinámica desde Odoo (proyecto.inmobiliario),
+                no hardcodeada: un proyecto nuevo aparece acá solo con crearlo en Odoo. */}
+            {proyectos.length > 0 && (
+                <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-1 ml-1">
+                        <Building2 size={10} className="text-[#A145F5]" /> Proyecto
+                    </label>
+                    <div className="relative">
+                        <select
+                            value={proyectoFilter}
+                            onChange={(e) => onProyectoChange(e.target.value)}
+                            className="w-full pl-2.5 pr-6 py-1.5 bg-stone-50/50 dark:bg-slate-800 border border-stone-200 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-[#A145F5] focus:ring-2 focus:ring-[#A145F5]/10 appearance-none cursor-pointer transition-all hover:bg-white dark:hover:bg-slate-700 hover:border-[#A145F5]/50"
+                        >
+                            <option value="all">Todos los proyectos</option>
+                            {proyectos.map((p) => (
+                                <option key={p.id} value={p.codigo}>{p.nombre}</option>
+                            ))}
+                        </select>
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-[#A145F5]">
+                            <Building2 size={12} />
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Status Filter - Violet Chips */}
             <div className="space-y-1.5">

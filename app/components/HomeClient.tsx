@@ -4,6 +4,7 @@
 // Importaciones
 // ----------------------------------------------------------------------
 import { useState, useMemo, useEffect } from 'react';
+import proj4 from 'proj4';
 import { OdooProduct, Proyecto } from '@/app/services/odooService';
 import Header from '@/app/components/UI/Header';
 import LotCard from '@/app/components/UI/LotCard';
@@ -98,6 +99,9 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, e
     const [searchQuery, setSearchQuery] = useState<string>(savedFilters?.searchQuery || '');
     const [manzanaFilter, setManzanaFilter] = useState<string>(savedFilters?.manzanaFilter || 'all');
     const [etapaFilter, setEtapaFilter] = useState<string>(savedFilters?.etapaFilter || 'all');
+    // Código de proyecto.inmobiliario ('all' = todos los proyectos juntos,
+    // el comportamiento histórico de antes de que existiera este campo).
+    const [proyectoFilter, setProyectoFilter] = useState<string>(savedFilters?.proyectoFilter || 'all');
     
     // Nuevos filtros de rango
     const [priceMin, setPriceMin] = useState<number | null>(savedFilters?.priceMin || null);
@@ -148,13 +152,56 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, e
         return mergeLotsData(odooProducts, lotsData, geometriesJson);
     }, [odooProducts]);
 
-    // Estado que almacena la lista final de lotes a mostrar
-    const [lots, setLots] = useState<Lot[]>(mergedLots);
+    // id de proyecto.inmobiliario seleccionado (resuelto desde el código del
+    // filtro) — null cuando el filtro es 'all', o cuando el código elegido
+    // no matchea ningún proyecto real (no debería pasar, pero por las dudas
+    // no oculta todo silenciosamente).
+    const proyectoSeleccionadoId = useMemo(() => {
+        if (proyectoFilter === 'all') return null;
+        return proyectos.find((p) => p.codigo === proyectoFilter)?.id ?? null;
+    }, [proyectoFilter, proyectos]);
 
-    // Efecto: Sincronizar estado cuando mergedLots cambie (ej. al cargar)
+    // Lotes del proyecto elegido — se aplica ANTES de la búsqueda/filtros de
+    // manzana-etapa-estado, así que todo lo demás (stats, dashboard, mapa,
+    // lista) automáticamente respeta el proyecto seleccionado sin tener que
+    // tocar esa lógica.
+    const lotesDelProyecto = useMemo(() => {
+        if (!proyectoSeleccionadoId) return mergedLots;
+        return mergedLots.filter((l) => l.x_proyectoId === proyectoSeleccionadoId);
+    }, [mergedLots, proyectoSeleccionadoId]);
+
+    // Estado que almacena la lista final de lotes a mostrar
+    const [lots, setLots] = useState<Lot[]>(lotesDelProyecto);
+
+    // Efecto: Sincronizar estado cuando cambien los lotes fusionados o el proyecto elegido
     useEffect(() => {
-        setLots(mergedLots);
-    }, [mergedLots]);
+        setLots(lotesDelProyecto);
+    }, [lotesDelProyecto]);
+
+    // Elementos urbanos del proyecto elegido, mismo criterio que los lotes —
+    // sin esto, seleccionar un proyecto seguiría mostrando las calles/áreas
+    // verdes de TODOS los proyectos mezcladas en el mapa.
+    const elementosUrbanosDelProyecto = useMemo(() => {
+        if (!proyectoSeleccionadoId) return elementosUrbanos;
+        return elementosUrbanos.filter((e) => e.proyectoId === proyectoSeleccionadoId);
+    }, [elementosUrbanos, proyectoSeleccionadoId]);
+
+    // Al elegir un proyecto con centro UTM cargado (opcional en
+    // proyecto.inmobiliario), centra el mapa ahí — mismo evento que ya usa
+    // "Mi Ubicación" (ver MapArea.tsx). Sin centro cargado, no hace nada:
+    // el usuario sigue viendo lo que ya tenía, solo se aplica el filtro.
+    useEffect(() => {
+        if (!proyectoSeleccionadoId) return;
+        const proyecto = proyectos.find((p) => p.id === proyectoSeleccionadoId);
+        if (!proyecto?.centroEste || !proyecto?.centroNorte) return;
+        try {
+            const zona = Number(proyecto.zonaUTM) || 18;
+            const [lng, lat] = proj4(`+proj=utm +zone=${zona} +south +datum=WGS84 +units=m +no_defs`, 'EPSG:4326', [proyecto.centroEste, proyecto.centroNorte]);
+            window.dispatchEvent(new CustomEvent('centerMap', { detail: { lat, lng, zoom: 16 } }));
+        } catch (error) {
+            console.warn('No se pudo centrar el mapa en el proyecto seleccionado:', error);
+        }
+    }, [proyectoSeleccionadoId, proyectos]);
 
     // Efecto: Proteger ruta (Redirigir a login si no hay usuario)
     useEffect(() => {
@@ -179,18 +226,19 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, e
             statusFilter,
             manzanaFilter,
             etapaFilter,
+            proyectoFilter,
             priceMin,
             priceMax,
             areaMin,
             areaMax
         };
-        
+
         try {
             localStorage.setItem('lotFilters', JSON.stringify(filters));
         } catch (error) {
             console.warn('No se pudo guardar filtros en localStorage:', error);
         }
-    }, [searchQuery, statusFilter, manzanaFilter, etapaFilter, priceMin, priceMax, areaMin, areaMax]);
+    }, [searchQuery, statusFilter, manzanaFilter, etapaFilter, proyectoFilter, priceMin, priceMax, areaMin, areaMax]);
 
     // ------------------------------------------------------------------
     // Búsqueda Inteligente con Hook Personalizado
@@ -381,6 +429,9 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, e
                         onSearchChange={setSearchQuery}
                         statusFilter={statusFilter}
                         onStatusChange={setStatusFilter}
+                        proyectos={proyectos}
+                        proyectoFilter={proyectoFilter}
+                        onProyectoChange={setProyectoFilter}
                         manzanaFilter={manzanaFilter}
                         onManzanaChange={setManzanaFilter}
                         etapaFilter={etapaFilter}
@@ -482,7 +533,7 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, e
                 */}
                 <MapArea
                     lots={filteredLots}
-                    elementosUrbanos={elementosUrbanos}
+                    elementosUrbanos={elementosUrbanosDelProyecto}
                     proyectos={proyectos}
                     selectedLotId={selectedLotId}
                     onLotSelect={(l) => setSelectedLotId(l.id)}
