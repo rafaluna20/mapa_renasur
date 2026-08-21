@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { fetchOdoo, fetchElementosUrbanos, OdooProduct } from '@/app/services/odooService';
+import { fetchOdoo, fetchElementosUrbanos, fetchProyectos, OdooProduct, Proyecto } from '@/app/services/odooService';
 import { lotsData, Lot } from '@/app/data/lotsData';
 import { mergeLotsData, normalizeCode } from '@/app/utils/dataMerger';
 import { derivarColindanciasYDimensiones } from '@/app/utils/colindanciasUtils';
@@ -23,43 +23,66 @@ interface UbicacionProyecto {
   zonaUTM?: number; // Solo si el proyecto NO cae en zona 18S (default de plan_pro)
 }
 
-/**
- * Ubicación administrativa por proyecto. La clave debe coincidir EXACTO con
- * el valor del campo custom x_proyecto en Odoo (product.template) para cada
- * lote — ese campo hay que crearlo y poblarlo ahí, no es nativo de Odoo.
- *
- * Cuando arranque el proyecto nuevo: agrega su entrada acá con la clave que
- * uses en Odoo, y si NO cae en zona UTM 18S, especifica zonaUTM (17 o 19).
- */
-const UBICACION_POR_PROYECTO: Record<string, UbicacionProyecto> = {
-  'terra-lima': {
-    departamento: 'Lima',
-    provincia: 'Lima',
-    distrito: 'Pucusana',
-    urbanizacion: 'Terra Lima',
-  },
-  // 'proyecto-nuevo': { departamento: '...', provincia: '...', distrito: '...', urbanizacion: '...', zonaUTM: ... },
+// Único proyecto que existía antes de que proyecto.inmobiliario (Odoo)
+// existiera — fallback SOLO para lotes sin x_proyectoId NI x_proyecto
+// asignado (comportamiento histórico, el 100% de los lotes de antes de esta
+// migración). En cuanto el proyecto "terra-lima" se cargue en Odoo, este
+// fallback deja de usarse: resolverUbicacionProyecto siempre prioriza el
+// dato real de Odoo por sobre este valor fijo.
+const FALLBACK_TERRA_LIMA: UbicacionProyecto = {
+  departamento: 'Lima',
+  provincia: 'Lima',
+  distrito: 'Pucusana',
+  urbanizacion: 'Terra Lima',
 };
-
-// Proyecto asumido para lotes sin x_proyecto poblado todavía en Odoo — hoy
-// es el 100% de los lotes existentes, ya que este campo es nuevo.
-const PROYECTO_DEFAULT = 'terra-lima';
-
 /**
- * Resuelve la ubicación administrativa de un lote por su x_proyecto.
- * Si el proyecto no está en el mapa (ej. el proyecto nuevo ya tiene
- * x_proyecto poblado en Odoo pero todavía no le agregamos su entrada acá),
- * devuelve undefined en vez de adivinar — plan_pro marca el documento para
- * revisión manual cuando falta la ubicación, en vez de mostrar una ciudad
- * incorrecta.
+ * Resuelve la ubicación administrativa (y zona UTM) de un lote contra los
+ * proyectos reales de Odoo (proyecto.inmobiliario) — reemplaza al
+ * diccionario UBICACION_POR_PROYECTO que antes vivía hardcodeado acá:
+ * crear un proyecto nuevo ya no requiere tocar este archivo.
+ *
+ * Orden de resolución:
+ * 1. x_proyectoId (Many2one real) contra el id del proyecto — sin ambigüedad.
+ * 2. x_proyecto (texto libre, deprecado) contra el código del proyecto —
+ *    cubre lotes que todavía no pasaron por la migración de datos.
+ * 3. Si el lote no tiene NINGUNO de los dos asignado: Terra Lima por
+ *    defecto (mismo comportamiento histórico).
+ * 4. Si tiene alguno asignado pero no matchea contra ningún proyecto real
+ *    (código no registrado, o proyecto_inmobiliario recién desplegándose):
+ *    undefined — mejor sin ubicación que mostrar la de otro proyecto.
  */
-function resolverUbicacionProyecto(xProyecto: string | undefined): UbicacionProyecto | undefined {
-  const key = xProyecto?.trim() || PROYECTO_DEFAULT;
-  const ubicacion = UBICACION_POR_PROYECTO[key];
-  if (!ubicacion) {
-    console.warn(`[planoPayloadBuilder] Proyecto "${key}" no está registrado en UBICACION_POR_PROYECTO — el plano se generará sin ubicación administrativa.`);
+function resolverUbicacionProyecto(lote: Lot, proyectos: Proyecto[]): UbicacionProyecto | undefined {
+  let proyecto = lote.x_proyectoId
+    ? proyectos.find((p) => p.id === lote.x_proyectoId)
+    : undefined;
+
+  if (!proyecto) {
+    const codigo = lote.x_proyecto?.trim();
+    if (codigo) {
+      proyecto = proyectos.find((p) => p.codigo === codigo);
+    }
   }
-  return ubicacion;
+
+  if (proyecto) {
+    return {
+      departamento: proyecto.departamento,
+      provincia: proyecto.provincia,
+      distrito: proyecto.distrito,
+      urbanizacion: proyecto.urbanizacion,
+      zonaUTM: proyecto.zonaUTM ? Number(proyecto.zonaUTM) : undefined,
+    };
+  }
+
+  if (!lote.x_proyectoId && !lote.x_proyecto?.trim()) {
+    return FALLBACK_TERRA_LIMA;
+  }
+
+  console.warn(
+    `[planoPayloadBuilder] Proyecto del lote ${lote.default_code} ` +
+    `(x_proyectoId=${lote.x_proyectoId}, x_proyecto="${lote.x_proyecto}") ` +
+    `no resuelto contra proyecto.inmobiliario — el plano se generará sin ubicación administrativa.`
+  );
+  return undefined;
 }
 
 const geometriesJson = geometriesEnrichedRaw as unknown as Record<string, {
@@ -121,7 +144,7 @@ export async function construirPayloadPlano(defaultCode: string): Promise<PlanoP
     'search_read',
     [[['active', '=', true]]],
     {
-      fields: ['id', 'name', 'default_code', 'list_price', 'qty_available', 'x_statu', 'x_area', 'x_mz', 'x_etapa', 'x_lote', 'x_cliente', 'x_geometry_utm', 'x_proyecto', 'x_ubicacion', 'x_geometry_arcos'],
+      fields: ['id', 'name', 'default_code', 'list_price', 'qty_available', 'x_statu', 'x_area', 'x_mz', 'x_etapa', 'x_lote', 'x_cliente', 'x_geometry_utm', 'x_proyecto', 'x_proyecto_id', 'x_ubicacion', 'x_geometry_arcos'],
       limit: 1000,
       context: { lang: 'es_PE' },
     }
@@ -153,12 +176,16 @@ export async function construirPayloadPlano(defaultCode: string): Promise<PlanoP
   }
 
   // 2. Derivar colindancias y dimensiones por geometría (frente/fondo/derecha/izquierda)
-  const elementosUrbanos = mergeElementosUrbanos(await fetchElementosUrbanos());
+  const [elementosUrbanosOdoo, proyectos] = await Promise.all([
+    fetchElementosUrbanos(),
+    fetchProyectos(),
+  ]);
+  const elementosUrbanos = mergeElementosUrbanos(elementosUrbanosOdoo);
   // DIAGNOSTICO TEMPORAL: confirmar si el color ya llega mal desde Odoo o
   // se pierde despues, al armar el payload hacia plan_pro. Quitar una vez
   // resuelto el bug de "colores en escala de grises en el PDF".
   console.log('[planoPayloadBuilder][DIAG] elementosUrbanos desde Odoo:', JSON.stringify(
-    elementosUrbanos.map((e) => ({ codigo: e.codigo, tipo: e.tipo, color: e.color, mostrarEtiqueta: e.mostrarEtiqueta }))
+    elementosUrbanos.map((e) => ({ codigo: e.codigo, tipo: e.tipo, colorBorde: e.colorBorde, colorRelleno: e.colorRelleno, mostrarEtiqueta: e.mostrarEtiqueta }))
   ));
   const { colindancias, dimensiones } = derivarColindanciasYDimensiones(lote, allLots, elementosUrbanos);
 
@@ -193,7 +220,8 @@ export async function construirPayloadPlano(defaultCode: string): Promise<PlanoP
   // este archivo ni el adaptador de plan_pro.
   const elementosUrbanosContexto = elementosUrbanos.map((e) => ({
     tipo: e.tipo,
-    color: e.color,
+    colorBorde: e.colorBorde,
+    colorRelleno: e.colorRelleno,
     mostrarEtiqueta: e.mostrarEtiqueta,
     esArea: e.esArea,
     sinRelleno: e.sinRelleno,
@@ -208,11 +236,11 @@ export async function construirPayloadPlano(defaultCode: string): Promise<PlanoP
   // DIAGNOSTICO TEMPORAL: ver el mismo dato tal cual queda armado para el
   // payload final hacia plan_pro (justo antes del fetch en cada ruta llamante).
   console.log('[planoPayloadBuilder][DIAG] elementosUrbanosContexto (payload hacia plan_pro):', JSON.stringify(
-    elementosUrbanosContexto.map((e) => ({ codigo: e.codigo, tipo: e.tipo, color: e.color, mostrarEtiqueta: e.mostrarEtiqueta }))
+    elementosUrbanosContexto.map((e) => ({ codigo: e.codigo, tipo: e.tipo, colorBorde: e.colorBorde, colorRelleno: e.colorRelleno, mostrarEtiqueta: e.mostrarEtiqueta }))
   ));
 
   // 4. Armar el payload para plan_pro
-  const ubicacionProyecto = resolverUbicacionProyecto(lote.x_proyecto);
+  const ubicacionProyecto = resolverUbicacionProyecto(lote, proyectos);
   const direccion = construirDireccion(lote);
   // Combina la ubicación administrativa (por proyecto) con la dirección
   // real del lote (por x_ubicacion) si alguna de las dos existe. Si el

@@ -1,4 +1,4 @@
-import { fetchOdoo, fetchElementosUrbanos, OdooProduct } from '@/app/services/odooService';
+import { fetchOdoo, fetchElementosUrbanos, fetchProyectos, OdooProduct } from '@/app/services/odooService';
 import { mergeElementosUrbanos } from '@/app/data/elementosUrbanos';
 import HomeClient from '@/app/components/HomeClient';
 
@@ -38,7 +38,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ r
         "search_read",
         [[["active", "=", true]]],
         {
-          fields: ["id", "name", "default_code", "list_price", "qty_available", "x_statu", "x_area", "x_mz", "x_etapa", "x_lote", "x_cliente", "x_geometry_utm", "x_geometry_arcos"],
+          fields: ["id", "name", "default_code", "list_price", "qty_available", "x_statu", "x_area", "x_mz", "x_etapa", "x_lote", "x_cliente", "x_geometry_utm", "x_geometry_arcos", "x_proyecto_id"],
           limit: 1000,
           context: { lang: "es_PE" }
         }
@@ -70,12 +70,20 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ r
   const elementosUrbanosOdoo = await fetchElementosUrbanos();
   const elementosUrbanos = mergeElementosUrbanos(elementosUrbanosOdoo);
 
+  // Proyectos (ubicación + zona UTM real por proyecto): mapa_renasur ya no
+  // asume que todo cae en zona 18S — ver LeafletMap.tsx. Si el módulo
+  // proyecto_inmobiliario todavía no está desplegado, fetchProyectos
+  // devuelve [] y LeafletMap usa 18S por defecto (mismo comportamiento de
+  // antes de este cambio).
+  const proyectos = await fetchProyectos();
+
   return (
     <main>
       <HomeClient
         odooProducts={products}
         hasConnectionError={hasConnectionError}
         elementosUrbanos={elementosUrbanos}
+        proyectos={proyectos}
       />
     </main>
   );

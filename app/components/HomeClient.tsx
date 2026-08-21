@@ -4,7 +4,7 @@
 // Importaciones
 // ----------------------------------------------------------------------
 import { useState, useMemo, useEffect } from 'react';
-import { OdooProduct } from '@/app/services/odooService';
+import { OdooProduct, Proyecto } from '@/app/services/odooService';
 import Header from '@/app/components/UI/Header';
 import LotCard from '@/app/components/UI/LotCard';
 import { lotsData, Lot } from '@/app/data/lotsData';
@@ -48,6 +48,7 @@ interface HomeClientProps {
     odooProducts: OdooProduct[]; // Array de productos obtenidos de Odoo
     hasConnectionError?: boolean; // Flag if Odoo fetch failed
     elementosUrbanos?: ElementoUrbano[]; // Calles/áreas verdes (modelo Odoo separado, ver page.tsx)
+    proyectos?: Proyecto[]; // Proyectos inmobiliarios (ubicación + zona UTM), ver page.tsx
 }
 
 // ----------------------------------------------------------------------
@@ -58,7 +59,7 @@ interface HomeClientProps {
  * Recibe datos de Odoo, los fusiona con geometría local, y coordina
  * la comunicación entre el Mapa, la Barra Lateral y los Filtros.
  */
-export default function HomeClient({ odooProducts, hasConnectionError = false, elementosUrbanos = [] }: HomeClientProps) {
+export default function HomeClient({ odooProducts, hasConnectionError = false, elementosUrbanos = [], proyectos = [] }: HomeClientProps) {
 
     // Hooks de Contexto y Enrutamiento
     const { user, loading } = useAuth(); // Obtiene el usuario autenticado
@@ -482,6 +483,7 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, e
                 <MapArea
                     lots={filteredLots}
                     elementosUrbanos={elementosUrbanos}
+                    proyectos={proyectos}
                     selectedLotId={selectedLotId}
                     onLotSelect={(l) => setSelectedLotId(l.id)}
                     mapType={mapType}

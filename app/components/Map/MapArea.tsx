@@ -6,12 +6,13 @@ import LotDetailModal from '../UI/LotDetailModal';
 import PhotoPointModal from './PhotoPointModal';
 import { Lot } from '@/app/data/lotsData';
 import { ElementoUrbano } from '@/app/data/elementosUrbanos';
-import { odooService, OdooUser } from '@/app/services/odooService';
+import { odooService, OdooUser, Proyecto } from '@/app/services/odooService';
 import { SHADOW_FLOATING } from '@/app/lib/designTokens';
 
 interface MapAreaProps {
     lots: Lot[];
     elementosUrbanos?: ElementoUrbano[];
+    proyectos?: Proyecto[];
     selectedLotId: string | null;
     onLotSelect: (lot: Lot) => void;
     onCloseModal: () => void;
@@ -31,7 +32,7 @@ interface MapAreaProps {
 }
 
 export default function MapArea({
-    lots, elementosUrbanos = [], selectedLotId, onLotSelect, onCloseModal,
+    lots, elementosUrbanos = [], proyectos = [], selectedLotId, onLotSelect, onCloseModal,
     mapType, onMapTypeChange,
     userLocation, onUserLocationChange,
     selectedLot, onUpdateStatus,
@@ -212,6 +213,7 @@ export default function MapArea({
                 <MapContainerWrapper
                     lots={lots}
                     elementosUrbanos={elementosUrbanos}
+                    proyectos={proyectos}
                     selectedLotId={selectedLotId}
                     onLotSelect={onLotSelect}
                     mapType={mapType}

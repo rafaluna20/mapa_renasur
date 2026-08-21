@@ -21,10 +21,25 @@ export interface ElementoUrbano {
      * sin tocar código acá, siempre que también traiga su "color".
      */
     tipo: string;
-    /** Color hex de la capa (definido en Odoo, editable sin deploy). */
-    color: string;
+    /** Color hex del trazo/contorno de la capa (definido en Odoo, editable sin deploy). */
+    colorBorde: string;
+    /** Color hex del relleno de la capa — independiente de colorBorde (definido en Odoo). */
+    colorRelleno: string;
     /** Si el nombre del elemento se imprime como etiqueta en el plano. */
     mostrarEtiqueta: boolean;
+    /**
+     * Si esta capa se dibuja en el mapa interactivo (Leaflet). Solo un
+     * toggle de presentación — el elemento sigue existiendo y contando
+     * para colindancias aunque esté en false. El respaldo estático
+     * (elementos-urbanos.json) no trae este campo; queda `undefined` en
+     * runtime para esos elementos, y LeafletMap lo trata igual que
+     * `true` (solo oculta con `=== false`) — mismo criterio que el
+     * default=True del campo en Odoo.
+     */
+    mostrarEnMapa: boolean;
+    /** id de proyecto.inmobiliario — determina la zona UTM para transformar
+     * sus coordenadas a lat/lng. Ausente = zona 18S por defecto. */
+    proyectoId?: number;
     /** Si la capa es un área (polígono relleno) o una línea (trazo abierto, sin relleno). */
     esArea: boolean;
     /** Solo relevante si esArea=true: si el polígono se dibuja sin color de relleno (solo borde). */

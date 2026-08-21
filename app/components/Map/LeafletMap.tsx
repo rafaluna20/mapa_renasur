@@ -7,13 +7,33 @@ import 'leaflet-defaulticon-compatibility';
 import proj4 from 'proj4';
 import { Lot } from '@/app/data/lotsData';
 import { ElementoUrbano } from '@/app/data/elementosUrbanos';
+import { Proyecto } from '@/app/services/odooService';
 import { useEffect, useState, useMemo, useRef } from 'react';
 import L from 'leaflet';
 import { calculateMidpoint, calculateCentroid } from '@/app/utils/geometryUtils';
 import { expandirVerticesConArcos } from '@/app/utils/arcoUtils';
 
-// Define UTM zone 18L projection (WGS84)
+// Define UTM zone 18L projection (WGS84) — Perú abarca 17S/18S/19S; el resto
+// de zonas se arma al vuelo con getUtmProjString(), no hace falta
+// registrarlas de antemano (proj4() acepta un string de definición directo).
 proj4.defs("EPSG:32718", "+proj=utm +zone=18 +south +datum=WGS84 +units=m +no_defs");
+
+const ZONA_UTM_DEFAULT = 18;
+
+/** Proyección UTM-Sur para cualquier zona (17/18/19...), sin necesidad de
+ * pre-registrarla con proj4.defs — Perú abarca varias zonas y qué proyecto
+ * cae en cuál la decide proyecto.inmobiliario (Odoo), no el código. */
+function getUtmProjString(zona: number): string {
+    return `+proj=utm +zone=${zona} +south +datum=WGS84 +units=m +no_defs`;
+}
+
+/** Transforma un punto UTM a [lat, lon] usando la zona real del proyecto al
+ * que pertenece — antes esto asumía siempre zona 18S (Lima), lo que ubicaba
+ * mal en el mapa cualquier proyecto en zona 17S (ej. Tumbes) o 19S. */
+function utmAZonaLatLng(p: [number, number], zona: number = ZONA_UTM_DEFAULT): [number, number] {
+    const [lon, lat] = proj4(getUtmProjString(zona), "EPSG:4326", p);
+    return [lat, lon];
+}
 
 // Color de respaldo si un elemento urbano llegara sin color (no debería
 // pasar: capa_id es requerido en Odoo). El color real de cada elemento
@@ -21,9 +41,15 @@ proj4.defs("EPSG:32718", "+proj=utm +zone=18 +south +datum=WGS84 +units=m +no_de
 // es una tabla fija acá, así que un tipo/color nuevo no requiere deploy.
 const COLOR_ELEMENTO_URBANO_FALLBACK = '#AAAAAA';
 
+// Desactivado a pedido del usuario (2026-08-19), por el momento — el resto
+// de la lógica (imageBounds, la imagen en public/) queda intacta para
+// reactivarlo simplemente volviendo esto a true.
+const MOSTRAR_PLANO_GENERAL_OVERLAY = false;
+
 interface LeafletMapProps {
     lots: Lot[];
     elementosUrbanos?: ElementoUrbano[];
+    proyectos?: Proyecto[];
     selectedLotId: string | null;
     onLotSelect: (lot: Lot) => void;
     mapType: 'street' | 'satellite' | 'blank' | 'dark';
@@ -76,7 +102,7 @@ function MapController({ lots, selectedLotId, onZoomChange }: { lots: Lot[], sel
                 try {
                     const bounds = L.latLngBounds([]);
                     selectedLot.points.forEach(p => {
-                        const [lon, lat] = proj4("EPSG:32718", "EPSG:4326", [p[0], p[1]]);
+                        const [lat, lon] = utmAZonaLatLng([p[0], p[1]], selectedLot.zonaUtm);
                         bounds.extend([lat, lon]);
                     });
 
@@ -109,7 +135,7 @@ function MapController({ lots, selectedLotId, onZoomChange }: { lots: Lot[], sel
                 const bounds = L.latLngBounds([]);
                 lots.forEach(lot => {
                     lot.points.forEach(p => {
-                        const [lon, lat] = proj4("EPSG:32718", "EPSG:4326", [p[0], p[1]]);
+                        const [lat, lon] = utmAZonaLatLng([p[0], p[1]], lot.zonaUtm);
                         bounds.extend([lat, lon]);
                     });
                 });
@@ -189,7 +215,7 @@ function SideMeasurementTooltips({ lot, map }: { lot: Lot; map: L.Map }) {
         // falta recalcular en cada evento de zoom/pan.
         const zoomRef = map.getZoom();
         const utmToScreenPoint = (utmPoint: [number, number]): L.Point => {
-            const [lon, lat] = proj4("EPSG:32718", "EPSG:4326", utmPoint);
+            const [lat, lon] = utmAZonaLatLng(utmPoint, lot.zonaUtm);
             return map.project([lat, lon], zoomRef);
         };
 
@@ -212,7 +238,7 @@ function SideMeasurementTooltips({ lot, map }: { lot: Lot; map: L.Map }) {
 
             // Convert to lat/lng for display
             try {
-                const [lon, lat] = proj4("EPSG:32718", "EPSG:4326", [midpointUTM[0], midpointUTM[1]]);
+                const [lat, lon] = utmAZonaLatLng([midpointUTM[0], midpointUTM[1]], lot.zonaUtm);
                 const sideLength = lot.measurements!.sides[index];
 
                 // Ángulo del lado en píxeles de pantalla, normalizado a
@@ -282,8 +308,28 @@ function MeasurementController({ selectedLotId, lots }: { selectedLotId: string 
     return <SideMeasurementTooltips lot={selectedLot} map={map} />;
 }
 
-export default function LeafletMap({ lots, elementosUrbanos = [], selectedLotId, onLotSelect, mapType, userLocation, preferCanvas = true, showMeasurements = true, onPhotoPointClick }: LeafletMapProps) {
+export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proyectos = [], selectedLotId, onLotSelect, mapType, userLocation, preferCanvas = true, showMeasurements = true, onPhotoPointClick }: LeafletMapProps) {
     const center: [number, number] = [-12.0464, -77.0428];
+
+    // Zona UTM real por proyecto (17S/18S/19S) — id de proyecto.inmobiliario
+    // -> número de zona. Sin proyectos (módulo aún no desplegado) o lote sin
+    // proyecto asignado, cae en ZONA_UTM_DEFAULT (18, el histórico).
+    const zonaPorProyectoId = useMemo(() => {
+        const map = new Map<number, number>();
+        proyectos.forEach((p) => map.set(p.id, Number(p.zonaUTM)));
+        return map;
+    }, [proyectos]);
+
+    // Todos los usos internos de "lots" leen esta versión enriquecida con
+    // zonaUtm ya resuelto — un solo punto de cómputo en vez de repetir el
+    // lookup por proyecto en cada callback/subcomponente.
+    const lots = useMemo(
+        () => lotsProp.map((lot) => ({
+            ...lot,
+            zonaUtm: (lot.x_proyectoId !== undefined ? zonaPorProyectoId.get(lot.x_proyectoId) : undefined) ?? ZONA_UTM_DEFAULT,
+        })),
+        [lotsProp, zonaPorProyectoId]
+    );
     const [zoom, setZoom] = useState(17.5);
     const [isMobile, setIsMobile] = useState(false);
 
@@ -313,8 +359,7 @@ export default function LeafletMap({ lots, elementosUrbanos = [], selectedLotId,
             const puntosUtm = expandirVerticesConArcos(lot.points, lot.x_geometry_arcos);
             const positions: [number, number][] = puntosUtm.map(p => {
                 try {
-                    const [lon, lat] = proj4("EPSG:32718", "EPSG:4326", [p[0], p[1]]);
-                    return [lat, lon] as [number, number];
+                    return utmAZonaLatLng([p[0], p[1]], lot.zonaUtm);
                 } catch {
                     return [0, 0] as [number, number];
                 }
@@ -329,15 +374,15 @@ export default function LeafletMap({ lots, elementosUrbanos = [], selectedLotId,
     // centro+radio), o un polígono/línea (points, con lados curvos
     // expandidos vía expandirVerticesConArcos antes de proyectar).
     const elementosUrbanosPositions = useMemo(() => {
-        const utmToLatLng = (p: [number, number]): [number, number] => {
-            try {
-                const [lon, lat] = proj4("EPSG:32718", "EPSG:4326", [p[0], p[1]]);
-                return [lat, lon];
-            } catch {
-                return [0, 0];
-            }
-        };
         return elementosUrbanos.map(elemento => {
+            const zona = (elemento.proyectoId !== undefined ? zonaPorProyectoId.get(elemento.proyectoId) : undefined) ?? ZONA_UTM_DEFAULT;
+            const utmToLatLng = (p: [number, number]): [number, number] => {
+                try {
+                    return utmAZonaLatLng(p, zona);
+                } catch {
+                    return [0, 0];
+                }
+            };
             if (elemento.circulo) {
                 return {
                     elemento,
@@ -354,12 +399,15 @@ export default function LeafletMap({ lots, elementosUrbanos = [], selectedLotId,
                 positions: puntosUtm.map(utmToLatLng),
             };
         });
-    }, [elementosUrbanos]);
+    }, [elementosUrbanos, zonaPorProyectoId]);
 
     // COORDENADAS DEL PLANO GENERAL (MASTERPLAN)
     // Proporcionadas por el usuario (Actualizadas):
     // Top-Left (NO): X=308132.686, Y=8623379.426
     // Bottom-Right (SE): X=309193.741, Y=8622631.289
+    // Zona 18S hardcodeada a propósito acá (no zonaUtm dinámico): esta
+    // imagen (public/plano_general.webp) es un overlay fijo, específico de
+    // Terra Lima — no tiene sentido para ningún otro proyecto.
     const imageBounds = useMemo(() => {
         try {
             const tl = proj4("EPSG:32718", "EPSG:4326", [309192.39, 8622652.56]); // -1m Sur
@@ -434,7 +482,7 @@ export default function LeafletMap({ lots, elementosUrbanos = [], selectedLotId,
             )}
 
             {/* SUPERPOSICIÓN DEL PLANO MASTER (RENDER) */}
-            {imageBounds && (
+            {MOSTRAR_PLANO_GENERAL_OVERLAY && imageBounds && (
                 <ImageOverlay
                     url="/plano_general.webp"
                     bounds={imageBounds}
@@ -463,7 +511,20 @@ export default function LeafletMap({ lots, elementosUrbanos = [], selectedLotId,
                 se dibujan debajo de los lotes, sin tooltip ni interacción. */}
             {elementosUrbanosPositions.map((item) => {
                 const { elemento } = item;
-                const color = elemento.color || COLOR_ELEMENTO_URBANO_FALLBACK;
+                // mostrarEnMapa es un toggle de presentación editable desde
+                // Odoo (capa elemento.urbano.capa), independiente de
+                // "Active": el elemento sigue existiendo y contando para
+                // colindancias (Memoria Descriptiva) aunque esté oculto acá.
+                // "Calle" viene con mostrarEnMapa=false por defecto (decisión
+                // de producto histórica), pero cualquier capa se puede
+                // ocultar/mostrar así, sin tocar código. Ausente (respaldo
+                // estático sin este campo) = visible.
+                if (elemento.mostrarEnMapa === false) return null;
+                // Borde y relleno son colores independientes desde Odoo
+                // (estilo capas de AutoCAD: trazo y hatch de una capa pueden
+                // diferir) — antes compartían un único "color".
+                const colorBorde = elemento.colorBorde || COLOR_ELEMENTO_URBANO_FALLBACK;
+                const colorRelleno = elemento.colorRelleno || COLOR_ELEMENTO_URBANO_FALLBACK;
 
                 if (item.kind === 'circulo') {
                     // Punto de interés fotográfico: ícono de cámara clickeable
@@ -476,7 +537,7 @@ export default function LeafletMap({ lots, elementosUrbanos = [], selectedLotId,
                             <Marker
                                 key={`urbano-${elemento.codigo}`}
                                 position={item.center}
-                                icon={crearIconoFoto(color)}
+                                icon={crearIconoFoto(colorBorde)}
                                 eventHandlers={{
                                     click: () => onPhotoPointClick?.(elemento),
                                 }}
@@ -488,7 +549,14 @@ export default function LeafletMap({ lots, elementosUrbanos = [], selectedLotId,
                             key={`urbano-${elemento.codigo}`}
                             center={item.center}
                             radius={item.radiusMeters}
-                            pathOptions={{ color, fillColor: color, fillOpacity: elemento.sinRelleno ? 0 : 0.5, weight: 1, interactive: false }}
+                            pathOptions={{
+                                color: colorBorde,
+                                stroke: !elemento.sinBorde,
+                                fillColor: colorRelleno,
+                                fillOpacity: elemento.sinRelleno ? 0 : 0.5,
+                                weight: 1,
+                                interactive: false,
+                            }}
                         />
                     );
                 }
@@ -500,7 +568,7 @@ export default function LeafletMap({ lots, elementosUrbanos = [], selectedLotId,
                         <Polyline
                             key={`urbano-${elemento.codigo}`}
                             positions={item.positions}
-                            pathOptions={{ color, weight: 2, interactive: false }}
+                            pathOptions={{ color: colorBorde, weight: 2, interactive: false }}
                         />
                     );
                 }
@@ -510,8 +578,9 @@ export default function LeafletMap({ lots, elementosUrbanos = [], selectedLotId,
                         key={`urbano-${elemento.codigo}`}
                         positions={item.positions}
                         pathOptions={{
-                            color,
-                            fillColor: color,
+                            color: colorBorde,
+                            stroke: !elemento.sinBorde,
+                            fillColor: colorRelleno,
                             fillOpacity: elemento.sinRelleno ? 0 : 0.5,
                             weight: 1,
                             interactive: false,

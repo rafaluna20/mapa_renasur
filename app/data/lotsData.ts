@@ -23,7 +23,9 @@ export interface Lot {
     default_code: string; // Código de Odoo para matching (ej: E01MZX001)
     measurements?: LotMeasurements; // Pre-calculated geometry measurements
     x_cliente?: string; // Nombre del cliente asignado (Odoo x_cliente)
-    x_proyecto?: string; // Proyecto/urbanización al que pertenece (Odoo x_proyecto) — ver UBICACION_POR_PROYECTO en app/api/planos/generar/route.ts
+    x_proyecto?: string; // Proyecto/urbanización al que pertenece (Odoo x_proyecto, texto libre) — deprecado, ver x_proyectoId
+    x_proyectoId?: number; // id de proyecto.inmobiliario (Odoo x_proyecto_id) — reemplaza a x_proyecto
+    zonaUtm?: number; // Resuelto en el cliente (LeafletMap) a partir de x_proyectoId + la lista de proyectos, NO viene de Odoo directamente
     x_ubicacion?: string; // Calle/referencia del frente del lote (Odoo x_ubicacion), ej. "CALLE 13"
     x_geometry_arcos?: ArcoMetadata[]; // Metadata de lados curvos (Odoo x_geometry_arcos), ver product_lot_geometry
 }

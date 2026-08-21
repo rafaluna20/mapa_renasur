@@ -39,6 +39,11 @@ export interface OdooProduct {
     // radio, longitudArco, sentido }, ...]. false/[] si el lote no tiene
     // ningún lado curvo (la inmensa mayoría).
     x_geometry_arcos?: ArcoMetadata[] | false;
+    // Many2one real a proyecto.inmobiliario (módulo proyecto_inmobiliario).
+    // Reemplaza a x_proyecto (texto libre, arriba) — viaja como tupla
+    // [id, display_name] por JSON-RPC clásico. x_proyecto se mantiene sin
+    // tocar mientras dure la migración de datos.
+    x_proyecto_id?: [number, string] | false;
 }
 
 // --- Server-Side Fetch Utility ---
@@ -123,6 +128,9 @@ interface OdooElementoUrbano {
     // capa "foto". Se resuelven a URLs de /api/odoo/photo/[id] más abajo,
     // nunca se exponen los IDs crudos de Odoo al cliente.
     x_fotos: number[];
+    // Many2one a proyecto.inmobiliario — determina la zona UTM real del
+    // elemento (ver LeafletMap.tsx). Ausente en elementos aún sin migrar.
+    proyecto_id: [number, string] | false;
 }
 
 // Registro crudo del modelo Odoo 'elemento.urbano.capa' — capas estilo
@@ -131,8 +139,10 @@ interface OdooElementoUrbano {
 interface OdooElementoUrbanoCapa {
     id: number;
     codigo: string;
-    color: string;
+    color_borde: string;
+    color_relleno: string;
     mostrar_etiqueta: boolean;
+    mostrar_en_mapa: boolean;
     es_area: boolean;
     sin_relleno: boolean;
     sin_borde: boolean;
@@ -148,26 +158,39 @@ interface OdooElementoUrbanoCapa {
  */
 export async function fetchElementosUrbanos(): Promise<ElementoUrbano[]> {
     try {
-        const registros: OdooElementoUrbano[] = await fetchOdoo(
-            'elemento.urbano',
-            'search_read',
-            // Un elemento es válido con UN polígono (x_geometry_utm) O un
-            // círculo completo (x_geometry_circulo) — no hace falta el
-            // primero si tiene el segundo.
-            // IMPORTANTE: "args" acá debe ser [domain] (un solo elemento que
-            // ES la lista de condiciones) — el mismo patrón que la consulta
-            // de capas más abajo. Sin este nivel extra de arreglo, Odoo
-            // recibe el domain partido en args sueltos (fields/offset/limit
-            // con basura), lanza un error server-side, y esta función lo
-            // atrapa silenciosamente devolviendo [] — exactamente el bug
-            // que dejó de dibujar TODOS los elementos urbanos (no solo los
-            // círculos) desde que se agregó el operador '|' acá.
-            [[['active', '=', true], '|', ['x_geometry_utm', '!=', false], ['x_geometry_circulo', '!=', false]]],
-            {
-                fields: ['id', 'name', 'codigo', 'capa_id', 'x_geometry_utm', 'x_geometry_arcos', 'x_geometry_circulo', 'x_fotos'],
-                limit: 500,
-            }
-        );
+        // Un elemento es válido con UN polígono (x_geometry_utm) O un
+        // círculo completo (x_geometry_circulo) — no hace falta el
+        // primero si tiene el segundo.
+        // IMPORTANTE: "args" acá debe ser [domain] (un solo elemento que
+        // ES la lista de condiciones) — el mismo patrón que la consulta
+        // de capas más abajo. Sin este nivel extra de arreglo, Odoo
+        // recibe el domain partido en args sueltos (fields/offset/limit
+        // con basura), lanza un error server-side, y esta función lo
+        // atrapa silenciosamente devolviendo [] — exactamente el bug
+        // que dejó de dibujar TODOS los elementos urbanos (no solo los
+        // círculos) desde que se agregó el operador '|' acá.
+        const domain = [['active', '=', true], '|', ['x_geometry_utm', '!=', false], ['x_geometry_circulo', '!=', false]];
+        const PAGE_SIZE = 500;
+        const registros: OdooElementoUrbano[] = [];
+        // Paginado, no un límite fijo: con un solo import grande (ej. una
+        // capa con 1000+ elementos, como pasó al importar "Jardín") un
+        // límite fijo corta la consulta a mitad de camino y descarta capas
+        // enteras que quedaron después del corte (ej. "Veredas" desapareció
+        // del mapa así, sin que sus datos en Odoo tuvieran nada malo).
+        for (let offset = 0; ; offset += PAGE_SIZE) {
+            const pagina: OdooElementoUrbano[] = await fetchOdoo(
+                'elemento.urbano',
+                'search_read',
+                [domain],
+                {
+                    fields: ['id', 'name', 'codigo', 'capa_id', 'x_geometry_utm', 'x_geometry_arcos', 'x_geometry_circulo', 'x_fotos', 'proyecto_id'],
+                    limit: PAGE_SIZE,
+                    offset,
+                }
+            );
+            registros.push(...pagina);
+            if (pagina.length < PAGE_SIZE) break;
+        }
 
         const validos = registros.filter((r) => {
             const tieneCirculo = !!(r.x_geometry_circulo && r.x_geometry_circulo.radio);
@@ -184,7 +207,7 @@ export async function fetchElementosUrbanos(): Promise<ElementoUrbano[]> {
             'elemento.urbano.capa',
             'search_read',
             [[['id', 'in', capaIds]]],
-            { fields: ['id', 'codigo', 'color', 'mostrar_etiqueta', 'es_area', 'sin_relleno', 'sin_borde'] }
+            { fields: ['id', 'codigo', 'color_borde', 'color_relleno', 'mostrar_etiqueta', 'mostrar_en_mapa', 'es_area', 'sin_relleno', 'sin_borde'] }
         );
         const capaPorId = new Map(capas.map((c) => [c.id, c]));
 
@@ -196,11 +219,14 @@ export async function fetchElementosUrbanos(): Promise<ElementoUrbano[]> {
                     codigo: r.codigo || `elemento-urbano-${r.id}`,
                     nombre: r.name,
                     tipo: capa.codigo,
-                    color: capa.color,
+                    colorBorde: capa.color_borde,
+                    colorRelleno: capa.color_relleno,
                     mostrarEtiqueta: capa.mostrar_etiqueta,
+                    mostrarEnMapa: capa.mostrar_en_mapa,
                     esArea: capa.es_area,
                     sinRelleno: !!capa.sin_relleno,
                     sinBorde: !!capa.sin_borde,
+                    ...(r.proyecto_id ? { proyectoId: r.proyecto_id[0] } : {}),
                     points: (r.x_geometry_utm || []) as [number, number][],
                     ...(r.x_geometry_arcos ? { arcos: r.x_geometry_arcos } : {}),
                     ...(r.x_geometry_circulo ? { circulo: r.x_geometry_circulo } : {}),
@@ -212,6 +238,73 @@ export async function fetchElementosUrbanos(): Promise<ElementoUrbano[]> {
             .filter((e): e is ElementoUrbano => e !== null);
     } catch (error) {
         console.warn('No se pudieron obtener elementos urbanos desde Odoo (¿módulo elemento_urbano_geometry instalado?):', error);
+        return [];
+    }
+}
+
+// Registro crudo del modelo Odoo 'proyecto.inmobiliario' (módulo
+// proyecto_inmobiliario) — fuente única de proyectos, reemplaza al
+// diccionario UBICACION_POR_PROYECTO que antes vivía hardcodeado en
+// mapa_renasur. Crear un proyecto nuevo es un registro en Odoo, no un
+// deploy de código.
+export interface Proyecto {
+    id: number;
+    codigo: string;
+    nombre: string;
+    departamento: string;
+    provincia: string;
+    distrito: string;
+    urbanizacion: string;
+    /** '17' | '18' | '19' — Selection en Odoo, viaja como string. */
+    zonaUTM: string;
+    centroEste?: number;
+    centroNorte?: number;
+}
+
+interface OdooProyectoInmobiliario {
+    id: number;
+    codigo: string;
+    name: string;
+    departamento: string;
+    provincia: string;
+    distrito: string;
+    urbanizacion: string;
+    zona_utm: string;
+    centro_este: number | false;
+    centro_norte: number | false;
+}
+
+/**
+ * Trae todos los proyectos inmobiliarios activos desde Odoo. Si el módulo
+ * proyecto_inmobiliario todavía no está instalado (o la consulta falla por
+ * cualquier motivo), devuelve [] silenciosamente — mismo criterio que
+ * fetchElementosUrbanos, para no tumbar el mapa ni la generación de planos
+ * mientras se completa el rollout de este módulo.
+ */
+export async function fetchProyectos(): Promise<Proyecto[]> {
+    try {
+        const registros: OdooProyectoInmobiliario[] = await fetchOdoo(
+            'proyecto.inmobiliario',
+            'search_read',
+            [[['active', '=', true]]],
+            {
+                fields: ['id', 'codigo', 'name', 'departamento', 'provincia', 'distrito', 'urbanizacion', 'zona_utm', 'centro_este', 'centro_norte'],
+            }
+        );
+        return registros.map((r) => ({
+            id: r.id,
+            codigo: r.codigo,
+            nombre: r.name,
+            departamento: r.departamento,
+            provincia: r.provincia,
+            distrito: r.distrito,
+            urbanizacion: r.urbanizacion,
+            zonaUTM: r.zona_utm,
+            ...(r.centro_este ? { centroEste: r.centro_este } : {}),
+            ...(r.centro_norte ? { centroNorte: r.centro_norte } : {}),
+        }));
+    } catch (error) {
+        console.warn('No se pudieron obtener proyectos desde Odoo (¿módulo proyecto_inmobiliario instalado?):', error);
         return [];
     }
 }
