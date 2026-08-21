@@ -28,6 +28,7 @@ interface MapContainerProps {
     preferCanvas?: boolean;
     showMeasurements?: boolean;
     onPhotoPointClick?: (elemento: ElementoUrbano) => void;
+    onMatrizClick?: (elemento: ElementoUrbano) => void;
 }
 
 export default function MapContainerWrapper(props: MapContainerProps) {

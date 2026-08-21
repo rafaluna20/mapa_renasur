@@ -57,6 +57,9 @@ interface LeafletMapProps {
     preferCanvas?: boolean;
     showMeasurements?: boolean;
     onPhotoPointClick?: (elemento: ElementoUrbano) => void;
+    /** Click en un elemento tipo "matriz" — el caller (MapArea) decide si
+     * pasar esto o no según si el usuario es admin. */
+    onMatrizClick?: (elemento: ElementoUrbano) => void;
 }
 
 // Ícono de cámara para los puntos de interés fotográfico (capa "foto") —
@@ -308,7 +311,7 @@ function MeasurementController({ selectedLotId, lots }: { selectedLotId: string 
     return <SideMeasurementTooltips lot={selectedLot} map={map} />;
 }
 
-export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proyectos = [], selectedLotId, onLotSelect, mapType, userLocation, preferCanvas = true, showMeasurements = true, onPhotoPointClick }: LeafletMapProps) {
+export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proyectos = [], selectedLotId, onLotSelect, mapType, userLocation, preferCanvas = true, showMeasurements = true, onPhotoPointClick, onMatrizClick }: LeafletMapProps) {
     const center: [number, number] = [-12.0464, -77.0428];
 
     // Zona UTM real por proyecto (17S/18S/19S) — id de proyecto.inmobiliario
@@ -573,6 +576,12 @@ export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proy
                     );
                 }
 
+                // La matriz es clickeable (para generar su plano perimétrico,
+                // ver MatrizPlanoModal) cuando el caller pasó onMatrizClick —
+                // MapArea solo lo pasa si el usuario es admin. El resto de
+                // capas queda interactive:false como siempre, para no
+                // interferir con el click en los lotes de abajo.
+                const esMatrizClickeable = elemento.tipo === 'matriz' && !!onMatrizClick;
                 return (
                     <Polygon
                         key={`urbano-${elemento.codigo}`}
@@ -583,8 +592,9 @@ export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proy
                             fillColor: colorRelleno,
                             fillOpacity: elemento.sinRelleno ? 0 : 0.5,
                             weight: 1,
-                            interactive: false,
+                            interactive: esMatrizClickeable,
                         }}
+                        eventHandlers={esMatrizClickeable ? { click: () => onMatrizClick!(elemento) } : undefined}
                     />
                 );
             })}

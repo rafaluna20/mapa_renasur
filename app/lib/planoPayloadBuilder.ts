@@ -283,3 +283,151 @@ export async function construirPayloadPlano(defaultCode: string): Promise<PlanoP
 
   return { ok: true, payload };
 }
+
+/**
+ * Arma el payload de plano perimétrico para una MATRIZ (el predio original
+ * completo antes de la subdivisión en lotes — elemento.urbano, capa
+ * "matriz") en vez de un lote-producto individual. Reusa exactamente el
+ * mismo pipeline de colindancias/contexto que construirPayloadPlano,
+ * tratando la matriz como si fuera "un lote" con manzana/etapa/numeroLote
+ * vacíos — plan_pro ya sabe mostrar esos campos en blanco de forma
+ * elegante cuando no aplican (ver PlanoPerimetricoGeneratorV2.ts).
+ */
+export async function construirPayloadPlanoMatriz(codigoElemento: string): Promise<PlanoPayloadResult> {
+  const [odooProducts, elementosUrbanosOdoo, proyectos] = await Promise.all([
+    fetchOdoo(
+      'product.template',
+      'search_read',
+      [[['active', '=', true]]],
+      {
+        fields: ['id', 'name', 'default_code', 'list_price', 'qty_available', 'x_statu', 'x_area', 'x_mz', 'x_etapa', 'x_lote', 'x_cliente', 'x_geometry_utm', 'x_proyecto', 'x_proyecto_id', 'x_ubicacion', 'x_geometry_arcos'],
+        limit: 1000,
+        context: { lang: 'es_PE' },
+      }
+    ) as Promise<OdooProduct[]>,
+    fetchElementosUrbanos(),
+    fetchProyectos(),
+  ]);
+
+  const allLots: Lot[] = mergeLotsData(odooProducts, lotsData, geometriesJson);
+  const elementosUrbanos = mergeElementosUrbanos(elementosUrbanosOdoo);
+
+  const normCode = normalizeCode(codigoElemento);
+  const matriz = elementosUrbanos.find(
+    (e) => e.tipo === 'matriz' && normalizeCode(e.codigo) === normCode
+  );
+
+  if (!matriz) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { success: false, error: { code: 'MATRIZ_NOT_FOUND', message: `Matriz ${codigoElemento} no encontrada` } },
+        { status: 404 }
+      ),
+    };
+  }
+
+  if (!matriz.points || matriz.points.length < 3) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { success: false, error: { code: 'NO_GEOMETRY', message: `La matriz ${codigoElemento} no tiene geometría cargada` } },
+        { status: 400 }
+      ),
+    };
+  }
+
+  // Objeto "lote" sintético: derivarColindanciasYDimensiones solo necesita
+  // points/x_geometry_arcos para el cálculo geométrico — el resto de campos
+  // de Lot no aplican a una matriz, quedan en blanco/neutros.
+  const loteFalso: Lot = {
+    id: `matriz-${matriz.codigo}`,
+    name: matriz.nombre,
+    x_statu: 'no vender',
+    list_price: 0,
+    x_area: 0,
+    points: matriz.points,
+    x_mz: '',
+    x_etapa: '',
+    x_lote: '',
+    default_code: matriz.codigo,
+    x_geometry_arcos: matriz.arcos,
+  };
+
+  // La matriz misma no debe aparecer como "vecina de sí misma" en la
+  // búsqueda de colindancias por coincidencia de arista.
+  const elementosUrbanosSinMatriz = elementosUrbanos.filter((e) => e.codigo !== matriz.codigo);
+
+  const { colindancias, dimensiones } = derivarColindanciasYDimensiones(loteFalso, allLots, elementosUrbanosSinMatriz);
+
+  const centroidMatriz = calculateCentroid(matriz.points);
+  const elementosContexto = allLots
+    .filter((l) => {
+      if (!l.points || l.points.length < 3) return false;
+      const centroidVecino = calculateCentroid(l.points);
+      return calculateDistance(centroidMatriz, centroidVecino) <= RADIO_CONTEXTO_METROS;
+    })
+    .map((l) => ({
+      tipo: 'LOTE',
+      codigo: l.default_code,
+      texto: l.x_lote || l.default_code,
+      estado: l.x_statu,
+      vertices: l.points,
+    }));
+
+  const elementosUrbanosContexto = elementosUrbanosSinMatriz.map((e) => ({
+    tipo: e.tipo,
+    colorBorde: e.colorBorde,
+    colorRelleno: e.colorRelleno,
+    mostrarEtiqueta: e.mostrarEtiqueta,
+    esArea: e.esArea,
+    sinRelleno: e.sinRelleno,
+    sinBorde: e.sinBorde,
+    codigo: e.codigo,
+    texto: e.nombre,
+    estado: '',
+    vertices: e.points,
+    arcos: e.arcos,
+    circulo: e.circulo,
+  }));
+
+  const proyecto = matriz.proyectoId ? proyectos.find((p) => p.id === matriz.proyectoId) : undefined;
+  const ubicacion = proyecto
+    ? {
+        departamento: proyecto.departamento,
+        provincia: proyecto.provincia,
+        distrito: proyecto.distrito,
+        urbanizacion: proyecto.urbanizacion,
+        zonaUTM: proyecto.zonaUTM ? Number(proyecto.zonaUTM) : undefined,
+      }
+    : undefined;
+
+  const payload = {
+    vertices: matriz.points,
+    arcos: matriz.arcos,
+    dimensiones,
+    lote: {
+      codigo: matriz.codigo,
+      nombre: matriz.nombre,
+      manzana: '',
+      etapa: '',
+      numeroLote: '',
+      estado: 'libre' as const,
+      ubicacion,
+    },
+    colindancias: colindancias.map((c) => ({
+      lado: c.lado,
+      tipo: c.tipo,
+      nombre: c.nombre,
+      longitud: c.longitud,
+      radio: c.radio,
+      longitudArco: c.longitudArco,
+      sentido: c.sentido,
+    })),
+    contexto: (elementosContexto.length > 0 || elementosUrbanosContexto.length > 0)
+      ? { elementos: [...elementosContexto, ...elementosUrbanosContexto] }
+      : undefined,
+  };
+
+  return { ok: true, payload };
+}

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import MapContainerWrapper from './MapContainer';
 import LotDetailModal from '../UI/LotDetailModal';
 import PhotoPointModal from './PhotoPointModal';
+import MatrizPlanoModal from './MatrizPlanoModal';
 import { Lot } from '@/app/data/lotsData';
 import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 import { odooService, OdooUser, Proyecto } from '@/app/services/odooService';
@@ -44,6 +45,10 @@ export default function MapArea({
 }: MapAreaProps) {
     const [activeQuotes, setActiveQuotes] = useState<{ count: number; quotes: { orderId: number; clientName: string; vendorName: string }[] } | null>(null);
     const [selectedPhotoPoint, setSelectedPhotoPoint] = useState<ElementoUrbano | null>(null);
+    // Generar el plano de la matriz es solo para administradores (a pedido
+    // del usuario) — por eso el click en el mapa se gatea acá, no dentro de
+    // LeafletMap: onMatrizClick solo se pasa hacia abajo si es admin.
+    const [selectedMatriz, setSelectedMatriz] = useState<ElementoUrbano | null>(null);
 
     // Fetch active quotes when a lot is selected
     useEffect(() => {
@@ -221,6 +226,7 @@ export default function MapArea({
                     preferCanvas={preferCanvas}
                     showMeasurements={showMeasurements}
                     onPhotoPointClick={setSelectedPhotoPoint}
+                    onMatrizClick={currentUser?.is_system ? setSelectedMatriz : undefined}
                 />
             </div>
 
@@ -239,6 +245,14 @@ export default function MapArea({
                 <PhotoPointModal
                     elemento={selectedPhotoPoint}
                     onClose={() => setSelectedPhotoPoint(null)}
+                />
+            )}
+
+            {/* Generar plano perimétrico de una matriz — solo administradores */}
+            {selectedMatriz && (
+                <MatrizPlanoModal
+                    elemento={selectedMatriz}
+                    onClose={() => setSelectedMatriz(null)}
                 />
             )}
 
