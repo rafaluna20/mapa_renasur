@@ -212,6 +212,48 @@ export function calcularPuntoYAnguloEnRuta(
 }
 
 /**
+ * Puntos (con ángulo) para poner varias copias de la etiqueta de nombre a
+ * lo largo de una calle larga — con una sola etiqueta en el punto medio,
+ * una calle que cruza buena parte del mapa puede quedar "sin nombre
+ * visible" en la mitad de la pantalla mientras se navega/hace zoom. Se
+ * reparten centradas en `maxEtiquetas` tramos iguales (por defecto hasta
+ * 3), pero la cantidad real se reduce en calles cortas para que las copias
+ * no se amontonen: aproximadamente una etiqueta cada `espaciadoMinimoM`
+ * metros de longitud real, nunca menos de 1.
+ */
+export function calcularPuntosEtiquetaEnRuta(
+    coordinates: [number, number][],
+    opciones: { maxEtiquetas?: number; espaciadoMinimoM?: number } = {}
+): { punto: [number, number]; anguloDeg: number }[] {
+    // 30m -> 1 etiqueta, 60m -> 2, 90m+ -> 3 (tope) — valores pedidos
+    // explícitamente por el usuario.
+    const { maxEtiquetas = 3, espaciadoMinimoM = 30 } = opciones;
+
+    if (coordinates.length === 0) {
+        return [];
+    }
+    if (coordinates.length === 1) {
+        return [{ punto: coordinates[0], anguloDeg: 0 }];
+    }
+
+    let total = 0;
+    for (let i = 0; i < coordinates.length - 1; i++) {
+        total += calculateDistance(coordinates[i], coordinates[i + 1]);
+    }
+    if (total === 0) {
+        return [{ punto: coordinates[0], anguloDeg: 0 }];
+    }
+
+    const cantidad = Math.min(maxEtiquetas, Math.max(1, Math.round(total / espaciadoMinimoM)));
+    const puntos: { punto: [number, number]; anguloDeg: number }[] = [];
+    for (let i = 0; i < cantidad; i++) {
+        const fraccion = (i + 0.5) / cantidad;
+        puntos.push(calcularPuntoYAnguloEnRuta(coordinates, fraccion));
+    }
+    return puntos;
+}
+
+/**
  * Format a measurement value for display
  * @param value - Measurement value in meters
  * @param decimals - Number of decimal places (default: 2)

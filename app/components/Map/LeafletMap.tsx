@@ -10,7 +10,7 @@ import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 import { Proyecto } from '@/app/services/odooService';
 import { useEffect, useState, useMemo, useRef, Fragment } from 'react';
 import L from 'leaflet';
-import { calculateMidpoint, calculateCentroid, calcularPuntoYAnguloEnRuta } from '@/app/utils/geometryUtils';
+import { calculateMidpoint, calculateCentroid, calcularPuntosEtiquetaEnRuta } from '@/app/utils/geometryUtils';
 import { expandirVerticesConArcos } from '@/app/utils/arcoUtils';
 
 // Define UTM zone 18L projection (WGS84) — Perú abarca 17S/18S/19S; el resto
@@ -391,11 +391,12 @@ export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proy
     const showLabels = zoom >= labelZoomThreshold;
 
     // Etiquetas de elementos urbanos (calles/áreas verdes/aportes/etc.):
-    // umbral mucho más bajo que el de lotes a propósito — el nombre de una
-    // calle sirve para orientarse navegando el mapa a un zoom normal, no
-    // solo pegado a un lote individual. El zoom inicial del mapa es 17.5,
-    // así que con 15 las etiquetas ya se ven apenas se carga.
-    const elementoLabelZoomThreshold = 15;
+    // umbral más bajo que el de lotes (21) a propósito, pero NO tan bajo
+    // como para aparecer con el mapa recién cargado/alejado — probado en
+    // vivo con 15 y quedaba muy temprano (aparecían "lejos"), subido a 18
+    // a pedido del usuario para que solo se vean acercándose a nivel de
+    // calle, no de ciudad.
+    const elementoLabelZoomThreshold = 18;
     const showElementoLabels = zoom >= elementoLabelZoomThreshold;
 
     // OPTIMIZACIÓN CRÍTICA: Memoizar todas las posiciones Lat/Lng
@@ -443,17 +444,23 @@ export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proy
             const puntosUtm = expandirVerticesConArcos(elemento.points, elemento.arcos);
             const kind: 'area' | 'linea' = elemento.esArea ? 'area' : 'linea';
             if (kind === 'linea') {
-                // Punto medio real (por longitud, no bbox) + ángulo del
-                // tramo ahí, calculados en UTM (plano, metros) — más
-                // preciso que hacerlo en lat/lng, donde un grado de
-                // longitud no mide lo mismo que uno de latitud.
-                const { punto, anguloDeg } = calcularPuntoYAnguloEnRuta(puntosUtm, 0.5);
+                // Hasta 3 copias de la etiqueta repartidas a lo largo del
+                // trazo (menos en calles cortas, ver
+                // calcularPuntosEtiquetaEnRuta) — con una sola en el punto
+                // medio, una calle larga queda "sin nombre visible" en
+                // buena parte de la pantalla al navegar/hacer zoom.
+                // Calculado en UTM (plano, metros): más preciso que en
+                // lat/lng, donde un grado de longitud no mide lo mismo que
+                // uno de latitud.
+                const etiquetas = calcularPuntosEtiquetaEnRuta(puntosUtm).map(({ punto, anguloDeg }) => ({
+                    pos: utmToLatLng(punto),
+                    anguloDeg,
+                }));
                 return {
                     elemento,
                     kind,
                     positions: puntosUtm.map(utmToLatLng),
-                    labelPos: utmToLatLng(punto),
-                    labelAngleDeg: anguloDeg,
+                    labelPoints: etiquetas,
                 };
             }
             return {
@@ -662,18 +669,22 @@ export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proy
                                 positions={item.positions}
                                 pathOptions={{ color: colorBorde, weight: mostrarGeometria ? 2 : 0, interactive: false }}
                             />
-                            {/* Etiqueta aparte (no anidada en el Polyline):
-                                un Marker con divIcon rotado, ubicado en el
-                                punto medio REAL del trazo — un Tooltip
-                                "center" normal ancla al centro del bounding
-                                box y no puede rotar, por eso no sirve acá. */}
-                            {mostrarEtiquetaFlag && showElementoLabels && elemento.nombre && (
-                                <Marker
-                                    position={item.labelPos}
-                                    icon={crearIconoEtiquetaLinea(elemento.nombre, item.labelAngleDeg)}
-                                    interactive={false}
-                                />
-                            )}
+                            {/* Etiquetas aparte (no anidadas en el
+                                Polyline): un Marker con divIcon rotado por
+                                cada punto de item.labelPoints (hasta 3,
+                                repartidos a lo largo del trazo real) — un
+                                Tooltip "center" normal ancla al centro del
+                                bounding box, no puede rotar y solo da UNA
+                                copia, por eso no sirve acá. */}
+                            {mostrarEtiquetaFlag && showElementoLabels && elemento.nombre &&
+                                item.labelPoints.map((lp, idx) => (
+                                    <Marker
+                                        key={`etiqueta-${elemento.codigo}-${idx}`}
+                                        position={lp.pos}
+                                        icon={crearIconoEtiquetaLinea(elemento.nombre!, lp.anguloDeg)}
+                                        interactive={false}
+                                    />
+                                ))}
                         </Fragment>
                     );
                 }
