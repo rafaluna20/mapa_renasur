@@ -150,6 +150,68 @@ export function calculateLotMeasurements(
 }
 
 /**
+ * Punto a una fracción de la longitud acumulada de una ruta (polilínea
+ * abierta), más el ángulo de pantalla del tramo local ahí — se usa para
+ * ubicar la etiqueta de nombre de una calle en su punto medio REAL (por
+ * longitud recorrida, no el centro del bounding box, que para una calle
+ * con recodos puede caer lejos del trazo) y orientarla en la dirección de
+ * la calle.
+ *
+ * anguloDeg ya viene listo para `transform: rotate(${anguloDeg}deg)` en
+ * CSS: el mapa siempre se dibuja norte-arriba (sin rotación), así que el
+ * eje Y de pantalla es el inverso del eje Y (norte) de UTM — de ahí el
+ * signo invertido en el atan2. Se normaliza a [-90°, 90°] para que el
+ * texto nunca quede "cabeza abajo".
+ *
+ * @param coordinates - Vértices de la ruta en UTM (metros), en orden
+ * @param fraccion - 0 a 1 (0.5 = punto medio, default)
+ */
+export function calcularPuntoYAnguloEnRuta(
+    coordinates: [number, number][],
+    fraccion: number = 0.5
+): { punto: [number, number]; anguloDeg: number } {
+    if (coordinates.length === 0) {
+        return { punto: [0, 0], anguloDeg: 0 };
+    }
+    if (coordinates.length === 1) {
+        return { punto: coordinates[0], anguloDeg: 0 };
+    }
+
+    const segLengths: number[] = [];
+    let total = 0;
+    for (let i = 0; i < coordinates.length - 1; i++) {
+        const d = calculateDistance(coordinates[i], coordinates[i + 1]);
+        segLengths.push(d);
+        total += d;
+    }
+
+    if (total === 0) {
+        return { punto: coordinates[0], anguloDeg: 0 };
+    }
+
+    const objetivo = total * Math.min(1, Math.max(0, fraccion));
+    let acumulado = 0;
+    for (let i = 0; i < segLengths.length; i++) {
+        const d = segLengths[i];
+        if (acumulado + d >= objetivo || i === segLengths.length - 1) {
+            const t = d === 0 ? 0 : (objetivo - acumulado) / d;
+            const [x1, y1] = coordinates[i];
+            const [x2, y2] = coordinates[i + 1];
+            const punto: [number, number] = [x1 + (x2 - x1) * t, y1 + (y2 - y1) * t];
+
+            let anguloDeg = Math.atan2(-(y2 - y1), x2 - x1) * (180 / Math.PI);
+            if (anguloDeg > 90) anguloDeg -= 180;
+            if (anguloDeg < -90) anguloDeg += 180;
+
+            return { punto, anguloDeg };
+        }
+        acumulado += d;
+    }
+
+    return { punto: coordinates[coordinates.length - 1], anguloDeg: 0 };
+}
+
+/**
  * Format a measurement value for display
  * @param value - Measurement value in meters
  * @param decimals - Number of decimal places (default: 2)

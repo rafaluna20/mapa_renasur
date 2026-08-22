@@ -8,9 +8,9 @@ import proj4 from 'proj4';
 import { Lot } from '@/app/data/lotsData';
 import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 import { Proyecto } from '@/app/services/odooService';
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef, Fragment } from 'react';
 import L from 'leaflet';
-import { calculateMidpoint, calculateCentroid } from '@/app/utils/geometryUtils';
+import { calculateMidpoint, calculateCentroid, calcularPuntoYAnguloEnRuta } from '@/app/utils/geometryUtils';
 import { expandirVerticesConArcos } from '@/app/utils/arcoUtils';
 
 // Define UTM zone 18L projection (WGS84) — Perú abarca 17S/18S/19S; el resto
@@ -82,6 +82,44 @@ function crearIconoFoto(color: string): L.DivIcon {
         </div>`,
         iconSize: [30, 30],
         iconAnchor: [15, 15],
+    });
+}
+
+function escapeHtml(texto: string): string {
+    return texto
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// Etiqueta de nombre para una LÍNEA (calle, eje de vía): a pedido del
+// usuario, va centrada en el punto medio REAL del trazo (por longitud
+// acumulada, ver calcularPuntoYAnguloEnRuta) y rotada para leerse en la
+// dirección de la calle — un <Tooltip direction="center"> normal no sirve
+// acá porque ancla al centro del bounding box (no al punto medio del
+// trazo) y no puede rotar. iconSize [0,0] + iconAnchor [0,0] porque el
+// ancho del texto es variable (nombre de calle); el centrado real lo hace
+// el translate(-50%,-50%) del div interno.
+function crearIconoEtiquetaLinea(nombre: string, anguloDeg: number): L.DivIcon {
+    return L.divIcon({
+        className: '',
+        html: `<div style="
+            transform: translate(-50%, -50%) rotate(${anguloDeg}deg);
+            white-space: nowrap;
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: -0.01em;
+            color: #1e293b;
+            background: rgba(255,255,255,0.85);
+            padding: 1px 4px;
+            border-radius: 3px;
+            pointer-events: none;
+        ">${escapeHtml(nombre)}</div>`,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
     });
 }
 
@@ -404,6 +442,20 @@ export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proy
             }
             const puntosUtm = expandirVerticesConArcos(elemento.points, elemento.arcos);
             const kind: 'area' | 'linea' = elemento.esArea ? 'area' : 'linea';
+            if (kind === 'linea') {
+                // Punto medio real (por longitud, no bbox) + ángulo del
+                // tramo ahí, calculados en UTM (plano, metros) — más
+                // preciso que hacerlo en lat/lng, donde un grado de
+                // longitud no mide lo mismo que uno de latitud.
+                const { punto, anguloDeg } = calcularPuntoYAnguloEnRuta(puntosUtm, 0.5);
+                return {
+                    elemento,
+                    kind,
+                    positions: puntosUtm.map(utmToLatLng),
+                    labelPos: utmToLatLng(punto),
+                    labelAngleDeg: anguloDeg,
+                };
+            }
             return {
                 elemento,
                 kind,
@@ -605,17 +657,24 @@ export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proy
 
                 if (item.kind === 'linea') {
                     return (
-                        <Polyline
-                            key={`urbano-${elemento.codigo}`}
-                            positions={item.positions}
-                            // weight 0 cuando solo se pide la etiqueta (sin
-                            // geometría visible) — el trazo sigue existiendo
-                            // en el DOM (invisible) para que el Tooltip
-                            // "center" tenga de qué layer colgar.
-                            pathOptions={{ color: colorBorde, weight: mostrarGeometria ? 2 : 0, interactive: false }}
-                        >
-                            {etiqueta}
-                        </Polyline>
+                        <Fragment key={`urbano-${elemento.codigo}`}>
+                            <Polyline
+                                positions={item.positions}
+                                pathOptions={{ color: colorBorde, weight: mostrarGeometria ? 2 : 0, interactive: false }}
+                            />
+                            {/* Etiqueta aparte (no anidada en el Polyline):
+                                un Marker con divIcon rotado, ubicado en el
+                                punto medio REAL del trazo — un Tooltip
+                                "center" normal ancla al centro del bounding
+                                box y no puede rotar, por eso no sirve acá. */}
+                            {mostrarEtiquetaFlag && showElementoLabels && elemento.nombre && (
+                                <Marker
+                                    position={item.labelPos}
+                                    icon={crearIconoEtiquetaLinea(elemento.nombre, item.labelAngleDeg)}
+                                    interactive={false}
+                                />
+                            )}
+                        </Fragment>
                     );
                 }
 
