@@ -10,7 +10,7 @@ import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 import { Proyecto } from '@/app/services/odooService';
 import { useEffect, useState, useMemo, useRef, Fragment } from 'react';
 import L from 'leaflet';
-import { calculateMidpoint, calculateCentroid, calcularPuntosEtiquetaEnRuta } from '@/app/utils/geometryUtils';
+import { calculateMidpoint, calculateCentroid, calcularPuntosEtiquetaEnRuta, derivarLineaCentralDeRutaCerrada } from '@/app/utils/geometryUtils';
 import { expandirVerticesConArcos } from '@/app/utils/arcoUtils';
 
 // Define UTM zone 18L projection (WGS84) — Perú abarca 17S/18S/19S; el resto
@@ -452,7 +452,15 @@ export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proy
                 // Calculado en UTM (plano, metros): más preciso que en
                 // lat/lng, donde un grado de longitud no mide lo mismo que
                 // uno de latitud.
-                const etiquetas = calcularPuntosEtiquetaEnRuta(puntosUtm).map(({ punto, anguloDeg }) => ({
+                //
+                // derivarLineaCentralDeRutaCerrada SOLO para el cálculo de
+                // etiquetas — algunas calles están digitalizadas como un
+                // anillo cerrado (borde de ida + borde de vuelta) en vez de
+                // un eje único; sin esto la etiqueta cae encima de uno de
+                // los dos bordes. La geometría DIBUJADA (`positions` abajo)
+                // sigue siendo el trazo completo tal cual viene de Odoo.
+                const lineaParaEtiqueta = derivarLineaCentralDeRutaCerrada(puntosUtm);
+                const etiquetas = calcularPuntosEtiquetaEnRuta(lineaParaEtiqueta).map(({ punto, anguloDeg }) => ({
                     pos: utmToLatLng(punto),
                     anguloDeg,
                 }));

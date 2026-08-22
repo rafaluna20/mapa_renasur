@@ -212,6 +212,52 @@ export function calcularPuntoYAnguloEnRuta(
 }
 
 /**
+ * Deriva una línea central aproximada a partir de una ruta que en realidad
+ * es un anillo CERRADO (primer y último vértice casi coincidentes) — caso
+ * real observado en calles digitalizadas trazando un borde de la vía "de
+ * ida" y volviendo por el otro "de vuelta", en vez de un solo eje central.
+ * Sin este paso, calcularPuntosEtiquetaEnRuta calcula el punto medio por
+ * longitud RECORRIDA del anillo completo, que cae exactamente sobre uno de
+ * los dos bordes (mitad del anillo = fin del borde de ida), no en el
+ * centro visual de la calle — el bug reportado ("la etiqueta se dibuja
+ * justo encima de la polilínea").
+ *
+ * Si la ruta NO es un anillo cerrado (caso normal: un eje/línea de
+ * referencia genuino, ej. capa "Líneas"), se devuelve tal cual — cero
+ * cambio de comportamiento para el caso que ya funcionaba bien.
+ *
+ * Técnica: recorrer el anillo desde el inicio ("ida", 0% a 50% de la
+ * longitud total) y desde el final hacia atrás ("vuelta", 100% a 50%) en
+ * paralelo, muestreando por longitud (no por índice de vértice — robusto
+ * aunque los dos bordes tengan densidades de puntos distintas) y promediar
+ * cada par de puntos opuestos. En los extremos (0%/100%, donde ambos
+ * bordes casi se tocan) y en la punta (50%, el punto de retorno del
+ * anillo) el promedio colapsa naturalmente al punto correcto.
+ */
+export function derivarLineaCentralDeRutaCerrada(
+    coordinates: [number, number][],
+    muestras: number = 15
+): [number, number][] {
+    if (coordinates.length < 4) {
+        return coordinates;
+    }
+
+    const esAnilloCerrado = calculateDistance(coordinates[0], coordinates[coordinates.length - 1]) < 0.5;
+    if (!esAnilloCerrado) {
+        return coordinates;
+    }
+
+    const central: [number, number][] = [];
+    for (let i = 0; i < muestras; i++) {
+        const t = i / (muestras - 1);
+        const ida = calcularPuntoYAnguloEnRuta(coordinates, t * 0.5).punto;
+        const vuelta = calcularPuntoYAnguloEnRuta(coordinates, 1 - t * 0.5).punto;
+        central.push([(ida[0] + vuelta[0]) / 2, (ida[1] + vuelta[1]) / 2]);
+    }
+    return central;
+}
+
+/**
  * Puntos (con ángulo) para poner varias copias de la etiqueta de nombre a
  * lo largo de una calle larga — con una sola etiqueta en el punto medio,
  * una calle que cruza buena parte del mapa puede quedar "sin nombre
