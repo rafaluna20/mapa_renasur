@@ -258,22 +258,37 @@ export function derivarLineaCentralDeRutaCerrada(
 }
 
 /**
+ * Cantidad de copias de etiqueta según el largo real de la calle — tabla
+ * pedida explícitamente por el usuario, sin tope: <30m -> 1, <60m -> 2,
+ * <100m -> 3, y de ahí en más una etiqueta adicional por cada 100m extra
+ * (piso, no redondeo: recién se suma la etiqueta al completar el tramo de
+ * 100m, no a mitad de camino). `limiteSeguridad` no es parte del pedido —
+ * es solo un resguardo defensivo por si algún día una línea llega con una
+ * longitud absurda por un error de datos (ej. unidades mal cargadas);
+ * ninguna calle real de este proyecto se acerca a ese número.
+ */
+function contarEtiquetasSegunLargo(totalM: number, limiteSeguridad: number): number {
+    let cantidad: number;
+    if (totalM < 30) cantidad = 1;
+    else if (totalM < 60) cantidad = 2;
+    else if (totalM < 100) cantidad = 3;
+    else cantidad = 3 + Math.floor((totalM - 100) / 100);
+    return Math.min(cantidad, limiteSeguridad);
+}
+
+/**
  * Puntos (con ángulo) para poner varias copias de la etiqueta de nombre a
  * lo largo de una calle larga — con una sola etiqueta en el punto medio,
  * una calle que cruza buena parte del mapa puede quedar "sin nombre
- * visible" en la mitad de la pantalla mientras se navega/hace zoom. Se
- * reparten centradas en `maxEtiquetas` tramos iguales (por defecto hasta
- * 3), pero la cantidad real se reduce en calles cortas para que las copias
- * no se amontonen: aproximadamente una etiqueta cada `espaciadoMinimoM`
- * metros de longitud real, nunca menos de 1.
+ * visible" en la mitad de la pantalla mientras se navega/hace zoom. La
+ * cantidad sale de contarEtiquetasSegunLargo; se reparten centradas en
+ * esa cantidad de tramos iguales a lo largo de la ruta.
  */
 export function calcularPuntosEtiquetaEnRuta(
     coordinates: [number, number][],
-    opciones: { maxEtiquetas?: number; espaciadoMinimoM?: number } = {}
+    opciones: { limiteSeguridad?: number } = {}
 ): { punto: [number, number]; anguloDeg: number }[] {
-    // 30m -> 1 etiqueta, 60m -> 2, 90m+ -> 3 (tope) — valores pedidos
-    // explícitamente por el usuario.
-    const { maxEtiquetas = 3, espaciadoMinimoM = 30 } = opciones;
+    const { limiteSeguridad = 60 } = opciones;
 
     if (coordinates.length === 0) {
         return [];
@@ -290,7 +305,7 @@ export function calcularPuntosEtiquetaEnRuta(
         return [{ punto: coordinates[0], anguloDeg: 0 }];
     }
 
-    const cantidad = Math.min(maxEtiquetas, Math.max(1, Math.round(total / espaciadoMinimoM)));
+    const cantidad = contarEtiquetasSegunLargo(total, limiteSeguridad);
     const puntos: { punto: [number, number]; anguloDeg: number }[] = [];
     for (let i = 0; i < cantidad; i++) {
         const fraccion = (i + 0.5) / cantidad;
