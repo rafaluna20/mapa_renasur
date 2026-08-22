@@ -352,6 +352,14 @@ export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proy
     const labelZoomThreshold = 21;
     const showLabels = zoom >= labelZoomThreshold;
 
+    // Etiquetas de elementos urbanos (calles/áreas verdes/aportes/etc.):
+    // umbral mucho más bajo que el de lotes a propósito — el nombre de una
+    // calle sirve para orientarse navegando el mapa a un zoom normal, no
+    // solo pegado a un lote individual. El zoom inicial del mapa es 17.5,
+    // así que con 15 las etiquetas ya se ven apenas se carga.
+    const elementoLabelZoomThreshold = 15;
+    const showElementoLabels = zoom >= elementoLabelZoomThreshold;
+
     // OPTIMIZACIÓN CRÍTICA: Memoizar todas las posiciones Lat/Lng
     const memoizedPositionsMap = useMemo(() => {
         const map = new Map<string, [number, number][]>();
@@ -511,23 +519,48 @@ export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proy
             )}
 
             {/* Calles/parques/círculos/líneas (contexto visual, no vendibles):
-                se dibujan debajo de los lotes, sin tooltip ni interacción. */}
+                se dibujan debajo de los lotes, sin tooltip ni interacción
+                salvo la etiqueta de nombre (ver mostrarEtiqueta abajo). */}
             {elementosUrbanosPositions.map((item) => {
                 const { elemento } = item;
-                // mostrarEnMapa es un toggle de presentación editable desde
-                // Odoo (capa elemento.urbano.capa), independiente de
-                // "Active": el elemento sigue existiendo y contando para
-                // colindancias (Memoria Descriptiva) aunque esté oculto acá.
-                // "Calle" viene con mostrarEnMapa=false por defecto (decisión
-                // de producto histórica), pero cualquier capa se puede
-                // ocultar/mostrar así, sin tocar código. Ausente (respaldo
-                // estático sin este campo) = visible.
-                if (elemento.mostrarEnMapa === false) return null;
+                // mostrarEnMapa (dibujar la geometría) y mostrarEtiqueta
+                // (mostrar el nombre) son toggles INDEPENDIENTES — a
+                // propósito: "Calle" hoy tiene mostrarEnMapa=false (decisión
+                // de producto histórica) pero igual se quiere ver su nombre
+                // en el mapa. Si no hay que mostrar NI la geometría NI la
+                // etiqueta, no se renderiza nada. "Active" es un campo
+                // aparte (en Odoo): un elemento sigue contando para
+                // colindancias aunque las dos banderas de acá estén en
+                // false.
+                const mostrarGeometria = elemento.mostrarEnMapa !== false;
+                const mostrarEtiquetaFlag = elemento.mostrarEtiqueta === true;
+                if (!mostrarGeometria && !mostrarEtiquetaFlag) return null;
+
                 // Borde y relleno son colores independientes desde Odoo
                 // (estilo capas de AutoCAD: trazo y hatch de una capa pueden
                 // diferir) — antes compartían un único "color".
                 const colorBorde = elemento.colorBorde || COLOR_ELEMENTO_URBANO_FALLBACK;
                 const colorRelleno = elemento.colorRelleno || COLOR_ELEMENTO_URBANO_FALLBACK;
+
+                // Etiqueta de nombre: generalizada a CUALQUIER capa con
+                // mostrarEtiqueta=true (editable en Odoo, no solo "calle") —
+                // mismo umbral de zoom bajo para todas, viewport culling
+                // simple (sin esto, con cientos de elementos tipo Jardín la
+                // lista de tooltips permanentes sería carísima).
+                const etiqueta = (mostrarEtiquetaFlag && showElementoLabels && elemento.nombre) ? (
+                    <Tooltip
+                        key={`etiqueta-${elemento.codigo}`}
+                        permanent={true}
+                        direction="center"
+                        interactive={false}
+                        className="!bg-transparent !border-0 !shadow-none p-0"
+                        opacity={1}
+                    >
+                        <span className="text-[9px] font-bold uppercase tracking-tight text-slate-800 bg-white/85 px-1 py-0.5 rounded whitespace-nowrap">
+                            {elemento.nombre}
+                        </span>
+                    </Tooltip>
+                ) : null;
 
                 if (item.kind === 'circulo') {
                     // Punto de interés fotográfico: ícono de cámara clickeable
@@ -544,7 +577,9 @@ export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proy
                                 eventHandlers={{
                                     click: () => onPhotoPointClick?.(elemento),
                                 }}
-                            />
+                            >
+                                {etiqueta}
+                            </Marker>
                         );
                     }
                     return (
@@ -554,13 +589,15 @@ export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proy
                             radius={item.radiusMeters}
                             pathOptions={{
                                 color: colorBorde,
-                                stroke: !elemento.sinBorde,
+                                stroke: mostrarGeometria && !elemento.sinBorde,
                                 fillColor: colorRelleno,
-                                fillOpacity: elemento.sinRelleno ? 0 : 0.5,
+                                fillOpacity: mostrarGeometria && !elemento.sinRelleno ? 0.5 : 0,
                                 weight: 1,
                                 interactive: false,
                             }}
-                        />
+                        >
+                            {etiqueta}
+                        </Circle>
                     );
                 }
 
@@ -571,8 +608,14 @@ export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proy
                         <Polyline
                             key={`urbano-${elemento.codigo}`}
                             positions={item.positions}
-                            pathOptions={{ color: colorBorde, weight: 2, interactive: false }}
-                        />
+                            // weight 0 cuando solo se pide la etiqueta (sin
+                            // geometría visible) — el trazo sigue existiendo
+                            // en el DOM (invisible) para que el Tooltip
+                            // "center" tenga de qué layer colgar.
+                            pathOptions={{ color: colorBorde, weight: mostrarGeometria ? 2 : 0, interactive: false }}
+                        >
+                            {etiqueta}
+                        </Polyline>
                     );
                 }
 
@@ -588,14 +631,16 @@ export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proy
                         positions={item.positions}
                         pathOptions={{
                             color: colorBorde,
-                            stroke: !elemento.sinBorde,
+                            stroke: mostrarGeometria && !elemento.sinBorde,
                             fillColor: colorRelleno,
-                            fillOpacity: elemento.sinRelleno ? 0 : 0.5,
+                            fillOpacity: mostrarGeometria && !elemento.sinRelleno ? 0.5 : 0,
                             weight: 1,
                             interactive: esMatrizClickeable,
                         }}
                         eventHandlers={esMatrizClickeable ? { click: () => onMatrizClick!(elemento) } : undefined}
-                    />
+                    >
+                        {etiqueta}
+                    </Polygon>
                 );
             })}
 
