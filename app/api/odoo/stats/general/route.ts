@@ -94,6 +94,21 @@ export async function GET(request: NextRequest) {
         let otherProductsCount = 0;
         let projectValue = 0;
 
+        // Resumen por los 5 estados reales del lote (para el reporte de
+        // administrador) — misma categorización que getColorEstado/getColor
+        // en LeafletMap.tsx, así el conteo nunca diverge del color que ve el
+        // admin en el mapa. Es una foto del inventario ACTUAL: no se filtra
+        // por rango de fechas (a diferencia de las ventas/comisiones de más
+        // abajo), porque el estado de un lote no es un hecho histórico.
+        // "otros" no se muestra como tile, solo evita perder en silencio
+        // algún x_statu no contemplado (dato sucio).
+        let estadoNoVender = 0;
+        let estadoDisponible = 0;
+        let estadoCotizacion = 0;
+        let estadoReservado = 0;
+        let estadoVendido = 0;
+        let estadoOtros = 0;
+
         const mzMap: Record<string, { total: number; sold: number; reserved: number; available: number }> = {};
 
         if (products && Array.isArray(products)) {
@@ -126,6 +141,25 @@ export async function GET(request: NextRequest) {
                         mzMap[mz].available++;
                     }
                     projectValue += (prod.list_price || 0);
+
+                    // Resumen de 5 estados (ver declaración arriba) — switch
+                    // idéntico al de getColorEstado, no reutiliza las
+                    // categorías de 3 baldes de arriba porque esas mezclan
+                    // "no vender"/"disponible"/"cotización" en un solo
+                    // "availableLots".
+                    if (status === 'no vender') {
+                        estadoNoVender++;
+                    } else if (status === 'libre' || status === 'disponible') {
+                        estadoDisponible++;
+                    } else if (status === 'cotizacion' || status === 'cotización') {
+                        estadoCotizacion++;
+                    } else if (status === 'reservado' || status === 'separado') {
+                        estadoReservado++;
+                    } else if (status === 'vendido') {
+                        estadoVendido++;
+                    } else {
+                        estadoOtros++;
+                    }
                 } else {
                     otherProductsCount++;
                 }
@@ -326,6 +360,100 @@ export async function GET(request: NextRequest) {
             };
         });
 
+        // 4. REPORTE DE OPERACIONES (Administrador) — lista completa, no solo
+        // las últimas 10 como recentActivity. Respeta el mismo rango de
+        // fechas que globalOrders (a diferencia del resumen de estados de
+        // arriba, que es una foto actual). Anuladas (state='cancel') quedan
+        // fuera a propósito, igual que recentActivity/globalOrders.
+        const allOperationsOrders = await fetchOdoo(
+            "sale.order",
+            "search_read",
+            [[
+                ["state", "in", ["draft", "sent", "sale", "done"]],
+                ["date_order", ">=", startDate],
+                ["date_order", "<=", endDate]
+            ]],
+            {
+                fields: ["id", "state", "user_id", "partner_id", "date_order", "order_line"],
+                order: "date_order desc"
+            }
+        ) as OdooOrder[];
+
+        const allOpLineIds = allOperationsOrders.flatMap((order: OdooOrder) => order.order_line || []);
+        // Mapa código→nombre (a diferencia de lineMap de arriba, que
+        // descarta el código entre corchetes y se queda con el nombre: acá
+        // es al revés, "PROPIEDAD" necesita el código de lote, no el
+        // nombre largo).
+        const codeMap: Record<number, string> = {};
+
+        if (allOpLineIds.length > 0) {
+            const opOrderLines = await fetchOdoo(
+                "sale.order.line",
+                "search_read",
+                [[["id", "in", allOpLineIds]]],
+                { fields: ["id", "product_id"] }
+            ) as OdooOrderLine[];
+
+            if (opOrderLines && Array.isArray(opOrderLines)) {
+                for (const line of opOrderLines) {
+                    if (line.product_id) {
+                        const displayName = line.product_id[1];
+                        // "[E01MZD148P] Lote 148 - Manzana D" → "E01MZD148P".
+                        // Si no viene entre corchetes (producto sin código),
+                        // se deja el nombre tal cual como respaldo.
+                        const match = displayName.match(/^\[(.+?)\]/);
+                        codeMap[line.id] = match ? match[1] : displayName;
+                    }
+                }
+            }
+        }
+
+        const operacionesCrudas = allOperationsOrders.flatMap((order: OdooOrder) => {
+            let tipo: 'Cotización' | 'Reserva' | 'Venta' = 'Cotización';
+            if (order.state === 'sale') tipo = 'Reserva';
+            if (order.state === 'done') tipo = 'Venta';
+
+            const asesor = order.user_id ? order.user_id[1] : 'Sin asesor';
+            const asignado = order.partner_id ? order.partner_id[1] : 'Sin cliente';
+            const fecha = order.date_order || '';
+
+            const lineIds = order.order_line || [];
+            if (lineIds.length === 0) {
+                // Orden sin líneas (raro, pero no debería desaparecer del
+                // reporte): una fila con propiedad vacía en vez de omitirla.
+                return [{ tipo, propiedad: '—', asesor, asignado, fecha }];
+            }
+            // Una fila por lote de la orden: una orden con 2+ lotes genera
+            // 2+ filas crudas, cada una con su propio código en "propiedad"
+            // pero mismo tipo/asesor/asignado/fecha (misma operación) —
+            // se deduplican por lote más abajo.
+            return lineIds.map((lineId) => ({
+                tipo,
+                propiedad: codeMap[lineId] || 'Lote',
+                asesor,
+                asignado,
+                fecha
+            }));
+        });
+
+        // Una fila POR LOTE (no por operación histórica): un lote puede
+        // haber pasado por cotización → reserva → venta con distintos
+        // asesores/clientes en el camino; acá se muestra solo la operación
+        // más reciente de cada lote — "para cada lote, qué cliente tiene
+        // asignado y qué asesor se lo vendió/cotizó", pedido explícito del
+        // usuario, no un historial completo. Comparación de fecha como
+        // string funciona porque Odoo la entrega en formato "YYYY-MM-DD
+        // HH:mm:ss" (orden lexicográfico = orden cronológico).
+        const masRecientePorLote = new Map<string, typeof operacionesCrudas[number]>();
+        for (const op of operacionesCrudas) {
+            const actual = masRecientePorLote.get(op.propiedad);
+            if (!actual || op.fecha > actual.fecha) {
+                masRecientePorLote.set(op.propiedad, op);
+            }
+        }
+        const operaciones = Array.from(masRecientePorLote.values())
+            .sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0));
+
         return NextResponse.json({
             success: true,
             stats: {
@@ -344,6 +472,15 @@ export async function GET(request: NextRequest) {
                 salesTrend,
                 advisorRanking,
                 recentActivity,
+                estadoSummary: {
+                    noVender: estadoNoVender,
+                    disponible: estadoDisponible,
+                    cotizacion: estadoCotizacion,
+                    reservado: estadoReservado,
+                    vendido: estadoVendido,
+                    otros: estadoOtros
+                },
+                operaciones,
                 comparison: {
                     totalSales: { value: totalSales, change: totalSalesChange, trend: trendOf(totalSalesChange) },
                     commission: { value: commission, change: commissionChange, trend: trendOf(commissionChange) },

@@ -122,7 +122,7 @@ interface KPICardProps {
     label: string;
     value: string | number;
     icon: React.ReactNode;
-    color: 'emerald' | 'amber' | 'indigo' | 'blue' | 'purple';
+    color: 'emerald' | 'amber' | 'indigo' | 'blue' | 'purple' | 'red' | 'slate';
     change?: number;
     trend?: 'up' | 'down' | 'stable';
     subtitle?: string;
@@ -165,6 +165,22 @@ const KPICard = ({ label, value, icon, color, change, trend, subtitle, sparkline
             border: 'border-purple-500/20',
             gradient: 'from-purple-500/5',
             hover: 'hover:border-purple-500/30 hover:shadow-[0_0_20px_rgba(168,85,247,0.05)]'
+        },
+        // Agregados para el resumen de estados del lote (Vendido/No Vender),
+        // mismos colores que getColorEstado en LeafletMap.tsx.
+        red: {
+            bg: 'bg-red-950/60',
+            text: 'text-red-400',
+            border: 'border-red-500/20',
+            gradient: 'from-red-500/5',
+            hover: 'hover:border-red-500/30 hover:shadow-[0_0_20px_rgba(248,113,113,0.05)]'
+        },
+        slate: {
+            bg: 'bg-slate-800/60',
+            text: 'text-slate-400',
+            border: 'border-slate-500/20',
+            gradient: 'from-slate-500/5',
+            hover: 'hover:border-slate-500/30 hover:shadow-[0_0_20px_rgba(148,163,184,0.05)]'
         }
     };
 
@@ -344,7 +360,18 @@ export default function DashboardClientImproved() {
     const [generatingReportCsv, setGeneratingReportCsv] = useState(false);
     const [generatingGeneralCsv, setGeneratingGeneralCsv] = useState(false);
     const [generatingInvoicesCsv, setGeneratingInvoicesCsv] = useState(false);
-    
+    const [generatingOperacionesCsv, setGeneratingOperacionesCsv] = useState(false);
+
+    // Reporte de operaciones (solo administrador) — estado propio, separado
+    // de `stats`: sale del endpoint /api/odoo/stats/general (estadoSummary +
+    // operaciones), distinto del /api/odoo/stats/detailed que alimenta el
+    // resto del dashboard.
+    const [operacionesData, setOperacionesData] = useState<{
+        estadoSummary: { noVender: number; disponible: number; cotizacion: number; reservado: number; vendido: number; otros: number };
+        operaciones: { tipo: string; propiedad: string; asesor: string; asignado: string; fecha: string }[];
+    } | null>(null);
+    const [loadingOperaciones, setLoadingOperaciones] = useState(false);
+
     // Filtro de fechas personalizadas
     const [customStartDate, setCustomStartDate] = useState<string>('');
     const [customEndDate, setCustomEndDate] = useState<string>('');
@@ -450,6 +477,78 @@ export default function DashboardClientImproved() {
 
         fetchDashboardData();
     }, [authUser, periodFilter, appliedCustomDates, salesCount]);
+
+    // Reporte de operaciones (solo administrador) — depende de activeDateRange,
+    // que recién queda seteado después del efecto de arriba, así que este
+    // efecto corre después (mismo patrón que ya usan los handlers de
+    // exportación CSV/PDF, que también leen activeDateRange).
+    useEffect(() => {
+        if (!authUser?.is_system) {
+            setOperacionesData(null);
+            return;
+        }
+
+        const fetchOperaciones = async () => {
+            setLoadingOperaciones(true);
+            try {
+                let url = '/api/odoo/stats/general';
+                if (activeDateRange.start || activeDateRange.end) {
+                    const params = new URLSearchParams();
+                    if (activeDateRange.start) params.append('startDate', activeDateRange.start);
+                    if (activeDateRange.end) params.append('endDate', activeDateRange.end);
+                    url += `?${params.toString()}`;
+                }
+                const response = await fetch(url);
+                const data = await response.json();
+                if (data.success && data.stats?.estadoSummary) {
+                    setOperacionesData({
+                        estadoSummary: data.stats.estadoSummary,
+                        operaciones: data.stats.operaciones || [],
+                    });
+                }
+            } catch (err) {
+                console.error('Error fetching operaciones report:', err);
+            } finally {
+                setLoadingOperaciones(false);
+            }
+        };
+
+        fetchOperaciones();
+    }, [authUser, activeDateRange]);
+
+    const handleExportOperacionesCsv = useCallback(async () => {
+        if (!authUser || !authUser.is_system || generatingOperacionesCsv) return;
+        setGeneratingOperacionesCsv(true);
+        try {
+            let url = '/api/odoo/stats/general';
+            if (activeDateRange.start || activeDateRange.end) {
+                const params = new URLSearchParams();
+                if (activeDateRange.start) params.append('startDate', activeDateRange.start);
+                if (activeDateRange.end) params.append('endDate', activeDateRange.end);
+                url += `?${params.toString()}`;
+            }
+
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.success && data.stats) {
+                if (activeDateRange.start || activeDateRange.end) {
+                    const startLabel = formatToDDMMYY(activeDateRange.start) || 'Inicio';
+                    const endLabel = formatToDDMMYY(activeDateRange.end) || 'Hoy';
+                    data.stats.dateRangeLabel = `${startLabel} al ${endLabel}`;
+                }
+                const { exportOperacionesReportToCsv } = await import('@/app/services/csvExportService');
+                exportOperacionesReportToCsv(data.stats);
+            } else {
+                throw new Error(data.error || 'Failed to fetch operaciones stats');
+            }
+        } catch (err) {
+            console.error('Error exporting operaciones CSV report:', err);
+            alert('Error al exportar el CSV de operaciones. Inténtelo de nuevo.');
+        } finally {
+            setGeneratingOperacionesCsv(false);
+        }
+    }, [authUser, generatingOperacionesCsv, activeDateRange]);
 
     // Manejadores de eventos
     const handleDownloadReport = useCallback(async () => {
@@ -886,6 +985,14 @@ export default function DashboardClientImproved() {
                                 >
                                     {generatingInvoicesCsv ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
                                 </button>
+                                <button
+                                    onClick={handleExportOperacionesCsv}
+                                    disabled={generatingOperacionesCsv}
+                                    title="Exportar reporte de operaciones a CSV (Excel)"
+                                    className="bg-slate-900 hover:bg-slate-800 border border-blue-500/30 text-blue-300 hover:text-blue-200 disabled:opacity-50 disabled:cursor-wait px-3 py-2.5 rounded-xl font-semibold transition-all flex items-center gap-2"
+                                >
+                                    {generatingOperacionesCsv ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
+                                </button>
                             </>
                         )}
                     </div>
@@ -1010,6 +1117,110 @@ export default function DashboardClientImproved() {
                         subtitle="Promedio último trimestre"
                     />
                 </div>
+
+                {/* Reporte de Operaciones (solo Administrador) — resumen de
+                    lotes por estado + una fila por lote con su cliente/
+                    asesor asignado (la operación más reciente de cada uno). */}
+                {authUser?.is_system && (
+                    <div className="bg-slate-900/30 border border-slate-900 rounded-2xl shadow-xl overflow-hidden">
+                        <div className="p-6 border-b border-slate-900 flex justify-between items-center flex-wrap gap-3">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 bg-blue-950/60 border border-blue-500/20 text-blue-400 rounded-xl">
+                                    <Users size={20} />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-slate-100">Reporte de Operaciones</h3>
+                                    <p className="text-xs text-slate-400">Estado de lotes y cliente/asesor asignado — solo administrador</p>
+                                </div>
+                            </div>
+                            {loadingOperaciones && (
+                                <span className="flex items-center gap-2 text-xs text-slate-400">
+                                    <Loader2 size={14} className="animate-spin" /> Cargando...
+                                </span>
+                            )}
+                        </div>
+
+                        {/* Resumen por estado */}
+                        <div className="p-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                            <KPICard label="No Vender" value={operacionesData?.estadoSummary.noVender ?? 0} icon={<Filter size={20} />} color="slate" />
+                            <KPICard label="Disponible" value={operacionesData?.estadoSummary.disponible ?? 0} icon={<MapPin size={20} />} color="emerald" />
+                            <KPICard label="Cotización" value={operacionesData?.estadoSummary.cotizacion ?? 0} icon={<Clock size={20} />} color="amber" />
+                            <KPICard label="Reservado" value={operacionesData?.estadoSummary.reservado ?? 0} icon={<Target size={20} />} color="purple" />
+                            <KPICard label="Vendido" value={operacionesData?.estadoSummary.vendido ?? 0} icon={<DollarSign size={20} />} color="red" />
+                        </div>
+
+                        {/* Lista por lote: Tipo, Propiedad, Asesor, Asignado, Fecha */}
+                        <div className="hidden sm:block overflow-x-auto overflow-y-auto max-h-[520px] border-t border-slate-900">
+                            <table className="w-full">
+                                <thead className="sticky top-0 z-10">
+                                    <tr className="bg-slate-950/90 text-slate-400 text-xs font-semibold uppercase tracking-wider border-b border-slate-900">
+                                        <th className="px-6 py-4 text-left">Tipo</th>
+                                        <th className="px-6 py-4 text-left">Propiedad</th>
+                                        <th className="px-6 py-4 text-left">Asesor</th>
+                                        <th className="px-6 py-4 text-left">Asignado</th>
+                                        <th className="px-6 py-4 text-left">Fecha</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-900">
+                                    {!operacionesData || operacionesData.operaciones.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={5} className="px-6 py-12 text-center text-slate-500 text-sm">
+                                                {loadingOperaciones ? 'Cargando operaciones...' : 'No hay operaciones registradas en este período.'}
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        operacionesData.operaciones.map((op, idx) => {
+                                            const tipoColor = op.tipo === 'Venta' ? 'text-red-300 bg-red-500/10 border-red-500/30'
+                                                : op.tipo === 'Reserva' ? 'text-purple-300 bg-purple-500/10 border-purple-500/30'
+                                                : 'text-amber-300 bg-amber-500/10 border-amber-500/30';
+                                            const fechaLegible = op.fecha
+                                                ? new Date(op.fecha.replace(' ', 'T')).toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                                                : '—';
+                                            return (
+                                                <tr key={`${op.propiedad}-${idx}`} className="hover:bg-blue-950/10 transition-colors">
+                                                    <td className="px-6 py-4">
+                                                        <span className={`px-3 py-1 rounded-full text-xs font-bold border ${tipoColor}`}>{op.tipo}</span>
+                                                    </td>
+                                                    <td className="px-6 py-4 font-bold text-slate-200 text-sm">{op.propiedad}</td>
+                                                    <td className="px-6 py-4 text-slate-300 text-sm">{op.asesor}</td>
+                                                    <td className="px-6 py-4 text-slate-300 text-sm">{op.asignado}</td>
+                                                    <td className="px-6 py-4 text-slate-400 text-xs">{fechaLegible}</td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Vista Mobile: tarjetas */}
+                        <div className="block sm:hidden divide-y divide-slate-900 overflow-y-auto max-h-[520px] border-t border-slate-900">
+                            {!operacionesData || operacionesData.operaciones.length === 0 ? (
+                                <p className="p-6 text-center text-slate-500 text-sm">
+                                    {loadingOperaciones ? 'Cargando operaciones...' : 'No hay operaciones registradas en este período.'}
+                                </p>
+                            ) : (
+                                operacionesData.operaciones.map((op, idx) => {
+                                    const fechaLegible = op.fecha
+                                        ? new Date(op.fecha.replace(' ', 'T')).toLocaleDateString('es-PE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+                                        : '—';
+                                    return (
+                                        <div key={`${op.propiedad}-${idx}`} className="p-4">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="font-bold text-slate-200 text-sm">{op.propiedad}</span>
+                                                <span className="text-[10px] text-slate-500">{fechaLegible}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between mt-1.5 text-xs text-slate-400">
+                                                <span>{op.tipo} · {op.asesor}</span>
+                                                <span>{op.asignado}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 {/* Panel de Insights Inteligentes */}
                 {insights.length > 0 && (

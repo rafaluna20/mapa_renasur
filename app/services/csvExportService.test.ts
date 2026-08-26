@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildCsvContent, buildInvoicesSections, buildGeneralSections, buildIndividualSections } from './csvExportService';
+import { buildCsvContent, buildInvoicesSections, buildGeneralSections, buildIndividualSections, buildOperacionesSections } from './csvExportService';
 
 describe('buildCsvContent', () => {
     it('escapa valores con comas, comillas y saltos de línea', () => {
@@ -75,6 +75,42 @@ describe('buildGeneralSections', () => {
 
         const rankingSection = sections.find(s => s.title === 'RANKING DE ASESORES')!;
         expect(rankingSection.rows[1]).toEqual(['#1', 'Ana Torres', 12, '200000.00', '12000.00']);
+    });
+});
+
+describe('buildOperacionesSections', () => {
+    it('incluye el resumen por estado y una fila por lote', () => {
+        const sections = buildOperacionesSections({
+            kpis: {
+                totalSales: 0, projectValue: 0, commission: 0,
+                occupationRate: 0, totalLots: 5, soldLots: 1, reservedLots: 1, availableLots: 3,
+            },
+            salesTrend: [],
+            advisorRanking: [],
+            recentActivity: [],
+            estadoSummary: { noVender: 1, disponible: 2, cotizacion: 0, reservado: 1, vendido: 1, otros: 0 },
+            operaciones: [
+                { tipo: 'Venta', propiedad: 'E01MZD148P', asesor: 'Ana Torres', asignado: 'Jorge Basadre', fecha: '2026-08-20 10:00:00' },
+            ],
+        });
+
+        const resumenSection = sections.find(s => s.title === 'RESUMEN POR ESTADO')!;
+        expect(resumenSection.rows).toContainEqual(['Vendido', 1]);
+
+        const opsSection = sections.find(s => s.title === 'OPERACIONES POR LOTE')!;
+        expect(opsSection.rows[1]).toEqual(['Venta', 'E01MZD148P', 'Ana Torres', 'Jorge Basadre', '2026-08-20 10:00:00']);
+    });
+
+    it('omite las secciones opcionales cuando no vienen datos', () => {
+        const sections = buildOperacionesSections({
+            kpis: { totalSales: 0, projectValue: 0, commission: 0, occupationRate: 0, totalLots: 0, soldLots: 0, reservedLots: 0, availableLots: 0 },
+            salesTrend: [],
+            advisorRanking: [],
+            recentActivity: [],
+        });
+
+        expect(sections.find(s => s.title === 'RESUMEN POR ESTADO')).toBeUndefined();
+        expect(sections.find(s => s.title === 'OPERACIONES POR LOTE')).toBeUndefined();
     });
 });
 

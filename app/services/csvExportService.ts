@@ -164,6 +164,50 @@ export function exportGeneralReportToCsv(data: GeneralReportData): void {
     downloadCsv(`TerraLima_ReporteGeneral_Datos_${now.getFullYear()}${now.getMonth() + 1}.csv`, buildGeneralSections(data));
 }
 
+// Reporte de operaciones (solo administrador, app/dashboard): resumen de
+// lotes por estado + una fila por lote con su cliente/asesor asignado (la
+// operación más reciente de cada uno, no un historial completo — ver
+// route.ts de /api/odoo/stats/general).
+export function buildOperacionesSections(data: GeneralReportData): CsvSection[] {
+    const sections: CsvSection[] = [
+        {
+            title: `REPORTE DE OPERACIONES${data.dateRangeLabel ? ` — ${data.dateRangeLabel}` : ''}`,
+            rows: [],
+        },
+    ];
+
+    if (data.estadoSummary) {
+        sections.push({
+            title: 'RESUMEN POR ESTADO',
+            rows: [
+                ['Estado', 'Cantidad'],
+                ['No Vender', data.estadoSummary.noVender],
+                ['Disponible', data.estadoSummary.disponible],
+                ['Cotización', data.estadoSummary.cotizacion],
+                ['Reservado', data.estadoSummary.reservado],
+                ['Vendido', data.estadoSummary.vendido],
+            ],
+        });
+    }
+
+    if (data.operaciones && data.operaciones.length > 0) {
+        sections.push({
+            title: 'OPERACIONES POR LOTE',
+            rows: [
+                ['Tipo', 'Propiedad', 'Asesor', 'Asignado', 'Fecha'],
+                ...data.operaciones.map(op => [op.tipo, op.propiedad, op.asesor, op.asignado, op.fecha]),
+            ],
+        });
+    }
+
+    return sections;
+}
+
+export function exportOperacionesReportToCsv(data: GeneralReportData): void {
+    const now = new Date();
+    downloadCsv(`TerraLima_ReporteOperaciones_${now.getFullYear()}${now.getMonth() + 1}.csv`, buildOperacionesSections(data));
+}
+
 export function buildIndividualSections(data: ReportData): CsvSection[] {
     const sections: CsvSection[] = [
         {

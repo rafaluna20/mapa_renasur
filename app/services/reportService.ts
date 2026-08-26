@@ -764,6 +764,20 @@ export interface GeneralReportData {
         commission: { value: number; change: number; trend: 'up' | 'down' | 'stable' };
         salesCount: { value: number; change: number; trend: 'up' | 'down' | 'stable' };
     };
+    // Reporte de operaciones (solo administrador, app/dashboard) — opcional
+    // porque el generador de PDF de este archivo no lo imprime (no pedido);
+    // solo lo consumen el CSV y la tabla nueva del dashboard.
+    estadoSummary?: {
+        noVender: number;
+        disponible: number;
+        cotizacion: number;
+        reservado: number;
+        vendido: number;
+        otros: number;
+    };
+    // Una fila POR LOTE (la operación más reciente de cada uno), no un
+    // historial completo — ver route.ts de /api/odoo/stats/general.
+    operaciones?: { tipo: string; propiedad: string; asesor: string; asignado: string; fecha: string }[];
 }
 
 // ─── Reporte General Consolidado (Administrador) ──────────────────────────────
