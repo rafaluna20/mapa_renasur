@@ -25,8 +25,14 @@ export const emailService = {
         codes.set(dni, { code, expiresAt });
 
         try {
-            // Send email with Resend
-            await resend.emails.send({
+            // Send email with Resend. El SDK de Resend NO lanza una excepción
+            // ante un error de la API (ej. dominio de EMAIL_FROM sin
+            // verificar) — devuelve { data: null, error: {...} }. Sin este
+            // chequeo, un envío fallido queda invisible: se loguea "enviado"
+            // y se responde éxito igual, aunque el email nunca haya salido
+            // (confirmado en vivo: pasó exactamente esto con terralima.es
+            // sin verificar en Resend).
+            const { error } = await resend.emails.send({
                 from: process.env.EMAIL_FROM || 'Terra Lima <onboarding@resend.dev>',
                 to: email,
                 subject: 'Tu código de verificación - Terra Lima',
@@ -71,6 +77,13 @@ export const emailService = {
                     </html>
                 `,
             });
+
+            if (error) {
+                // No hay excepción que capturar acá — hay que lanzarla a
+                // mano para que el catch de abajo (y el 500 de
+                // request-code/route.ts) se disparen de verdad.
+                throw new Error(error.message || 'Resend rechazó el envío del código');
+            }
 
             console.log(`[EMAIL] Verification code sent to ${email}`);
             return code;
