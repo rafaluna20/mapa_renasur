@@ -17,7 +17,7 @@ export default function BankDetailsCard({ paymentReference, amount }: BankDetail
                 </div>
                 <div>
                     <h4 className="font-bold text-blue-900">Datos para Transferencia</h4>
-                    <p className="text-xs text-blue-700">Terra Lima S.A.C.</p>
+                    <p className="text-xs text-blue-700">Renacimiento del Sur S.A.C.</p>
                 </div>
             </div>
 
@@ -39,9 +39,9 @@ export default function BankDetailsCard({ paymentReference, amount }: BankDetail
                     copyable 
                 />
                 
-                <DetailRow 
-                    label="👤 Titular" 
-                    value="TERRA LIMA S.A.C."
+                <DetailRow
+                    label="👤 Titular"
+                    value="RENACIMIENTO DEL SUR S.A.C."
                 />
                 
                 <div className="border-t border-blue-200 pt-3 mt-3">

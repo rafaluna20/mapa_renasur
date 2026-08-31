@@ -260,6 +260,12 @@ export async function POST(request: Request) {
                     project_id: parseInt(process.env.ODOO_COBRANZAS_PROJECT_ID),
                     partner_id: odooPartnerId,
                     user_ids: [[6, 0, [parseInt(process.env.ODOO_COBRANZAS_USER_ID || '2')]]],
+                    // Enlaza la tarea con el comprobante real (no solo el ID
+                    // suelto en el texto de la descripción) — la regla de
+                    // automatización en Odoo usa este campo para saber a qué
+                    // adjunto actualizarle x_voucher_status cuando alguien
+                    // mueve esta tarjeta a Validado/Rechazado en el Kanban.
+                    x_voucher_attachment_id: attachmentId,
                     description: `
 ## Validación de Comprobante Bancario
 
