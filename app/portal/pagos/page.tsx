@@ -10,8 +10,16 @@ import VoucherUploadModal from '@/app/components/Payments/VoucherUploadModal';
 import VoucherStatusBadge from '@/app/components/Payments/VoucherStatusBadge';
 import VoucherStatusAlert from '@/app/components/Payments/VoucherStatusAlert';
 import VoucherTimeline from '@/app/components/Payments/VoucherTimeline';
+import LotFinancialStatement, { type StatementInvoice } from '@/app/components/Payments/LotFinancialStatement';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
+
+interface StatementLot {
+    code: string;
+    label: string;
+    listPrice: number;
+    invoices: StatementInvoice[];
+}
 
 export default function PaymentsPortal() {
     const { data: session, status } = useSession();
@@ -21,6 +29,29 @@ export default function PaymentsPortal() {
     const [error, setError] = useState('');
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [retryCount, setRetryCount] = useState(0);
+
+    // Estado de cuenta completo (pagadas + pendientes, agrupado por lote) —
+    // independiente de `invoices` (que solo trae pendientes, para la lista
+    // accionable de "pagar"/"subir comprobante" de más abajo). Fetch simple,
+    // sin el retry/backoff de loadInvoices: es información complementaria,
+    // no bloquea poder pagar si falla.
+    const [statementLots, setStatementLots] = useState<StatementLot[]>([]);
+    const [loadingStatement, setLoadingStatement] = useState(true);
+
+    useEffect(() => {
+        if (status !== 'authenticated') return;
+        (async () => {
+            try {
+                const res = await fetch('/api/invoices/statement');
+                const data = await res.json();
+                if (data.success) setStatementLots(data.lots);
+            } catch (err) {
+                console.error('[PAGOS] Error cargando estado de cuenta:', err);
+            } finally {
+                setLoadingStatement(false);
+            }
+        })();
+    }, [status]);
 
     // useEffect moved below loadInvoices to avoid "used before declaration" TS error
 
@@ -166,6 +197,29 @@ export default function PaymentsPortal() {
 
             {/* Main Content */}
             <div className="max-w-6xl mx-auto px-6 py-6">
+                {/* Estado de Cuenta por Lote — precio total, saldo pendiente,
+                    % pagado e historial completo de cuotas, igual que la
+                    vista que ya usa el staff internamente. Si el cliente
+                    tiene más de un lote, aparece una tarjeta por cada uno. */}
+                {loadingStatement ? (
+                    <div className="bg-white rounded-xl p-8 text-center border border-slate-200 mb-6">
+                        <Loader2 size={28} className="animate-spin text-[#A145F5] mx-auto mb-2" />
+                        <p className="text-sm text-slate-500">Cargando tu estado de cuenta...</p>
+                    </div>
+                ) : statementLots.length > 0 && (
+                    <div className="space-y-6 mb-8">
+                        <h2 className="text-base font-bold text-slate-800">Estado de Cuenta</h2>
+                        {statementLots.map((lot) => (
+                            <LotFinancialStatement
+                                key={lot.code}
+                                lotLabel={statementLots.length > 1 ? lot.label : undefined}
+                                listPrice={lot.listPrice}
+                                invoices={lot.invoices}
+                            />
+                        ))}
+                    </div>
+                )}
+
                 {/* Summary Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                     <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
