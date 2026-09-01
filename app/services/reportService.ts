@@ -1403,11 +1403,24 @@ export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): 
     y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
 
     // ── Listado Detallado
-    drawSectionHeader(doc, 'DESGLOSE DE FACTURAS PAGADAS POR LOTE', margin, y, BRAND.purple);
+    // Igual que el detalle de vencidos (TOP 15 más urgentes, más abajo), esta
+    // tabla se acota por CANTIDAD de filas, no por fecha: recortar por un
+    // segundo rango temporal propio (ej. "solo el último mes") rompería la
+    // reconciliación con el KPI/resumen de arriba, que sí reflejan el rango
+    // de fechas elegido por el admin en el dashboard. El CSV de exportación
+    // (csvExportService.ts) sigue entregando recentPayments completo.
+    const DETAIL_ROW_LIMIT = 50;
+    const isDetailTruncated = data.recentPayments.length > DETAIL_ROW_LIMIT;
+
+    drawSectionHeader(
+        doc,
+        `DESGLOSE DE FACTURAS PAGADAS POR LOTE${isDetailTruncated ? ` (ÚLTIMAS ${DETAIL_ROW_LIMIT})` : ''}`,
+        margin, y, BRAND.purple
+    );
     drawLine(doc, margin, y + 2.5, W - margin, y + 2.5, BRAND.borderLight, 0.15);
     y += 5;
 
-    const detailRows = data.recentPayments.map(p => [
+    const detailRows = data.recentPayments.slice(0, DETAIL_ROW_LIMIT).map(p => [
         p.cuotaLabel || p.invoice,       // Cuota N° 13 / Cuota Inicial
         p.date,
         `${p.etapa} – Mz ${p.mz} – ${p.lot}`,  // E01 – Mz D – E01MZD148P
@@ -1430,7 +1443,17 @@ export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): 
         },
         margin: { left: margin, right: margin },
     });
-    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
+    y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + (isDetailTruncated ? 5 : 12);
+
+    if (isDetailTruncated) {
+        setFont(doc, 6.5, BRAND.textMuted);
+        const noteLines = doc.splitTextToSize(
+            `Se muestran los ${DETAIL_ROW_LIMIT} pagos más recientes de ${data.recentPayments.length} registrados en ${data.dateRangeLabel || 'el período analizado'}. Para el detalle completo, use el botón de exportar CSV.`,
+            contentW
+        ) as string[];
+        noteLines.forEach((line, i) => doc.text(line, margin, y + i * 3.2));
+        y += noteLines.length * 3.2 + 6;
+    }
 
     // ══════════════════════════════════════════════════════════════════════════
     // PÁGINA 2 — ANTIGÜEDAD DE SALDOS VENCIDOS (AGING, FOTO A HOY)
