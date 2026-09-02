@@ -259,6 +259,9 @@ export interface Proyecto {
     zonaUTM: string;
     centroEste?: number;
     centroNorte?: number;
+    /** Campo Odoo 'secuencia' ("Orden") — define cuál proyecto es el
+     *  default cuando el filtro del mapa está en "Todos los proyectos". */
+    orden: number;
 }
 
 interface OdooProyectoInmobiliario {
@@ -272,6 +275,7 @@ interface OdooProyectoInmobiliario {
     zona_utm: string;
     centro_este: number | false;
     centro_norte: number | false;
+    secuencia: number;
 }
 
 /**
@@ -288,7 +292,7 @@ export async function fetchProyectos(): Promise<Proyecto[]> {
             'search_read',
             [[['active', '=', true]]],
             {
-                fields: ['id', 'codigo', 'name', 'departamento', 'provincia', 'distrito', 'urbanizacion', 'zona_utm', 'centro_este', 'centro_norte'],
+                fields: ['id', 'codigo', 'name', 'departamento', 'provincia', 'distrito', 'urbanizacion', 'zona_utm', 'centro_este', 'centro_norte', 'secuencia'],
             }
         );
         return registros.map((r) => ({
@@ -300,6 +304,7 @@ export async function fetchProyectos(): Promise<Proyecto[]> {
             distrito: r.distrito,
             urbanizacion: r.urbanizacion,
             zonaUTM: r.zona_utm,
+            orden: r.secuencia,
             ...(r.centro_este ? { centroEste: r.centro_este } : {}),
             ...(r.centro_norte ? { centroNorte: r.centro_norte } : {}),
         }));

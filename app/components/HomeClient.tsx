@@ -188,11 +188,21 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, e
 
     // Al elegir un proyecto con centro UTM cargado (opcional en
     // proyecto.inmobiliario), centra el mapa ahí — mismo evento que ya usa
-    // "Mi Ubicación" (ver MapArea.tsx). Sin centro cargado, no hace nada:
-    // el usuario sigue viendo lo que ya tenía, solo se aplica el filtro.
+    // "Mi Ubicación" (ver MapArea.tsx). Con el filtro en "Todos los
+    // proyectos" (proyectoSeleccionadoId null), centra en el proyecto de
+    // menor 'orden' (campo Odoo 'secuencia') en vez de dejar el center
+    // genérico de Lima hardcodeado en LeafletMap.tsx — ese fallback no
+    // corresponde a ningún proyecto real y deja de tener sentido apenas
+    // haya un segundo proyecto en otra ubicación. Sin centro UTM cargado
+    // en ningún proyecto, no hace nada: el usuario sigue viendo lo que
+    // ya tenía, solo se aplica el filtro.
     useEffect(() => {
-        if (!proyectoSeleccionadoId) return;
-        const proyecto = proyectos.find((p) => p.id === proyectoSeleccionadoId);
+        const proyecto = proyectoSeleccionadoId
+            ? proyectos.find((p) => p.id === proyectoSeleccionadoId)
+            : proyectos.reduce<Proyecto | null>(
+                  (min, p) => (min === null || p.orden < min.orden ? p : min),
+                  null
+              );
         if (!proyecto?.centroEste || !proyecto?.centroNorte) return;
         try {
             const zona = Number(proyecto.zonaUTM) || 18;
