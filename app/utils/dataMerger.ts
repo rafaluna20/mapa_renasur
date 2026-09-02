@@ -1,6 +1,6 @@
 import { OdooProduct } from '@/app/services/odooService';
 import { Lot } from '@/app/data/lotsData';
-import { calculateLotMeasurements, LotMeasurements } from '@/app/utils/geometryUtils';
+import { calculateLotMeasurements, calculateDistance, LotMeasurements } from '@/app/utils/geometryUtils';
 import { ArcoMetadata } from '@/app/utils/arcoUtils';
 
 export interface EnrichedGeometry {
@@ -18,6 +18,34 @@ interface ResolvedGeometry {
     measurements: LotMeasurements;
 }
 
+// Tolerancia para considerar dos vértices "el mismo punto" — solo para
+// detectar el cierre duplicado de abajo, no para matching de vecinos
+// (eso usa su propia tolerancia en colindanciasUtils.ts).
+const TOLERANCIA_CIERRE_METROS = 0.01;
+
+/**
+ * Quita el último vértice si coincide con el primero. Todo el código que
+ * consume Lot.points asume una lista de vértices SIN el punto de cierre
+ * repetido (recorre aristas con `pts[(i+1) % n]`, que ya cierra el
+ * polígono solo). Algunas geometrías llegan digitalizadas con la
+ * convención GeoJSON estándar (primer punto = último punto, ej. lotes
+ * exportados desde QGIS/AutoCAD en vez de digitalizados directo en el
+ * editor de mapa_renasur) — sin este ajuste, esa arista de "cierre"
+ * fantasma (largo ~0, entre el vértice N y el vértice 1 que son el mismo
+ * punto) genera un vértice extra irreal (Vn+1 solapado con V1 en el
+ * plano) y una colindancia fantasma de "0.00 ml" en la Memoria
+ * Descriptiva (ver derivarColindanciasYDimensiones).
+ */
+function quitarVerticeDeCierreDuplicado(vertices: [number, number][]): [number, number][] {
+    if (vertices.length < 4) return vertices;
+    const primero = vertices[0];
+    const ultimo = vertices[vertices.length - 1];
+    if (calculateDistance(primero, ultimo) < TOLERANCIA_CIERRE_METROS) {
+        return vertices.slice(0, -1);
+    }
+    return vertices;
+}
+
 /**
  * Resuelve qué geometría usar para un lote: Odoo (product_lot_geometry) es
  * la fuente preferida; el JSON estático es el fallback mientras existan
@@ -29,9 +57,10 @@ function resolveGeometry(
     arcos?: ArcoMetadata[] | false
 ): ResolvedGeometry | null {
     if (Array.isArray(odooVertices) && odooVertices.length >= 3) {
+        const vertices = quitarVerticeDeCierreDuplicado(odooVertices);
         return {
-            points: odooVertices,
-            measurements: calculateLotMeasurements(odooVertices, arcos || undefined),
+            points: vertices,
+            measurements: calculateLotMeasurements(vertices, arcos || undefined),
         };
     }
     if (registryGeometry?.coordinates?.length) {
