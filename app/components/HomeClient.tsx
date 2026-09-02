@@ -545,6 +545,7 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, e
                     lots={filteredLots}
                     elementosUrbanos={elementosUrbanosDelProyecto}
                     proyectos={proyectos}
+                    proyectoSeleccionadoId={proyectoSeleccionadoId}
                     selectedLotId={selectedLotId}
                     onLotSelect={(l) => setSelectedLotId(l.id)}
                     mapType={mapType}

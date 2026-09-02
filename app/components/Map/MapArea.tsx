@@ -14,6 +14,9 @@ interface MapAreaProps {
     lots: Lot[];
     elementosUrbanos?: ElementoUrbano[];
     proyectos?: Proyecto[];
+    /** null = filtro "Todos los proyectos". Ver LeafletMap.tsx/MapController
+     *  para el centrado inicial por defecto (proyecto de menor 'orden'). */
+    proyectoSeleccionadoId?: number | null;
     selectedLotId: string | null;
     onLotSelect: (lot: Lot) => void;
     onCloseModal: () => void;
@@ -33,7 +36,7 @@ interface MapAreaProps {
 }
 
 export default function MapArea({
-    lots, elementosUrbanos = [], proyectos = [], selectedLotId, onLotSelect, onCloseModal,
+    lots, elementosUrbanos = [], proyectos = [], proyectoSeleccionadoId = null, selectedLotId, onLotSelect, onCloseModal,
     mapType, onMapTypeChange,
     userLocation, onUserLocationChange,
     selectedLot, onUpdateStatus,
@@ -219,6 +222,7 @@ export default function MapArea({
                     lots={lots}
                     elementosUrbanos={elementosUrbanos}
                     proyectos={proyectos}
+                    proyectoSeleccionadoId={proyectoSeleccionadoId}
                     selectedLotId={selectedLotId}
                     onLotSelect={onLotSelect}
                     mapType={mapType}

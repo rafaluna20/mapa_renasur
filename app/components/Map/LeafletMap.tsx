@@ -50,6 +50,10 @@ interface LeafletMapProps {
     lots: Lot[];
     elementosUrbanos?: ElementoUrbano[];
     proyectos?: Proyecto[];
+    /** null = filtro "Todos los proyectos". Usado por MapController para
+     *  decidir el centrado inicial (proyecto de menor 'orden' vs. bounds
+     *  del proyecto puntual ya filtrado en `lots`). */
+    proyectoSeleccionadoId?: number | null;
     selectedLotId: string | null;
     onLotSelect: (lot: Lot) => void;
     mapType: 'street' | 'satellite' | 'blank' | 'dark';
@@ -123,7 +127,7 @@ function crearIconoEtiquetaLinea(nombre: string, anguloDeg: number): L.DivIcon {
     });
 }
 
-function MapController({ lots, selectedLotId, onZoomChange }: { lots: Lot[], selectedLotId: string | null, onZoomChange: (z: number) => void }) {
+function MapController({ lots, selectedLotId, onZoomChange, proyectos, proyectoSeleccionadoId }: { lots: Lot[], selectedLotId: string | null, onZoomChange: (z: number) => void, proyectos: Proyecto[], proyectoSeleccionadoId: number | null }) {
     const map = useMap();
     const initialZoomDone = useRef(false);
 
@@ -173,28 +177,64 @@ function MapController({ lots, selectedLotId, onZoomChange }: { lots: Lot[], sel
             }
         } else if (lots.length > 0 && !initialZoomDone.current) {
             try {
-                const bounds = L.latLngBounds([]);
-                lots.forEach(lot => {
-                    lot.points.forEach(p => {
-                        const [lat, lon] = utmAZonaLatLng([p[0], p[1]], lot.zonaUtm);
-                        bounds.extend([lat, lon]);
-                    });
-                });
+                // Con el filtro en "Todos los proyectos" (proyectoSeleccionadoId
+                // null), el default debe ser el proyecto de menor 'orden', NO
+                // el fitBounds de todos los lotes mezclados: ese fitBounds deja
+                // de tener sentido apenas haya un segundo proyecto en otra
+                // ubicación (zoomearía para abarcar ambos). Se resuelve acá
+                // adentro (con `proyectos`, ya disponible como prop síncrona)
+                // en vez de depender de un evento 'centerMap' disparado desde
+                // HomeClient: ese evento se dispara ni bien monta HomeClient,
+                // antes de que este mapa (dynamic import, ssr:false) termine
+                // de cargar y registre su listener — se perdía intermitentemente
+                // según qué tan rápido cargara el chunk del mapa.
+                let centeredOnProyectoDefault = false;
+                if (!proyectoSeleccionadoId) {
+                    const proyectoDefault = proyectos.reduce<Proyecto | null>(
+                        (min, p) => (min === null || p.orden < min.orden ? p : min),
+                        null
+                    );
+                    if (proyectoDefault?.centroEste && proyectoDefault?.centroNorte) {
+                        const zona = Number(proyectoDefault.zonaUTM) || ZONA_UTM_DEFAULT;
+                        const [lng, lat] = proj4(
+                            `+proj=utm +zone=${zona} +south +datum=WGS84 +units=m +no_defs`,
+                            'EPSG:4326',
+                            [proyectoDefault.centroEste, proyectoDefault.centroNorte]
+                        );
+                        map.flyTo([lat, lng], 16, {
+                            animate: true,
+                            duration: 1.2,
+                            easeLinearity: 0.1
+                        });
+                        initialZoomDone.current = true;
+                        centeredOnProyectoDefault = true;
+                    }
+                }
 
-                if (bounds.isValid()) {
-                    // Zoom inicial suave al cargar el mapa
-                    map.flyTo(bounds.getCenter(), 17.5, {
-                        animate: true,
-                        duration: 1.2,
-                        easeLinearity: 0.1
+                if (!centeredOnProyectoDefault) {
+                    const bounds = L.latLngBounds([]);
+                    lots.forEach(lot => {
+                        lot.points.forEach(p => {
+                            const [lat, lon] = utmAZonaLatLng([p[0], p[1]], lot.zonaUtm);
+                            bounds.extend([lat, lon]);
+                        });
                     });
-                    initialZoomDone.current = true;
+
+                    if (bounds.isValid()) {
+                        // Zoom inicial suave al cargar el mapa
+                        map.flyTo(bounds.getCenter(), 17.5, {
+                            animate: true,
+                            duration: 1.2,
+                            easeLinearity: 0.1
+                        });
+                        initialZoomDone.current = true;
+                    }
                 }
             } catch (e) {
                 console.error("FitBounds error", e);
             }
         }
-    }, [selectedLotId, map, lots]);
+    }, [selectedLotId, map, lots, proyectos, proyectoSeleccionadoId]);
 
     useEffect(() => {
         const handleCenterMap = (event: Event) => {
@@ -349,7 +389,7 @@ function MeasurementController({ selectedLotId, lots }: { selectedLotId: string 
     return <SideMeasurementTooltips lot={selectedLot} map={map} />;
 }
 
-export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proyectos = [], selectedLotId, onLotSelect, mapType, userLocation, preferCanvas = true, showMeasurements = true, onPhotoPointClick, onMatrizClick }: LeafletMapProps) {
+export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proyectos = [], proyectoSeleccionadoId = null, selectedLotId, onLotSelect, mapType, userLocation, preferCanvas = true, showMeasurements = true, onPhotoPointClick, onMatrizClick }: LeafletMapProps) {
     const center: [number, number] = [-12.0464, -77.0428];
 
     // Zona UTM real por proyecto (17S/18S/19S) — id de proyecto.inmobiliario
@@ -797,7 +837,7 @@ export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proy
                 );
             })}
 
-            <MapController lots={lots} selectedLotId={selectedLotId} onZoomChange={setZoom} />
+            <MapController lots={lots} selectedLotId={selectedLotId} onZoomChange={setZoom} proyectos={proyectos} proyectoSeleccionadoId={proyectoSeleccionadoId} />
             <MapBoundsController onBoundsChange={setMapBounds} />
             {showMeasurements && <MeasurementController selectedLotId={selectedLotId} lots={lots} />}
         </MapContainer>
