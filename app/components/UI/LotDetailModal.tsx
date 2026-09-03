@@ -41,6 +41,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
     const [activeTab, setActiveTab] = useState<'info' | 'pagos'>('info');
     const [invoices, setInvoices] = useState<{ id: number; name: string; ref?: string; payment_reference?: string; invoice_date: string; invoice_date_due: string; amount_total: number; amount_residual: number; payment_state: string }[]>([]);
     const [loadingInvoices, setLoadingInvoices] = useState(false);
+    const [downloadingStatement, setDownloadingStatement] = useState(false);
 
     // ─── Generación de Plano y Memoria Descriptiva (plan_pro) ───────────────
     const [planoState, setPlanoState] = useState<{
@@ -357,6 +358,31 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
     }
 
     const recordatorioMoraLink = buildRecordatorioMoraLink();
+
+    // Mismo PDF "Estado de Cuenta" que puede bajar el cliente desde
+    // /portal/pagos (una sola fuente de verdad en reportService.ts) — así
+    // lo que el staff reenvía a un cliente es idéntico a lo que ese cliente
+    // vería si lo bajara él mismo.
+    async function handleDownloadStatement() {
+        if (downloadingStatement) return;
+        setDownloadingStatement(true);
+        try {
+            const { generateClientStatementReport } = await import('@/app/services/reportService');
+            await generateClientStatementReport({
+                clientName: reservationOwner?.clientName || (lot?.x_cliente as string) || 'Cliente',
+                lots: [{
+                    label: `Etapa ${lot?.x_etapa || '?'} Mz ${lot?.x_mz || '?'} Lote ${lot?.x_lote || '?'}`,
+                    listPrice: lot?.list_price || 0,
+                    invoices,
+                }],
+            });
+        } catch (error) {
+            console.error('Error generando PDF de estado de cuenta:', error);
+            alert('No se pudo generar el PDF. Inténtalo de nuevo.');
+        } finally {
+            setDownloadingStatement(false);
+        }
+    }
 
     return (
         <>
@@ -704,34 +730,43 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                             )}
                         </div>
 
-                        {/* Action Buttons Contextuales */}
-                        {isOverdue ? (
-                            recordatorioMoraLink ? (
-                                <a
-                                    href={recordatorioMoraLink}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-sm shadow-lg shadow-red-200 flex items-center justify-center gap-2 transition-transform active:scale-95"
-                                >
-                                    <AlertTriangle size={16} />
-                                    Recordar (WhatsApp)
-                                </a>
-                            ) : (
-                                <button
-                                    disabled
-                                    title="El cliente no tiene teléfono registrado en Odoo"
-                                    className="w-full py-3 bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-lg font-bold text-sm flex items-center justify-center gap-2 cursor-not-allowed"
-                                >
-                                    <AlertTriangle size={16} />
-                                    Recordar (sin teléfono registrado)
-                                </button>
-                            )
-                        ) : (
-                            <button className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-transform active:scale-95">
-                                <FileText size={16} />
-                                Enviar Estado de Cuenta al Cliente
+                        {/* Action Buttons Contextuales — Descargar Estado de Cuenta
+                            siempre visible; junto a Recordar (WhatsApp) cuando hay
+                            mora (ambas acciones son relevantes a la vez), sola
+                            cuando el cliente está al día. */}
+                        <div className={isOverdue ? 'flex gap-2' : ''}>
+                            <button
+                                onClick={handleDownloadStatement}
+                                disabled={downloadingStatement}
+                                className={`${isOverdue ? 'flex-1' : 'w-full'} py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-transform active:scale-95`}
+                            >
+                                {downloadingStatement ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                                Descargar Estado de Cuenta
                             </button>
-                        )}
+
+                            {isOverdue && (
+                                recordatorioMoraLink ? (
+                                    <a
+                                        href={recordatorioMoraLink}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-sm shadow-lg shadow-red-200 flex items-center justify-center gap-2 transition-transform active:scale-95"
+                                    >
+                                        <AlertTriangle size={16} />
+                                        Recordar (WhatsApp)
+                                    </a>
+                                ) : (
+                                    <button
+                                        disabled
+                                        title="El cliente no tiene teléfono registrado en Odoo"
+                                        className="flex-1 py-3 bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-400 rounded-lg font-bold text-sm flex items-center justify-center gap-2 cursor-not-allowed"
+                                    >
+                                        <AlertTriangle size={16} />
+                                        Sin teléfono
+                                    </button>
+                                )
+                            )}
+                        </div>
                     </div>
                 )}
 

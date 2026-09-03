@@ -3,7 +3,7 @@
 import { useSession } from 'next-auth/react';
 import { useEffect, useState, useCallback } from 'react';
 import { redirect } from 'next/navigation';
-import { CreditCard, Building2, Calendar, DollarSign, Loader2, AlertCircle, CheckCircle2, Clock, FileText, Upload, RefreshCw } from 'lucide-react';
+import { CreditCard, Building2, Calendar, DollarSign, Loader2, AlertCircle, CheckCircle2, Clock, FileText, Upload, RefreshCw, Download } from 'lucide-react';
 import type { PendingInvoice } from '@/app/services/paymentService';
 import NiubizPaymentModal from '@/app/components/Payments/NiubizPaymentModal';
 import VoucherUploadModal from '@/app/components/Payments/VoucherUploadModal';
@@ -37,6 +37,32 @@ export default function PaymentsPortal() {
     // no bloquea poder pagar si falla.
     const [statementLots, setStatementLots] = useState<StatementLot[]>([]);
     const [loadingStatement, setLoadingStatement] = useState(true);
+    const [downloadingStatement, setDownloadingStatement] = useState(false);
+
+    // Genera el mismo PDF "Estado de Cuenta" que también puede bajar el
+    // staff desde el mapa (LotDetailModal.tsx) — una sola fuente de verdad
+    // (reportService.ts) para que ambas descargas sean idénticas. Reusa
+    // statementLots ya cargado en pantalla, sin fetch adicional.
+    const handleDownloadStatement = useCallback(async () => {
+        if (downloadingStatement || statementLots.length === 0) return;
+        setDownloadingStatement(true);
+        try {
+            const { generateClientStatementReport } = await import('@/app/services/reportService');
+            await generateClientStatementReport({
+                clientName: session?.user?.name || 'Cliente',
+                lots: statementLots.map((lot) => ({
+                    label: lot.label,
+                    listPrice: lot.listPrice,
+                    invoices: lot.invoices,
+                })),
+            });
+        } catch (err) {
+            console.error('[PAGOS] Error generando PDF de estado de cuenta:', err);
+            alert('No se pudo generar el PDF. Inténtalo de nuevo.');
+        } finally {
+            setDownloadingStatement(false);
+        }
+    }, [downloadingStatement, statementLots, session]);
 
     useEffect(() => {
         if (status !== 'authenticated') return;
@@ -208,7 +234,21 @@ export default function PaymentsPortal() {
                     </div>
                 ) : statementLots.length > 0 && (
                     <div className="space-y-6 mb-8">
-                        <h2 className="text-base font-bold text-slate-800">Estado de Cuenta</h2>
+                        <div className="flex items-center justify-between">
+                            <h2 className="text-base font-bold text-slate-800">Estado de Cuenta</h2>
+                            <button
+                                onClick={handleDownloadStatement}
+                                disabled={downloadingStatement}
+                                className="flex items-center gap-1.5 text-xs font-bold text-[#A145F5] hover:text-[#8a2fd8] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                {downloadingStatement ? (
+                                    <Loader2 size={14} className="animate-spin" />
+                                ) : (
+                                    <Download size={14} />
+                                )}
+                                Descargar PDF
+                            </button>
+                        </div>
                         {statementLots.map((lot) => (
                             <LotFinancialStatement
                                 key={lot.code}

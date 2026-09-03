@@ -1573,3 +1573,229 @@ export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): 
 
     doc.save(`TerraLima_Recaudacion_Global_${year}${now.getMonth()+1}.pdf`);
 }
+
+// ─── Interfaces del Reporte de Estado de Cuenta (Cliente) ──────────────────────
+// Fuente única del PDF "Estado de Cuenta": la usan tanto el botón del
+// cliente en /portal/pagos como el botón "Descargar Estado de Cuenta" del
+// staff en LotDetailModal.tsx — mismo documento exacto en ambos casos, para
+// que lo que el staff reenvíe a un cliente sea idéntico a lo que ese cliente
+// vería si lo bajara él mismo (ver discusión: no mantener 2 plantillas que
+// puedan divergir).
+export interface ClientStatementInvoice {
+    id: number;
+    name: string;
+    ref?: string;
+    payment_reference?: string;
+    invoice_date: string;
+    invoice_date_due: string;
+    amount_total: number;
+    amount_residual: number;
+    payment_state: string;
+}
+
+export interface ClientStatementLot {
+    /** Ej. "Etapa 01 Mz D Lote 148" — se omite el encabezado de sección si
+     *  solo hay 1 lote (no hace falta aclarar de cuál se trata). */
+    label: string;
+    listPrice: number;
+    invoices: ClientStatementInvoice[];
+}
+
+export interface ClientStatementReportData {
+    clientName: string;
+    lots: ClientStatementLot[];
+}
+
+// Mismo parser de referencia que ya usa LotFinancialStatement.tsx (portal)
+// y LotDetailModal.tsx (staff) — duplicado a propósito, no extraído a un
+// módulo compartido, siguiendo la misma convención ya documentada en esos
+// 2 archivos (es solo formato, y cada uno tiene contexto propio alrededor).
+function parseCuotaLabelPdf(inv: { name: string; ref?: string; payment_reference?: string }): string {
+    const ref = inv.ref || inv.payment_reference || inv.name || '';
+    if (/[-_]INIT(\b|$|-)/i.test(ref)) return 'Cuota Inicial';
+    const m = ref.match(/[-_]C(\d+)(?:\b|$|-)/i);
+    if (m) return `Cuota N° ${parseInt(m[1], 10)}`;
+    return inv.name || 'Factura';
+}
+
+/**
+ * Genera el PDF "Estado de Cuenta" de un cliente: mismo Resumen Financiero
+ * (Valor Total, Saldo Deudor, Total Pagado + %) e Historial de Cuotas y
+ * Pagos que ya se muestra en pantalla (LotFinancialStatement.tsx), con el
+ * mismo tono suavizado para la alerta de mora ("Regulariza cuanto antes...")
+ * — nunca el lenguaje interno de gestión de cartera que usa el staff
+ * puertas adentro. Es un documento INFORMATIVO, no un comprobante fiscal
+ * (se aclara explícitamente en el pie), y no lleva bloque de firmas de
+ * aprobación interna (a diferencia de generatePaidInvoicesReport, que sí es
+ * un documento contable interno).
+ */
+export async function generateClientStatementReport(data: ClientStatementReportData): Promise<void> {
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const W = 210;
+    const H = 297;
+    const margin = 14;
+    const contentW = W - margin * 2;
+
+    const now = new Date();
+    const dateLabel = now.toLocaleDateString('es-PE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    const timeLabel = now.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+    const year = now.getFullYear();
+    const reportId = generateReportId('EDC', now);
+    const mostrarLabelLote = data.lots.length > 1;
+
+    const drawHeader = () => {
+        drawRect(doc, 0, 0, W, H, BRAND.pageBg);
+        drawRect(doc, 0, 0, W, 40, BRAND.panelBg);
+        drawLine(doc, 0, 40, W, 40, BRAND.borderLight, 0.3);
+        drawRect(doc, 0, 0, W, 2, BRAND.greenLight);
+
+        setFont(doc, 7, BRAND.textMuted);
+        doc.text(`Generado: ${dateLabel} · ${timeLabel}`, W - margin, 11, { align: 'right' });
+        setFont(doc, 6, BRAND.textMuted);
+        doc.text(`ID: ${reportId}`, W - margin, 15, { align: 'right' });
+
+        setFont(doc, 18, BRAND.darkBg, 'bold');
+        doc.text('ESTADO DE CUENTA', margin, 22);
+        setFont(doc, 9, BRAND.textMuted);
+        doc.text(data.clientName, margin, 29);
+        setFont(doc, 7, BRAND.textMuted);
+        doc.text('Terra Lima · Documento Informativo', margin, 34);
+
+        return 50;
+    };
+
+    let y = drawHeader();
+
+    data.lots.forEach((lot, lotIdx) => {
+        if (lotIdx > 0) {
+            doc.addPage();
+            drawRect(doc, 0, 0, W, H, BRAND.pageBg);
+            y = 16;
+        }
+
+        if (mostrarLabelLote) {
+            drawSectionHeader(doc, lot.label.toUpperCase(), margin, y, BRAND.purple);
+            drawLine(doc, margin, y + 2.5, W - margin, y + 2.5, BRAND.borderLight, 0.15);
+            y += 8;
+        }
+
+        const realTotalPaid = lot.invoices
+            .filter((i) => i.payment_state === 'paid')
+            .reduce((sum, inv) => sum + (inv.amount_total || 0), 0);
+        const pendingBalance = Math.max(0, lot.listPrice - realTotalPaid);
+        const financialProgress = lot.listPrice > 0 ? Math.min(100, Math.round((realTotalPaid / lot.listPrice) * 100)) : 0;
+
+        const overdueInvoices = lot.invoices.filter(
+            (inv) => inv.payment_state !== 'paid' && inv.invoice_date_due && new Date(inv.invoice_date_due) < now
+        );
+        const isOverdue = overdueInvoices.length > 0;
+        const totalOverdueAmount = overdueInvoices.reduce((sum, inv) => sum + (inv.amount_residual || 0), 0);
+
+        // ── Resumen Financiero
+        drawSectionHeader(doc, 'RESUMEN FINANCIERO', margin, y, BRAND.green);
+        drawLine(doc, margin, y + 2.5, W - margin, y + 2.5, BRAND.borderLight, 0.15);
+        y += 8;
+
+        drawRect(doc, margin, y, contentW, 26, BRAND.panelBg, 2);
+        setFont(doc, 7, BRAND.textMuted, 'bold');
+        doc.text('VALOR TOTAL (PRECIO)', margin + 5, y + 7);
+        doc.text('SALDO DEUDOR PENDIENTE', W - margin - 5, y + 7, { align: 'right' });
+        setFont(doc, 12, BRAND.darkBg, 'bold');
+        doc.text(currency(lot.listPrice), margin + 5, y + 13.5);
+        setFont(doc, 12, BRAND.red, 'bold');
+        doc.text(currency(pendingBalance), W - margin - 5, y + 13.5, { align: 'right' });
+
+        setFont(doc, 7.5, BRAND.greenLight, 'bold');
+        doc.text(`Total Pagado: ${currency(realTotalPaid)}`, margin + 5, y + 20.5);
+        doc.text(`${financialProgress}%`, W - margin - 5, y + 20.5, { align: 'right' });
+        drawRect(doc, margin + 5, y + 22.5, contentW - 10, 1.8, BRAND.borderLight, 0.9);
+        // roundedRect con ancho 0 (0% pagado, ej. cuota inicial aún sin
+        // registrar) puede dar un radio mayor que el propio ancho — se omite
+        // el relleno en ese caso en vez de arriesgar un rect degenerado.
+        if (financialProgress > 0) {
+            drawRect(doc, margin + 5, y + 22.5, (contentW - 10) * (financialProgress / 100), 1.8, BRAND.greenLight, 0.9);
+        }
+        y += 32;
+
+        // ── Estado de morosidad — mismo tono que LotFinancialStatement.tsx
+        // (portal del cliente), nunca el lenguaje interno de cobranza.
+        const bannerH = 16;
+        if (isOverdue) {
+            drawRect(doc, margin, y, contentW, bannerH, [254, 242, 242] as [number, number, number], 2);
+            setFont(doc, 8, BRAND.red, 'bold');
+            doc.text(
+                `ATRASO DETECTADO (${overdueInvoices.length} ${overdueInvoices.length === 1 ? 'CUOTA' : 'CUOTAS'}) · DEUDA EXIGIBLE: ${currency(totalOverdueAmount)}`,
+                margin + 5, y + 6
+            );
+            setFont(doc, 6.5, BRAND.textMuted);
+            doc.text('Regulariza cuanto antes para evitar recargos. Podés subir tu comprobante desde el portal.', margin + 5, y + 11.5);
+        } else {
+            drawRect(doc, margin, y, contentW, bannerH, [236, 253, 245] as [number, number, number], 2);
+            setFont(doc, 8, BRAND.greenLight, 'bold');
+            doc.text('FINANCIAMIENTO AL DÍA', margin + 5, y + 6);
+            setFont(doc, 6.5, BRAND.textMuted);
+            doc.text('No tenés cuotas vencidas registradas.', margin + 5, y + 11.5);
+        }
+        y += bannerH + 8;
+
+        // ── Historial de Cuotas y Pagos
+        drawSectionHeader(doc, 'HISTORIAL DE CUOTAS Y PAGOS', margin, y, BRAND.purple);
+        drawLine(doc, margin, y + 2.5, W - margin, y + 2.5, BRAND.borderLight, 0.15);
+        y += 5;
+
+        const sortedInvoices = [...lot.invoices].sort(
+            (a, b) => new Date(a.invoice_date).getTime() - new Date(b.invoice_date).getTime()
+        );
+
+        const filaEstado = (inv: ClientStatementInvoice) => {
+            if (inv.payment_state === 'paid') return 'Pagado';
+            const vencida = inv.invoice_date_due && new Date(inv.invoice_date_due) < now;
+            return vencida ? 'Mora' : 'Pendiente';
+        };
+
+        const rows = sortedInvoices.map((inv) => [
+            parseCuotaLabelPdf(inv),
+            inv.invoice_date_due || inv.invoice_date,
+            inv.name || inv.ref || 'S/N',
+            filaEstado(inv),
+            currency(inv.amount_total),
+            inv.payment_state === 'paid' ? '—' : currency(inv.amount_residual),
+        ]);
+
+        autoTable(doc, {
+            startY: y,
+            head: [['CUOTA', 'VENCIMIENTO', 'FACTURA', 'ESTADO', 'MONTO', 'SALDO']],
+            body: rows.length > 0 ? rows : [['Aún no hay cuotas facturadas.', '', '', '', '', '']],
+            theme: 'plain',
+            styles: { font: 'helvetica', fontSize: 7.5, cellPadding: { top: 3, bottom: 3, left: 4, right: 4 }, textColor: BRAND.textLight, lineColor: BRAND.borderLight, lineWidth: 0.1 },
+            headStyles: { fillColor: BRAND.panelBg, textColor: BRAND.darkBg, fontStyle: 'bold', fontSize: 6.5 },
+            alternateRowStyles: { fillColor: [250, 252, 254] as [number, number, number] },
+            columnStyles: {
+                0: { fontStyle: 'bold', textColor: BRAND.purple },
+                3: { halign: 'center' },
+                4: { halign: 'right' },
+                5: { fontStyle: 'bold', textColor: BRAND.red, halign: 'right' },
+            },
+            margin: { left: margin, right: margin },
+        });
+        y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+    });
+
+    // ── Pie: disclaimer informativo (sin bloque de firmas — no aplica a un
+    // documento dirigido al cliente) + numeración de página.
+    const totalPages = doc.getNumberOfPages();
+    for (let p = 1; p <= totalPages; p++) {
+        doc.setPage(p);
+        drawLine(doc, margin, H - 18, W - margin, H - 18, BRAND.borderLight, 0.3);
+        setFont(doc, 6, BRAND.textMuted);
+        const disclaimerLines = doc.splitTextToSize(
+            'Documento informativo — no constituye comprobante de pago válido para efectos tributarios.',
+            contentW - 30
+        ) as string[];
+        doc.text(disclaimerLines, margin, H - 13);
+        doc.text(`ID: ${reportId}`, margin, H - 5);
+        doc.text(`Pág. ${p} / ${totalPages}`, W - margin, H - 5, { align: 'right' });
+    }
+
+    doc.save(`TerraLima_EstadoCuenta_${year}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}.pdf`);
+}
