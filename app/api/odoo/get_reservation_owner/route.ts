@@ -67,17 +67,22 @@ export async function POST(request: Request) {
 
         // Teléfono del cliente (para el recordatorio de pago por WhatsApp) —
         // se prefiere mobile sobre phone porque es el que normalmente tiene
-        // WhatsApp activo.
+        // WhatsApp activo. Email/DNI se suman acá (mismo fetch) para el
+        // botón "Descargar Estado de Cuenta" del modal de lote.
         let clientPhone: string | null = null;
+        let clientEmail: string | null = null;
+        let clientDni: string | null = null;
         if (partnerId) {
             const partners = await fetchOdoo(
                 'res.partner',
                 'read',
                 [[partnerId]],
-                { fields: ['phone', 'mobile'] }
+                { fields: ['phone', 'mobile', 'email', 'vat'] }
             );
             const partner = partners && partners[0];
             clientPhone = (partner?.mobile || partner?.phone || null) as string | null;
+            clientEmail = (partner?.email || null) as string | null;
+            clientDni = (partner?.vat || null) as string | null;
         }
 
         return NextResponse.json({
@@ -87,6 +92,8 @@ export async function POST(request: Request) {
             partnerId,
             clientName,
             clientPhone,
+            clientEmail,
+            clientDni,
             totalInstallments,
             orderDate: order.date_order,
             orderId: order.id, // Actual Sale Order ID

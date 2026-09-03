@@ -1610,7 +1610,48 @@ export interface ClientStatementLot {
 
 export interface ClientStatementReportData {
     clientName: string;
+    /** Sin guiones/espacios, tal cual viene de Odoo (res.partner.vat). */
+    clientDni?: string | null;
+    clientEmail?: string | null;
+    clientPhone?: string | null;
     lots: ClientStatementLot[];
+}
+
+// Caja de información reutilizable (mismo estilo que el box de Resumen
+// Financiero): un título con acento de color arriba, y una grilla de
+// label/valor debajo. Se usa tanto para "Datos del Cliente" (una vez, al
+// inicio) como para "Datos del Lote" (una por lote, dentro del loop).
+function drawInfoBox(
+    doc: jsPDF,
+    x: number,
+    y: number,
+    width: number,
+    title: string,
+    items: { label: string; value: string }[],
+    accentColor: [number, number, number],
+    columns: number = 2
+): number {
+    const rowH = 11;
+    const rows = Math.ceil(items.length / columns);
+    const boxH = 9 + rows * rowH;
+    const colW = width / columns;
+
+    drawRect(doc, x, y, width, boxH, BRAND.panelBg, 2);
+    setFont(doc, 7, accentColor, 'bold');
+    doc.text(title, x + 5, y + 6);
+
+    items.forEach((item, i) => {
+        const col = i % columns;
+        const row = Math.floor(i / columns);
+        const ix = x + 5 + col * colW;
+        const iy = y + 13 + row * rowH;
+        setFont(doc, 6.5, BRAND.textMuted, 'bold');
+        doc.text(item.label.toUpperCase(), ix, iy);
+        setFont(doc, 8.5, BRAND.darkBg, 'bold');
+        doc.text(item.value, ix, iy + 4.5);
+    });
+
+    return y + boxH + 6;
 }
 
 // Mismo parser de referencia que ya usa LotFinancialStatement.tsx (portal)
@@ -1686,15 +1727,28 @@ export async function generateClientStatementReport(data: ClientStatementReportD
 
         setFont(doc, 18, BRAND.darkBg, 'bold');
         doc.text('ESTADO DE CUENTA', margin, 22);
-        setFont(doc, 9, BRAND.textMuted);
-        doc.text(data.clientName, margin, 29);
         setFont(doc, 7, BRAND.textMuted);
-        doc.text('Terra Lima · Documento Informativo', margin, 34);
+        doc.text('Terra Lima · Documento Informativo', margin, 29);
 
         return 50;
     };
 
     let y = drawHeader();
+
+    // ── Datos del Cliente — una sola vez (no cambia entre lotes). "No
+    // registrado" en vez de dejar el campo vacío cuando falta el dato en
+    // Odoo (mismo criterio de robustez que el resto del sistema).
+    y = drawInfoBox(
+        doc, margin, y, contentW, 'DATOS DEL CLIENTE',
+        [
+            { label: 'Nombre', value: data.clientName || 'No registrado' },
+            { label: 'DNI', value: data.clientDni || 'No registrado' },
+            { label: 'Correo', value: data.clientEmail || 'No registrado' },
+            { label: 'Teléfono', value: data.clientPhone || 'No registrado' },
+        ],
+        BRAND.green,
+        2
+    );
 
     data.lots.forEach((lot, lotIdx) => {
         if (lotIdx > 0) {
@@ -1709,18 +1763,16 @@ export async function generateClientStatementReport(data: ClientStatementReportD
             y += 8;
         }
 
-        // Mz/etapa/lote por separado — se imprime siempre (aunque haya un
-        // solo lote y no se muestre el label de arriba), para identificar
-        // de qué lote es el estado de cuenta.
-        const metadataChips = [
-            lot.etapa && `Etapa ${lot.etapa}`,
-            lot.mz && `Mz ${lot.mz}`,
-            lot.numeroLote && `Lote ${lot.numeroLote}`,
-        ].filter(Boolean) as string[];
-        if (metadataChips.length > 0) {
-            setFont(doc, 7.5, BRAND.textMuted, 'bold');
-            doc.text(metadataChips.join('   ·   '), margin, y);
-            y += 6;
+        // Mz/etapa/lote por separado en su propia caja — se imprime siempre
+        // (aunque haya un solo lote y no se muestre el label de arriba),
+        // para identificar de qué lote es el estado de cuenta.
+        const loteItems = [
+            lot.etapa && { label: 'Etapa', value: lot.etapa },
+            lot.mz && { label: 'Manzana', value: lot.mz },
+            lot.numeroLote && { label: 'N° de Lote', value: lot.numeroLote },
+        ].filter(Boolean) as { label: string; value: string }[];
+        if (loteItems.length > 0) {
+            y = drawInfoBox(doc, margin, y, contentW, 'DATOS DEL LOTE', loteItems, BRAND.purple, 3);
         }
 
         const realTotalPaid = lot.invoices

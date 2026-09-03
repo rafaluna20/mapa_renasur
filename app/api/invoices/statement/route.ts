@@ -67,15 +67,23 @@ export async function GET() {
     }
 
     try {
-        const invoices = await fetchOdoo('account.move', 'search_read', [[
-            ['partner_id', '=', partnerId],
-            ['move_type', '=', 'out_invoice'],
-            ['state', '=', 'posted'],
-        ]], {
-            fields: ['id', 'name', 'ref', 'payment_reference', 'invoice_date', 'invoice_date_due', 'payment_state', 'amount_total', 'amount_residual'],
-            limit: 500,
-            order: 'invoice_date asc',
-        }) as OdooInvoice[];
+        // El teléfono no viaja en la sesión de NextAuth (solo name/email/dni,
+        // ver [...nextauth]/route.ts) aunque Odoo sí lo tiene — se trae acá
+        // con un fetch puntual por partnerId, mismo patrón ya usado en
+        // get_reservation_owner/route.ts para el mismo dato.
+        const [invoices, partners] = await Promise.all([
+            fetchOdoo('account.move', 'search_read', [[
+                ['partner_id', '=', partnerId],
+                ['move_type', '=', 'out_invoice'],
+                ['state', '=', 'posted'],
+            ]], {
+                fields: ['id', 'name', 'ref', 'payment_reference', 'invoice_date', 'invoice_date_due', 'payment_state', 'amount_total', 'amount_residual'],
+                limit: 500,
+                order: 'invoice_date asc',
+            }) as Promise<OdooInvoice[]>,
+            fetchOdoo('res.partner', 'read', [[partnerId]], { fields: ['phone', 'mobile'] }) as Promise<{ phone?: string | false; mobile?: string | false }[]>,
+        ]);
+        const clientPhone = (partners[0]?.mobile || partners[0]?.phone || null) as string | null;
 
         // Agrupar por código de lote parseado de ref/payment_reference/name
         const grupos = new Map<string, OdooInvoice[]>();
@@ -120,7 +128,7 @@ export async function GET() {
             };
         });
 
-        return Response.json({ success: true, lots });
+        return Response.json({ success: true, lots, clientPhone });
     } catch (error: unknown) {
         console.error('[STATEMENT] Error fetching account statement:', error);
         return Response.json({

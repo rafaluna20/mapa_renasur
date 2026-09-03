@@ -41,6 +41,9 @@ export default function PaymentsPortal() {
     const [statementLots, setStatementLots] = useState<StatementLot[]>([]);
     const [loadingStatement, setLoadingStatement] = useState(true);
     const [downloadingStatement, setDownloadingStatement] = useState(false);
+    // El teléfono no viaja en la sesión de NextAuth (solo name/email/dni) —
+    // llega en la misma respuesta de /api/invoices/statement.
+    const [clientPhone, setClientPhone] = useState<string | null>(null);
 
     // Genera el mismo PDF "Estado de Cuenta" que también puede bajar el
     // staff desde el mapa (LotDetailModal.tsx) — una sola fuente de verdad
@@ -53,6 +56,9 @@ export default function PaymentsPortal() {
             const { generateClientStatementReport } = await import('@/app/services/reportService');
             await generateClientStatementReport({
                 clientName: session?.user?.name || 'Cliente',
+                clientDni: (session?.user as unknown as { dni?: string })?.dni,
+                clientEmail: session?.user?.email,
+                clientPhone,
                 lots: statementLots.map((lot) => ({
                     label: lot.label,
                     mz: lot.mz,
@@ -68,7 +74,7 @@ export default function PaymentsPortal() {
         } finally {
             setDownloadingStatement(false);
         }
-    }, [downloadingStatement, statementLots, session]);
+    }, [downloadingStatement, statementLots, session, clientPhone]);
 
     useEffect(() => {
         if (status !== 'authenticated') return;
@@ -76,7 +82,10 @@ export default function PaymentsPortal() {
             try {
                 const res = await fetch('/api/invoices/statement');
                 const data = await res.json();
-                if (data.success) setStatementLots(data.lots);
+                if (data.success) {
+                    setStatementLots(data.lots);
+                    setClientPhone(data.clientPhone || null);
+                }
             } catch (err) {
                 console.error('[PAGOS] Error cargando estado de cuenta:', err);
             } finally {

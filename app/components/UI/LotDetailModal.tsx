@@ -37,7 +37,7 @@ const STATUS_CONFIG: Record<string, StatusConfigItem> = {
 export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotation, activeQuotes, currentUser }: LotDetailModalProps) {
     const [showReservationModal, setShowReservationModal] = useState(false);
     const [showRefundModal, setShowRefundModal] = useState(false);
-    const [reservationOwner, setReservationOwner] = useState<{ id: number; name: string; partnerId?: number; clientName?: string; clientPhone?: string | null; totalInstallments?: number; orderId?: number; separationAmount?: number | null } | null>(null);
+    const [reservationOwner, setReservationOwner] = useState<{ id: number; name: string; partnerId?: number; clientName?: string; clientPhone?: string | null; clientEmail?: string | null; clientDni?: string | null; totalInstallments?: number; orderId?: number; separationAmount?: number | null } | null>(null);
     const [activeTab, setActiveTab] = useState<'info' | 'pagos'>('info');
     const [invoices, setInvoices] = useState<{ id: number; name: string; ref?: string; payment_reference?: string; invoice_date: string; invoice_date_due: string; amount_total: number; amount_residual: number; payment_state: string }[]>([]);
     const [loadingInvoices, setLoadingInvoices] = useState(false);
@@ -136,6 +136,8 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                     partnerId: ownerData.partnerId,
                     clientName: ownerData.clientName,
                     clientPhone: ownerData.clientPhone,
+                    clientEmail: ownerData.clientEmail,
+                    clientDni: ownerData.clientDni,
                     totalInstallments: ownerData.totalInstallments,
                     orderId: ownerData.orderId,
                     separationAmount: ownerData.separationAmount
@@ -370,6 +372,9 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
             const { generateClientStatementReport } = await import('@/app/services/reportService');
             await generateClientStatementReport({
                 clientName: reservationOwner?.clientName || (lot?.x_cliente as string) || 'Cliente',
+                clientDni: reservationOwner?.clientDni,
+                clientEmail: reservationOwner?.clientEmail,
+                clientPhone: reservationOwner?.clientPhone,
                 lots: [{
                     label: `Etapa ${lot?.x_etapa || '?'} Mz ${lot?.x_mz || '?'} Lote ${lot?.x_lote || '?'}`,
                     mz: lot?.x_mz || null,
