@@ -372,6 +372,9 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                 clientName: reservationOwner?.clientName || (lot?.x_cliente as string) || 'Cliente',
                 lots: [{
                     label: `Etapa ${lot?.x_etapa || '?'} Mz ${lot?.x_mz || '?'} Lote ${lot?.x_lote || '?'}`,
+                    mz: lot?.x_mz || null,
+                    etapa: lot?.x_etapa || null,
+                    numeroLote: lot?.x_lote || null,
                     listPrice: lot?.list_price || 0,
                     invoices,
                 }],

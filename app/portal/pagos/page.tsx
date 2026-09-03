@@ -17,6 +17,9 @@ import { es } from 'date-fns/locale';
 interface StatementLot {
     code: string;
     label: string;
+    mz: string | null;
+    etapa: string | null;
+    numeroLote: string | null;
     listPrice: number;
     invoices: StatementInvoice[];
 }
@@ -52,6 +55,9 @@ export default function PaymentsPortal() {
                 clientName: session?.user?.name || 'Cliente',
                 lots: statementLots.map((lot) => ({
                     label: lot.label,
+                    mz: lot.mz,
+                    etapa: lot.etapa,
+                    numeroLote: lot.numeroLote,
                     listPrice: lot.listPrice,
                     invoices: lot.invoices,
                 })),
@@ -253,6 +259,9 @@ export default function PaymentsPortal() {
                             <LotFinancialStatement
                                 key={lot.code}
                                 lotLabel={statementLots.length > 1 ? lot.label : undefined}
+                                mz={lot.mz}
+                                etapa={lot.etapa}
+                                numeroLote={lot.numeroLote}
                                 listPrice={lot.listPrice}
                                 invoices={lot.invoices}
                             />

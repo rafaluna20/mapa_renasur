@@ -112,6 +112,9 @@ export async function GET() {
             return {
                 code: codigo,
                 label,
+                mz: producto?.x_mz || null,
+                etapa: producto?.x_etapa || null,
+                numeroLote: producto?.x_lote || null,
                 listPrice: producto?.list_price || 0,
                 invoices: invs,
             };

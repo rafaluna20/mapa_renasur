@@ -18,6 +18,13 @@ interface LotFinancialStatementProps {
     /** Ej. "Etapa 01 Mz D Lote 148" — se muestra como encabezado. Omitir si
      * el contexto ya deja claro de qué lote se trata (ej. un solo lote). */
     lotLabel?: string;
+    /** Manzana / etapa / número de lote — a diferencia de lotLabel (que solo
+     *  se muestra con más de un lote), esta fila se muestra siempre: el
+     *  cliente quiere identificar de qué lote es el estado de cuenta aunque
+     *  solo tenga uno. */
+    mz?: string | null;
+    etapa?: string | null;
+    numeroLote?: string | null;
     listPrice: number;
     invoices: StatementInvoice[];
     loading?: boolean;
@@ -43,7 +50,7 @@ function parseCuotaLabel(inv: { name: string; ref?: string; payment_reference?: 
     return { label: inv.name || 'Factura', isInitial: false };
 }
 
-export default function LotFinancialStatement({ lotLabel, listPrice, invoices, loading }: LotFinancialStatementProps) {
+export default function LotFinancialStatement({ lotLabel, mz, etapa, numeroLote, listPrice, invoices, loading }: LotFinancialStatementProps) {
     const realTotalPaid = invoices
         .filter((i) => i.payment_state === 'paid')
         .reduce((sum, inv) => sum + (inv.amount_total || 0), 0);
@@ -60,10 +67,29 @@ export default function LotFinancialStatement({ lotLabel, listPrice, invoices, l
         (a, b) => new Date(a.invoice_date).getTime() - new Date(b.invoice_date).getTime()
     );
 
+    const metadataChips = [
+        etapa && `Etapa ${etapa}`,
+        mz && `Mz ${mz}`,
+        numeroLote && `Lote ${numeroLote}`,
+    ].filter(Boolean) as string[];
+
     return (
         <div className="space-y-4">
             {lotLabel && (
                 <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">{lotLabel}</h3>
+            )}
+
+            {metadataChips.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                    {metadataChips.map((chip) => (
+                        <span
+                            key={chip}
+                            className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded-md"
+                        >
+                            {chip}
+                        </span>
+                    ))}
+                </div>
             )}
 
             {/* Resumen Financiero */}

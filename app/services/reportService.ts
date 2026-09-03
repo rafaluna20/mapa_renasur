@@ -1597,6 +1597,13 @@ export interface ClientStatementLot {
     /** Ej. "Etapa 01 Mz D Lote 148" — se omite el encabezado de sección si
      *  solo hay 1 lote (no hace falta aclarar de cuál se trata). */
     label: string;
+    /** Manzana/etapa/número de lote por separado — a diferencia de `label`
+     *  (que solo encabeza la sección con más de 1 lote), estos se imprimen
+     *  siempre debajo del título "ESTADO DE CUENTA" para identificar el
+     *  lote aunque el cliente tenga uno solo. */
+    mz?: string | null;
+    etapa?: string | null;
+    numeroLote?: string | null;
     listPrice: number;
     invoices: ClientStatementInvoice[];
 }
@@ -1616,6 +1623,29 @@ function parseCuotaLabelPdf(inv: { name: string; ref?: string; payment_reference
     const m = ref.match(/[-_]C(\d+)(?:\b|$|-)/i);
     if (m) return `Cuota N° ${parseInt(m[1], 10)}`;
     return inv.name || 'Factura';
+}
+
+// Clave numérica para ordenar el historial por cuota (Inicial, N° 1, N° 2,
+// ...) en vez de por fecha de factura — la fecha de emisión de una cuota no
+// siempre coincide con su orden real (ej. cuotas facturadas por adelantado
+// o con retraso administrativo). Las referencias sin cuota reconocida
+// (facturas sueltas, "Otros pagos") quedan al final, ordenadas por fecha.
+function getCuotaOrderKeyPdf(inv: { name: string; ref?: string; payment_reference?: string }): number {
+    const ref = inv.ref || inv.payment_reference || inv.name || '';
+    if (/[-_]INIT(\b|$|-)/i.test(ref)) return 0;
+    const m = ref.match(/[-_]C(\d+)(?:\b|$|-)/i);
+    if (m) return parseInt(m[1], 10);
+    return Number.MAX_SAFE_INTEGER;
+}
+
+// Formato DD/MM/AA pedido para el PDF — el resto del sistema (pantalla)
+// sigue mostrando la fecha cruda de Odoo (YYYY-MM-DD), este formateador es
+// exclusivo del documento descargable.
+function formatDDMMYY(fecha: string): string {
+    const d = new Date(fecha + 'T00:00:00');
+    if (isNaN(d.getTime())) return fecha;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${String(d.getFullYear()).slice(-2)}`;
 }
 
 /**
@@ -1677,6 +1707,20 @@ export async function generateClientStatementReport(data: ClientStatementReportD
             drawSectionHeader(doc, lot.label.toUpperCase(), margin, y, BRAND.purple);
             drawLine(doc, margin, y + 2.5, W - margin, y + 2.5, BRAND.borderLight, 0.15);
             y += 8;
+        }
+
+        // Mz/etapa/lote por separado — se imprime siempre (aunque haya un
+        // solo lote y no se muestre el label de arriba), para identificar
+        // de qué lote es el estado de cuenta.
+        const metadataChips = [
+            lot.etapa && `Etapa ${lot.etapa}`,
+            lot.mz && `Mz ${lot.mz}`,
+            lot.numeroLote && `Lote ${lot.numeroLote}`,
+        ].filter(Boolean) as string[];
+        if (metadataChips.length > 0) {
+            setFont(doc, 7.5, BRAND.textMuted, 'bold');
+            doc.text(metadataChips.join('   ·   '), margin, y);
+            y += 6;
         }
 
         const realTotalPaid = lot.invoices
@@ -1743,9 +1787,14 @@ export async function generateClientStatementReport(data: ClientStatementReportD
         drawLine(doc, margin, y + 2.5, W - margin, y + 2.5, BRAND.borderLight, 0.15);
         y += 5;
 
-        const sortedInvoices = [...lot.invoices].sort(
-            (a, b) => new Date(a.invoice_date).getTime() - new Date(b.invoice_date).getTime()
-        );
+        const sortedInvoices = [...lot.invoices].sort((a, b) => {
+            const ordenA = getCuotaOrderKeyPdf(a);
+            const ordenB = getCuotaOrderKeyPdf(b);
+            if (ordenA !== ordenB) return ordenA - ordenB;
+            // Empate (ambas sin cuota reconocida, o mismo número — no
+            // debería pasar): desempata por fecha de emisión.
+            return new Date(a.invoice_date).getTime() - new Date(b.invoice_date).getTime();
+        });
 
         const filaEstado = (inv: ClientStatementInvoice) => {
             if (inv.payment_state === 'paid') return 'Pagado';
@@ -1755,7 +1804,7 @@ export async function generateClientStatementReport(data: ClientStatementReportD
 
         const rows = sortedInvoices.map((inv) => [
             parseCuotaLabelPdf(inv),
-            inv.invoice_date_due || inv.invoice_date,
+            formatDDMMYY(inv.invoice_date_due || inv.invoice_date),
             inv.name || inv.ref || 'S/N',
             filaEstado(inv),
             currency(inv.amount_total),
