@@ -2,7 +2,7 @@
 
 import { use, useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, Calculator, Calendar, Tag, Table, Loader2, User, Search, Check, Plus, X, Save, Send, CheckCircle, Map } from 'lucide-react';
+import { ChevronLeft, Calculator, Calendar, Tag, Table, Loader2, User, Search, Check, Plus, X, Save, Send, CheckCircle, Map, Pencil } from 'lucide-react';
 import { lotsData, Lot } from '@/app/data/lotsData';
 import { financeService, QuoteCalculations } from '@/app/services/financeService';
 import Header from '@/app/components/UI/Header';
@@ -233,6 +233,14 @@ export default function QuotePage({ params }: QuotePageProps) {
     const [isCreatingClient, setIsCreatingClient] = useState(false);
     const [newClientData, setNewClientData] = useState({ name: '', vat: '', phone: '', email: '' });
 
+    // Edición de un cliente YA seleccionado (ej. el teléfono/correo quedó
+    // desactualizado en Odoo) — antes no existía ningún camino para
+    // corregirlo desde la cotización, solo buscar/seleccionar (solo
+    // lectura) o crear uno nuevo.
+    const [showEditClient, setShowEditClient] = useState(false);
+    const [isUpdatingClient, setIsUpdatingClient] = useState(false);
+    const [editClientData, setEditClientData] = useState({ name: '', vat: '', phone: '', email: '' });
+
     // Segundo cliente (cónyuge/conviviente): solo nombre + DNI/RUC, solo
     // informativo para pantalla y PDF — no crea un res.partner en Odoo ni
     // reemplaza al titular del sale.order, ver comentario en LocalQuoteClient.
@@ -405,6 +413,61 @@ export default function QuotePage({ params }: QuotePageProps) {
             }
         } finally {
             setIsCreatingClient(false);
+        }
+    };
+
+    const openEditClient = () => {
+        if (!selectedClient) return;
+        setEditClientData({
+            name: selectedClient.name || '',
+            vat: selectedClient.vat || '',
+            phone: selectedClient.phone || selectedClient.mobile || '',
+            email: selectedClient.email || '',
+        });
+        setShowEditClient(true);
+    };
+
+    const handleUpdateClient = async () => {
+        if (!selectedClient) return;
+        const { name, vat, phone, email } = editClientData;
+        const trimmedName = name.trim();
+        if (!trimmedName || !vat) return;
+
+        // Misma validación que handleCreateClient — un dato corregido a
+        // mano no debería ser menos estricto que uno nuevo.
+        if (!/^(?:\d{8}|\d{11})$/.test(vat)) {
+            alert('El DNI debe tener 8 dígitos o el RUC 11 dígitos numéricos.');
+            return;
+        }
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            alert('El formato del correo electrónico es inválido.');
+            return;
+        }
+
+        setIsUpdatingClient(true);
+        try {
+            await odooService.updatePartner({
+                id: selectedClient.id,
+                name: trimmedName,
+                vat,
+                phone,
+                email,
+            });
+
+            // Reflejar el cambio en pantalla de inmediato (mismo objeto que
+            // ya se usa para el PDF/guardado de la cotización) sin tener que
+            // volver a buscar/seleccionar el cliente.
+            setSelectedClient({ ...selectedClient, name: trimmedName, vat, phone, mobile: phone, email });
+            setSearchTerm(trimmedName);
+            setShowEditClient(false);
+        } catch (error) {
+            console.error('Error updating client:', error);
+            const message = error instanceof Error ? error.message : '';
+            if (!message.includes('No autenticado')) {
+                alert(message || 'Error al actualizar el cliente. Intente nuevamente.');
+            }
+        } finally {
+            setIsUpdatingClient(false);
         }
     };
 
@@ -871,16 +934,27 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                     className={`w-full px-3 py-2 text-sm text-black border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all pr-10 ${selectedClient ? 'border-emerald-500 bg-emerald-50 text-emerald-900 font-semibold' : 'border-slate-200'}`}
                                                 />
                                                 {selectedClient ? (
-                                                    <button
-                                                        onClick={() => {
-                                                            setSelectedClient(null);
-                                                            setSearchTerm('');
-                                                            setSearchResults([]);
-                                                        }}
-                                                        className="absolute right-3 top-2.5 text-slate-400 hover:text-red-500 transition-colors"
-                                                    >
-                                                        <X size={16} />
-                                                    </button>
+                                                    <div className="absolute right-3 top-2.5 flex items-center gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={openEditClient}
+                                                            title="Editar datos del cliente"
+                                                            className="text-slate-400 hover:text-blue-600 transition-colors"
+                                                        >
+                                                            <Pencil size={14} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                setSelectedClient(null);
+                                                                setSearchTerm('');
+                                                                setSearchResults([]);
+                                                                setShowEditClient(false);
+                                                            }}
+                                                            className="text-slate-400 hover:text-red-500 transition-colors"
+                                                        >
+                                                            <X size={16} />
+                                                        </button>
+                                                    </div>
                                                 ) : isSearching ? (
                                                     <div className="absolute right-3 top-2.5 animate-spin">
                                                         <Search size={16} className="text-slate-400" />
@@ -894,18 +968,36 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                 {/* Dropdown Results */}
                                                 {searchResults.length > 0 ? (
                                                     <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-slate-300 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto ring-1 ring-black/5">
-                                                        {searchResults.map((client, index) => (
-                                                            <button
-                                                                key={client.id}
-                                                                onClick={() => selectClient(client)}
-                                                                className={`w-full text-left px-4 py-3 text-sm hover:bg-blue-50 transition-colors flex items-center gap-3 ${index !== searchResults.length - 1 ? 'border-b border-slate-100' : ''}`}
-                                                            >
-                                                                <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-xs font-bold text-slate-600 shrink-0">
-                                                                    {client.name.charAt(0).toUpperCase()}
-                                                                </div>
-                                                                <span className="font-bold text-slate-700">{client.name}</span>
-                                                            </button>
-                                                        ))}
+                                                        {searchResults.map((client, index) => {
+                                                            // DNI/teléfono/correo ya venían del backend (search_partners
+                                                            // ya trae vat/phone/mobile/email) pero se descartaban acá:
+                                                            // el dropdown solo mostraba el nombre, obligando a
+                                                            // seleccionar un cliente "a ciegas" para recién ver sus
+                                                            // datos de contacto (o confundir dos clientes con nombre
+                                                            // parecido).
+                                                            const detalles = [
+                                                                client.vat && `DNI ${client.vat}`,
+                                                                (client.phone || client.mobile),
+                                                                client.email,
+                                                            ].filter(Boolean).join(' · ');
+                                                            return (
+                                                                <button
+                                                                    key={client.id}
+                                                                    onClick={() => selectClient(client)}
+                                                                    className={`w-full text-left px-4 py-3 text-sm hover:bg-blue-50 transition-colors flex items-center gap-3 ${index !== searchResults.length - 1 ? 'border-b border-slate-100' : ''}`}
+                                                                >
+                                                                    <div className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-xs font-bold text-slate-600 shrink-0">
+                                                                        {client.name.charAt(0).toUpperCase()}
+                                                                    </div>
+                                                                    <div className="min-w-0">
+                                                                        <p className="font-bold text-slate-700 truncate">{client.name}</p>
+                                                                        {detalles && (
+                                                                            <p className="text-[11px] text-slate-400 truncate">{detalles}</p>
+                                                                        )}
+                                                                    </div>
+                                                                </button>
+                                                            );
+                                                        })}
                                                         {/* Always show option to create at the bottom of valid results too */}
                                                         <button
                                                             onClick={() => setShowCreateClient(true)}
@@ -1012,6 +1104,62 @@ export default function QuotePage({ params }: QuotePageProps) {
                                             </div>
                                         )}
                                     </div>
+
+                                    {/* Editar datos del cliente ya seleccionado (ej. teléfono/correo
+                                        desactualizado en Odoo) — mismo formulario que "Crear Nuevo
+                                        Cliente", pero hace 'write' sobre el partner existente en vez
+                                        de crear uno nuevo. */}
+                                    {selectedClient && showEditClient && (
+                                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 animate-in fade-in slide-in-from-top-2 mt-2">
+                                            <div className="flex justify-between items-center mb-3 text-xs font-bold text-blue-700 uppercase">
+                                                <span>Editar Datos del Cliente</span>
+                                                <button onClick={() => setShowEditClient(false)} className="text-slate-400 hover:text-slate-600">
+                                                    <X size={14} />
+                                                </button>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <input
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    maxLength={11}
+                                                    placeholder="DNI (8) / RUC (11) - Obligatorio"
+                                                    className="w-full px-2 py-1.5 text-sm border rounded bg-white text-slate-800 placeholder:text-slate-500"
+                                                    value={editClientData.vat}
+                                                    onChange={e => setEditClientData({ ...editClientData, vat: e.target.value.replace(/\D/g, '') })}
+                                                />
+                                                <input
+                                                    type="text"
+                                                    placeholder="Nombre Completo (Obligatorio)"
+                                                    className="w-full px-2 py-1.5 text-sm border rounded bg-white text-slate-800 placeholder:text-slate-500"
+                                                    value={editClientData.name}
+                                                    onChange={e => setEditClientData({ ...editClientData, name: e.target.value })}
+                                                />
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="tel"
+                                                        placeholder="Teléfono"
+                                                        className="w-full px-2 py-1.5 text-sm border rounded bg-white text-slate-800 placeholder:text-slate-500"
+                                                        value={editClientData.phone}
+                                                        onChange={e => setEditClientData({ ...editClientData, phone: e.target.value })}
+                                                    />
+                                                    <input
+                                                        type="email"
+                                                        placeholder="Email"
+                                                        className="w-full px-2 py-1.5 text-sm border rounded bg-white text-slate-800 placeholder:text-slate-500"
+                                                        value={editClientData.email}
+                                                        onChange={e => setEditClientData({ ...editClientData, email: e.target.value })}
+                                                    />
+                                                </div>
+                                                <button
+                                                    onClick={handleUpdateClient}
+                                                    disabled={!editClientData.name || !editClientData.vat || isUpdatingClient}
+                                                    className="w-full py-2 bg-blue-700 text-white rounded text-xs font-bold hover:bg-blue-800 transition-colors disabled:opacity-50"
+                                                >
+                                                    {isUpdatingClient ? 'Guardando...' : 'Guardar Cambios'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* Segundo cliente (cónyuge/conviviente): solo visual/PDF, no crea
                                         un res.partner ni cambia el titular del pedido en Odoo — ver

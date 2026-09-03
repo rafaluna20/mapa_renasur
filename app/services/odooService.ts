@@ -658,9 +658,33 @@ export const odooService = {
             });
             const result = await response.json();
             if (!result.success) throw new Error(result.error);
-            return { id: result.partnerId, name: data.name };
+            // El route devuelve el campo como 'id' (ver create_partner/route.ts
+            // línea 37: `{ success: true, id: newPartnerId, name }`) — leer
+            // 'result.partnerId' acá devolvía siempre undefined, así que todo
+            // cliente nuevo creado desde la cotización quedaba con id
+            // indefinido (rompía cualquier uso posterior de selectedClient.id).
+            return { id: result.id, name: data.name };
         } catch (error) {
             console.error("Error creating partner:", error);
+            throw error;
+        }
+    },
+
+    // 1c. Actualizar los datos de contacto de un cliente ya existente —
+    // antes de esto no había forma de corregir un DNI/teléfono/correo mal
+    // cargado sin ir directo al CRM de Odoo.
+    async updatePartner(data: { id: number; name: string; vat: string; phone?: string; email?: string }): Promise<{ id: number; name: string }> {
+        try {
+            const response = await apiFetch('/api/odoo/update_partner', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data),
+            });
+            const result = await response.json();
+            if (!result.success) throw new Error(result.error);
+            return { id: data.id, name: data.name };
+        } catch (error) {
+            console.error("Error updating partner:", error);
             throw error;
         }
     },
