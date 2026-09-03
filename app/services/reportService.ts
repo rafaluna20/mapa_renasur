@@ -1739,6 +1739,14 @@ export async function generateClientStatementReport(data: ClientStatementReportD
     const reportId = generateReportId('EDC', now);
     const mostrarLabelLote = data.lots.length > 1;
 
+    // Columna "FACTURA" del historial oculta a pedido — cambiar a `true`
+    // para reactivarla. Se maneja con este flag (en vez de comentar/borrar
+    // las líneas sueltas de head/rows/columnStyles) porque autoTable indexa
+    // columnStyles por posición: sacar una columna a mano requeriría
+    // recalcular esos índices cada vez que se prenda/apague. Con el flag,
+    // los índices se recalculan solos.
+    const MOSTRAR_COLUMNA_FACTURA = false;
+
     const drawHeader = () => {
         drawRect(doc, 0, 0, W, H, BRAND.pageBg);
         drawRect(doc, 0, 0, W, 40, BRAND.panelBg);
@@ -1803,7 +1811,13 @@ export async function generateClientStatementReport(data: ClientStatementReportD
         const realTotalPaid = lot.invoices
             .filter((i) => i.payment_state === 'paid')
             .reduce((sum, inv) => sum + (inv.amount_total || 0), 0);
-        const pendingBalance = Math.max(0, lot.listPrice - realTotalPaid);
+        // Tolerancia de redondeo: dividir el precio en N cuotas iguales rara
+        // vez da un resultado exacto — sin esto, un lote 100% pagado podía
+        // mostrar unos centavos de "saldo pendiente" en vez de S/ 0.00
+        // (mismo ajuste aplicado en LotDetailModal.tsx/LotFinancialStatement.tsx).
+        const TOLERANCIA_REDONDEO_CUOTAS = 1; // soles
+        const pendingBalanceRaw = Math.max(0, lot.listPrice - realTotalPaid);
+        const pendingBalance = pendingBalanceRaw <= TOLERANCIA_REDONDEO_CUOTAS ? 0 : pendingBalanceRaw;
         const financialProgress = lot.listPrice > 0 ? Math.min(100, Math.round((realTotalPaid / lot.listPrice) * 100)) : 0;
 
         const overdueInvoices = lot.invoices.filter(
@@ -1882,25 +1896,33 @@ export async function generateClientStatementReport(data: ClientStatementReportD
         const rows = sortedInvoices.map((inv) => [
             parseCuotaLabelPdf(inv),
             formatDDMMYY(inv.invoice_date_due || inv.invoice_date),
-            inv.name || inv.ref || 'S/N',
+            ...(MOSTRAR_COLUMNA_FACTURA ? [inv.name || inv.ref || 'S/N'] : []),
             filaEstado(inv),
             currency(inv.amount_total),
             inv.payment_state === 'paid' ? '—' : currency(inv.amount_residual),
         ]);
 
+        // ESTADO/MONTO/SALDO se corren una posición cuando FACTURA está
+        // oculta — se calculan acá para que columnStyles siempre apunte a
+        // la columna correcta sin tocarlo a mano.
+        const idxEstado = MOSTRAR_COLUMNA_FACTURA ? 3 : 2;
+        const idxMonto = idxEstado + 1;
+        const idxSaldo = idxEstado + 2;
+        const numCols = idxSaldo + 1;
+
         autoTable(doc, {
             startY: y,
-            head: [['CUOTA', 'VENCIMIENTO', 'FACTURA', 'ESTADO', 'MONTO', 'SALDO']],
-            body: rows.length > 0 ? rows : [['Aún no hay cuotas facturadas.', '', '', '', '', '']],
+            head: [['CUOTA', 'VENCIMIENTO', ...(MOSTRAR_COLUMNA_FACTURA ? ['FACTURA'] : []), 'ESTADO', 'MONTO', 'SALDO']],
+            body: rows.length > 0 ? rows : [['Aún no hay cuotas facturadas.', ...Array(numCols - 1).fill('')]],
             theme: 'plain',
             styles: { font: 'helvetica', fontSize: 7.5, cellPadding: { top: 3, bottom: 3, left: 4, right: 4 }, textColor: BRAND.textLight, lineColor: BRAND.borderLight, lineWidth: 0.1 },
             headStyles: { fillColor: BRAND.panelBg, textColor: BRAND.darkBg, fontStyle: 'bold', fontSize: 6.5 },
             alternateRowStyles: { fillColor: [250, 252, 254] as [number, number, number] },
             columnStyles: {
                 0: { fontStyle: 'bold', textColor: BRAND.purple },
-                3: { halign: 'center' },
-                4: { halign: 'right' },
-                5: { fontStyle: 'bold', textColor: BRAND.red, halign: 'right' },
+                [idxEstado]: { halign: 'center' },
+                [idxMonto]: { halign: 'right' },
+                [idxSaldo]: { fontStyle: 'bold', textColor: BRAND.red, halign: 'right' },
             },
             margin: { left: margin, right: margin },
         });

@@ -54,7 +54,15 @@ export default function LotFinancialStatement({ lotLabel, mz, etapa, numeroLote,
     const realTotalPaid = invoices
         .filter((i) => i.payment_state === 'paid')
         .reduce((sum, inv) => sum + (inv.amount_total || 0), 0);
-    const pendingBalance = Math.max(0, listPrice - realTotalPaid);
+    // Tolerancia de redondeo: dividir el precio en N cuotas iguales rara vez
+    // da un resultado exacto (ej. 28000/12 = 2333.33... cada cuota se
+    // registra en 2333.33, y la suma queda unos centavos por debajo del
+    // nominal) — sin esto, un lote 100% pagado (todas sus facturas
+    // payment_state='paid', amount_residual=0) mostraba un saldo pendiente
+    // de unos centavos en vez de S/ 0.00.
+    const TOLERANCIA_REDONDEO_CUOTAS = 1; // soles
+    const pendingBalanceRaw = Math.max(0, listPrice - realTotalPaid);
+    const pendingBalance = pendingBalanceRaw <= TOLERANCIA_REDONDEO_CUOTAS ? 0 : pendingBalanceRaw;
     const financialProgress = listPrice > 0 ? Math.min(100, Math.round((realTotalPaid / listPrice) * 100)) : 0;
 
     const overdueInvoices = invoices.filter(

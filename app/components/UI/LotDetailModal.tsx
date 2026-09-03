@@ -318,7 +318,15 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
     // ─── KPIs Financieros y Morosidad (Estado de Cuenta) ─────────────────────────
     const listPrice = lot.list_price || 0;
     const realTotalPaid = totalInvoiced;
-    const pendingBalance = Math.max(0, listPrice - realTotalPaid);
+    // Tolerancia de redondeo: dividir el precio en N cuotas iguales rara vez
+    // da un resultado exacto (ej. E01MZS034P: 28000/12 = 2333.33... cada
+    // cuota se registra en 2333.33, y 12x2333.33 = 27999.96, 4 centavos
+    // menos que el nominal) — sin esto, un lote 100% pagado (las 13
+    // facturas payment_state='paid', amount_residual=0, verificado real)
+    // mostraba "Saldo Deudor Pendiente: S/ 0.04" en vez de S/ 0.00.
+    const TOLERANCIA_REDONDEO_CUOTAS = 1; // soles
+    const pendingBalanceRaw = Math.max(0, listPrice - realTotalPaid);
+    const pendingBalance = pendingBalanceRaw <= TOLERANCIA_REDONDEO_CUOTAS ? 0 : pendingBalanceRaw;
     const financialProgress = listPrice > 0 ? Math.min(100, Math.round((realTotalPaid / listPrice) * 100)) : 0;
 
     const overdueInvoices = invoices.filter(inv => inv.payment_state !== 'paid' && inv.invoice_date_due && new Date(inv.invoice_date_due) < new Date());
