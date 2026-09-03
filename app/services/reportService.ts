@@ -1621,6 +1621,15 @@ export interface ClientStatementReportData {
 // Financiero): un título con acento de color arriba, y una grilla de
 // label/valor debajo. Se usa tanto para "Datos del Cliente" (una vez, al
 // inicio) como para "Datos del Lote" (una por lote, dentro del loop).
+//
+// El valor de cada celda se envuelve (wrap) al ancho de su columna en vez
+// de imprimirse en una sola línea fija: un nombre largo (ej. "Fulano Y
+// Fulana", copropietarios concatenados) desbordaba su columna y quedaba
+// superpuesto sobre la celda de al lado (bug real reportado con un nombre
+// de ~70 caracteres tapando el DNI). La altura de cada fila se calcula
+// dinámicamente según la celda con más líneas de esa fila — así ninguna
+// celda le "roba" espacio a la de al lado sin importar cuán largo sea el
+// valor, sin necesitar un caso especial para "Nombre".
 function drawInfoBox(
     doc: jsPDF,
     x: number,
@@ -1631,25 +1640,41 @@ function drawInfoBox(
     accentColor: [number, number, number],
     columns: number = 2
 ): number {
-    const rowH = 11;
-    const rows = Math.ceil(items.length / columns);
-    const boxH = 9 + rows * rowH;
     const colW = width / columns;
+    const valueFontSize = 8.5;
+    const lineHeightMm = (valueFontSize * 1.15) / doc.internal.scaleFactor;
+
+    setFont(doc, valueFontSize, BRAND.darkBg, 'bold');
+    const wrappedItems = items.map((item) => ({
+        ...item,
+        lines: doc.splitTextToSize(item.value, colW - 10) as string[],
+    }));
+
+    const rows = Math.ceil(wrappedItems.length / columns);
+    const rowHeights: number[] = [];
+    for (let r = 0; r < rows; r++) {
+        const rowItems = wrappedItems.slice(r * columns, r * columns + columns);
+        const maxLines = Math.max(1, ...rowItems.map((it) => it.lines.length));
+        rowHeights.push(4.5 + maxLines * lineHeightMm + 3);
+    }
+    const boxH = 9 + rowHeights.reduce((sum, h) => sum + h, 0);
 
     drawRect(doc, x, y, width, boxH, BRAND.panelBg, 2);
     setFont(doc, 7, accentColor, 'bold');
     doc.text(title, x + 5, y + 6);
 
-    items.forEach((item, i) => {
-        const col = i % columns;
-        const row = Math.floor(i / columns);
-        const ix = x + 5 + col * colW;
-        const iy = y + 13 + row * rowH;
-        setFont(doc, 6.5, BRAND.textMuted, 'bold');
-        doc.text(item.label.toUpperCase(), ix, iy);
-        setFont(doc, 8.5, BRAND.darkBg, 'bold');
-        doc.text(item.value, ix, iy + 4.5);
-    });
+    let rowY = y + 13;
+    for (let r = 0; r < rows; r++) {
+        const rowItems = wrappedItems.slice(r * columns, r * columns + columns);
+        rowItems.forEach((item, ci) => {
+            const ix = x + 5 + ci * colW;
+            setFont(doc, 6.5, BRAND.textMuted, 'bold');
+            doc.text(item.label.toUpperCase(), ix, rowY);
+            setFont(doc, valueFontSize, BRAND.darkBg, 'bold');
+            doc.text(item.lines, ix, rowY + 4.5);
+        });
+        rowY += rowHeights[r];
+    }
 
     return y + boxH + 6;
 }
