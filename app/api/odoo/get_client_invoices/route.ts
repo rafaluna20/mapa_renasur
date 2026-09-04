@@ -81,7 +81,8 @@ export async function POST(request: Request) {
             'invoice_date_due',
             'payment_state',
             'amount_total',
-            'amount_residual'
+            'amount_residual',
+            'invoice_payments_widget' // Fecha real de pago (para el PDF de Estado de Cuenta)
         ];
 
         const invoices = await fetchOdoo(

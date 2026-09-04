@@ -1581,6 +1581,13 @@ export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): 
 // que lo que el staff reenvíe a un cliente sea idéntico a lo que ese cliente
 // vería si lo bajara él mismo (ver discusión: no mantener 2 plantillas que
 // puedan divergir).
+// Shape real (verificado contra Odoo) del campo computado `invoice_payments_widget`
+// de account.move — la única fuente de la fecha real de pago, ya que no existe
+// como campo plano. Un mismo move puede tener varios abonos parciales.
+export interface InvoicePaymentsWidget {
+    content?: { date?: string }[];
+}
+
 export interface ClientStatementInvoice {
     id: number;
     name: string;
@@ -1591,6 +1598,7 @@ export interface ClientStatementInvoice {
     amount_total: number;
     amount_residual: number;
     payment_state: string;
+    invoice_payments_widget?: InvoicePaymentsWidget | false;
 }
 
 export interface ClientStatementLot {
@@ -1712,6 +1720,38 @@ function formatDDMMYY(fecha: string): string {
     if (isNaN(d.getTime())) return fecha;
     const pad = (n: number) => String(n).padStart(2, '0');
     return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${String(d.getFullYear()).slice(-2)}`;
+}
+
+// Fecha real de pago (YYYY-MM-DD) — solo tiene sentido para cuotas ya
+// pagadas (payment_state='paid'); para Pendiente/Mora no hay una fecha real
+// que mostrar. Una misma cuota puede saldarse con más de un abono parcial
+// (verificado con datos reales de Odoo: un pago cubre varias cuotas a la
+// vez), así que se toma la fecha del abono MÁS RECIENTE — la que efectivamente
+// la dejó pagada — no la del primero.
+function getFechaPagoRawPdf(inv: ClientStatementInvoice): string | null {
+    if (inv.payment_state !== 'paid') return null;
+    const widget = inv.invoice_payments_widget;
+    const content = widget ? widget.content || [] : [];
+    const fechas = content.map((c) => c.date).filter((d): d is string => !!d);
+    if (fechas.length === 0) return null;
+    return fechas.reduce((max, d) => (d > max ? d : max));
+}
+
+// Diferencia en días entre el pago real y el vencimiento de la cuota:
+// positivo = pagó tarde (atraso), negativo = pagó antes (adelanto). Se
+// calcula sobre fechas puras (sin hora) para no arrastrar desfases de
+// timezone en el conteo. Confirmado con datos reales que el adelanto puede
+// ser de varios años (pago total anticipado de cuotas con vencimiento muy
+// a futuro) — no se trunca el valor, solo se le da ancho de columna fijo.
+function calcularDiasPdf(fechaPagoRaw: string | null, fechaVencimientoRaw: string): { texto: string; color: [number, number, number] } {
+    if (!fechaPagoRaw || !fechaVencimientoRaw) return { texto: '—', color: BRAND.textMuted };
+    const pago = new Date(fechaPagoRaw + 'T00:00:00').getTime();
+    const vence = new Date(fechaVencimientoRaw + 'T00:00:00').getTime();
+    if (isNaN(pago) || isNaN(vence)) return { texto: '—', color: BRAND.textMuted };
+    const dias = Math.round((pago - vence) / 86400000);
+    if (dias > 0) return { texto: `${dias}d atraso`, color: BRAND.red };
+    if (dias < 0) return { texto: `${Math.abs(dias)}d antes`, color: BRAND.greenLight };
+    return { texto: 'A tiempo', color: BRAND.greenLight };
 }
 
 /**
@@ -1893,26 +1933,35 @@ export async function generateClientStatementReport(data: ClientStatementReportD
             return vencida ? 'Mora' : 'Pendiente';
         };
 
-        const rows = sortedInvoices.map((inv) => [
+        // Fecha de pago real + días de atraso/adelanto — precalculados en el
+        // mismo orden que `sortedInvoices` para que `didParseCell` pueda
+        // colorear la celda de DÍAS por índice de fila sin recalcular nada.
+        const diasInfo = sortedInvoices.map((inv) => calcularDiasPdf(getFechaPagoRawPdf(inv), inv.invoice_date_due));
+
+        const rows = sortedInvoices.map((inv, i) => [
             parseCuotaLabelPdf(inv),
             formatDDMMYY(inv.invoice_date_due || inv.invoice_date),
+            (() => { const f = getFechaPagoRawPdf(inv); return f ? formatDDMMYY(f) : '—'; })(),
+            diasInfo[i].texto,
             ...(MOSTRAR_COLUMNA_FACTURA ? [inv.name || inv.ref || 'S/N'] : []),
             filaEstado(inv),
             currency(inv.amount_total),
             inv.payment_state === 'paid' ? '—' : currency(inv.amount_residual),
         ]);
 
-        // ESTADO/MONTO/SALDO se corren una posición cuando FACTURA está
-        // oculta — se calculan acá para que columnStyles siempre apunte a
-        // la columna correcta sin tocarlo a mano.
-        const idxEstado = MOSTRAR_COLUMNA_FACTURA ? 3 : 2;
+        // ESTADO/MONTO/SALDO se corren cuando FACTURA está oculta — se
+        // calculan acá para que columnStyles siempre apunte a la columna
+        // correcta sin tocarlo a mano.
+        const idxFechaPago = 2;
+        const idxDias = 3;
+        const idxEstado = MOSTRAR_COLUMNA_FACTURA ? 5 : 4;
         const idxMonto = idxEstado + 1;
         const idxSaldo = idxEstado + 2;
         const numCols = idxSaldo + 1;
 
         autoTable(doc, {
             startY: y,
-            head: [['CUOTA', 'VENCIMIENTO', ...(MOSTRAR_COLUMNA_FACTURA ? ['FACTURA'] : []), 'ESTADO', 'MONTO', 'SALDO']],
+            head: [['CUOTA', 'VENCIMIENTO', 'FECHA DE PAGO', 'DÍAS', ...(MOSTRAR_COLUMNA_FACTURA ? ['FACTURA'] : []), 'ESTADO', 'MONTO', 'SALDO']],
             body: rows.length > 0 ? rows : [['Aún no hay cuotas facturadas.', ...Array(numCols - 1).fill('')]],
             theme: 'plain',
             styles: { font: 'helvetica', fontSize: 7.5, cellPadding: { top: 3, bottom: 3, left: 4, right: 4 }, textColor: BRAND.textLight, lineColor: BRAND.borderLight, lineWidth: 0.1 },
@@ -1920,9 +1969,23 @@ export async function generateClientStatementReport(data: ClientStatementReportD
             alternateRowStyles: { fillColor: [250, 252, 254] as [number, number, number] },
             columnStyles: {
                 0: { fontStyle: 'bold', textColor: BRAND.purple },
+                [idxFechaPago]: { cellWidth: 20 },
+                [idxDias]: { cellWidth: 22, halign: 'center' },
                 [idxEstado]: { halign: 'center' },
                 [idxMonto]: { halign: 'right' },
                 [idxSaldo]: { fontStyle: 'bold', textColor: BRAND.red, halign: 'right' },
+            },
+            // Color condicional de DÍAS (rojo=atraso, verde=a tiempo/adelanto):
+            // depende del signo por fila, no se puede resolver con columnStyles
+            // (que aplica un único estilo fijo a toda la columna).
+            didParseCell: (data) => {
+                if (data.section === 'body' && data.column.index === idxDias) {
+                    const info = diasInfo[data.row.index];
+                    if (info) {
+                        data.cell.styles.textColor = info.color;
+                        data.cell.styles.fontStyle = 'bold';
+                    }
+                }
             },
             margin: { left: margin, right: margin },
         });

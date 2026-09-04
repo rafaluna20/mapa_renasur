@@ -16,6 +16,10 @@ interface OdooInvoice {
     payment_state: string;
     amount_total: number;
     amount_residual: number;
+    // Único lugar donde vive la fecha real de pago (no existe como campo
+    // plano en account.move) — la usa el PDF de Estado de Cuenta para la
+    // columna "Fecha de Pago" / "Días de atraso-adelanto".
+    invoice_payments_widget?: { content?: { date?: string }[] } | false;
 }
 
 interface OdooProductTemplate {
@@ -77,7 +81,7 @@ export async function GET() {
                 ['move_type', '=', 'out_invoice'],
                 ['state', '=', 'posted'],
             ]], {
-                fields: ['id', 'name', 'ref', 'payment_reference', 'invoice_date', 'invoice_date_due', 'payment_state', 'amount_total', 'amount_residual'],
+                fields: ['id', 'name', 'ref', 'payment_reference', 'invoice_date', 'invoice_date_due', 'payment_state', 'amount_total', 'amount_residual', 'invoice_payments_widget'],
                 limit: 500,
                 order: 'invoice_date asc',
             }) as Promise<OdooInvoice[]>,

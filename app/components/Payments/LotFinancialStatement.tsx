@@ -12,6 +12,8 @@ export interface StatementInvoice {
     amount_total: number;
     amount_residual: number;
     payment_state: string;
+    // Fecha real de pago (usada por el PDF de Estado de Cuenta, no en pantalla).
+    invoice_payments_widget?: { content?: { date?: string }[] } | false;
 }
 
 interface LotFinancialStatementProps {
