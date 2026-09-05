@@ -48,12 +48,20 @@ export async function POST(request: Request) {
         const invoiceIds = (order.invoice_ids as number[]) || [];
         const pickingIds = (order.picking_ids as number[]) || [];
 
-        // ─── Step 1.5: Detener el contrato recurrente vinculado (si existe) ───
+        // ─── Step 1.5: Resolver el contrato recurrente vinculado (si existe) ───
         // Antes de este fix, reembolsar/cancelar una orden no tocaba el
         // simple.contract asociado: el cron de facturación recurrente seguía
         // generando cuotas mensuales de un contrato ya reembolsado, porque
         // nada aquí llamaba a action_stop().
+        //
+        // Si el contrato sigue en 'draft' (nunca se confirmó: sin factura de
+        // cuota inicial ni cuotas facturadas), no hay nada que "detener" -se
+        // borra directo (unlink), mismo criterio que ya se usa más abajo con
+        // la propia orden cuando no tiene factura contabilizada (Case B).
+        // Dejarlo como contrato "Finalizado" sería un registro fantasma que
+        // nunca llegó a estar Vigente, y ensucia la lista de Contratos.
         let contractStopped = false;
+        let contractDeleted = false;
         try {
             const contracts = await fetchOdoo(
                 'simple.contract',
@@ -61,13 +69,20 @@ export async function POST(request: Request) {
                 [[['sale_order_id', '=', orderId]]],
                 { fields: ['id', 'state'], limit: 1 }
             );
-            if (Array.isArray(contracts) && contracts.length > 0 && contracts[0].state !== 'closed') {
-                await fetchOdoo('simple.contract', 'action_stop', [[contracts[0].id]]);
-                contractStopped = true;
-                console.log(`✅ Contrato recurrente ${contracts[0].id} detenido (action_stop) para orden ${orderId}`);
+            if (Array.isArray(contracts) && contracts.length > 0) {
+                const contract = contracts[0];
+                if (contract.state === 'draft') {
+                    await fetchOdoo('simple.contract', 'unlink', [[contract.id]]);
+                    contractDeleted = true;
+                    console.log(`🗑️ Contrato en borrador ${contract.id} eliminado para orden ${orderId}`);
+                } else if (contract.state !== 'closed') {
+                    await fetchOdoo('simple.contract', 'action_stop', [[contract.id]]);
+                    contractStopped = true;
+                    console.log(`✅ Contrato recurrente ${contract.id} detenido (action_stop) para orden ${orderId}`);
+                }
             }
         } catch (contractErr) {
-            console.warn('⚠️ No se pudo detener el contrato recurrente vinculado (puede no existir):', contractErr);
+            console.warn('⚠️ No se pudo resolver el contrato recurrente vinculado (puede no existir):', contractErr);
         }
 
         // Pre-fetch the product ID before any potential order deletion occurs
@@ -163,6 +178,7 @@ export async function POST(request: Request) {
             creditNoteId,
             orderDeleted,
             contractStopped,
+            contractDeleted,
             orderName: order.name,
             refundAmount: refundAmount ?? order.amount_total,
             newLotStatus,
