@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { fetchOdoo } from '@/app/services/odooService';
+import { fetchOdoo, inferIdentificationTypeId } from '@/app/services/odooService';
 import { requireStaffSession } from '@/app/lib/staffAuth';
 
 /**
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
             );
         }
 
-        const partnerData = {
+        const partnerData: Record<string, unknown> = {
             name,
             email: email || false,
             phone: phone || false,
@@ -39,6 +39,13 @@ export async function POST(request: Request) {
             vat: vat || false,
             street: address || false,
         };
+        // Mismo fix que create_partner: sin esto, contactos creados antes de
+        // ese fix (o con el tipo en blanco) siguen fallando al validar un
+        // DNI de 8 dígitos contra el formato de RUC.
+        if (vat) {
+            const idType = inferIdentificationTypeId(vat);
+            if (idType) partnerData.l10n_latam_identification_type_id = idType;
+        }
 
         await fetchOdoo('res.partner', 'write', [[id], partnerData]);
 

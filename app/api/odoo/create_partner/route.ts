@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { fetchOdoo } from '@/app/services/odooService';
+import { fetchOdoo, inferIdentificationTypeId } from '@/app/services/odooService';
 import { requireStaffSession } from '@/app/lib/staffAuth';
 
 export async function POST(request: Request) {
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
             );
         }
 
-        const partnerData = {
+        const partnerData: Record<string, unknown> = {
             name,
             email: email || false,
             phone: phone || false,
@@ -27,6 +27,12 @@ export async function POST(request: Request) {
             company_type: 'person', // Default to individual
             customer_rank: 1 // Important for Sales filters
         };
+        // Sin esto, un DNI de 8 dígitos queda con el tipo de identificación
+        // en blanco y Odoo lo rechaza más tarde exigiendo formato de RUC.
+        if (vat) {
+            const idType = inferIdentificationTypeId(vat);
+            if (idType) partnerData.l10n_latam_identification_type_id = idType;
+        }
 
         const newPartnerId = await fetchOdoo(
             'res.partner',

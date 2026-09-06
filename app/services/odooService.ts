@@ -46,6 +46,21 @@ export interface OdooProduct {
     x_proyecto_id?: [number, string] | false;
 }
 
+// IDs verificados contra Odoo real (l10n_latam.identification.type, Perú):
+// 5 = DNI, 4 = RUC. Sin fijar este campo al crear/editar un contacto, Odoo
+// lo deja en blanco y más tarde lo valida con el formato de RUC (prefijos
+// 10/15/16/17/20 + 9 dígitos), rechazando cualquier DNI de 8 dígitos con
+// "El número RUC [...] no parece ser válido" — bug real reportado desde
+// /quote al editar un cliente creado sin este campo.
+const ODOO_ID_TYPE_DNI = 5;
+const ODOO_ID_TYPE_RUC = 4;
+
+export function inferIdentificationTypeId(vat: string): number | false {
+    if (/^\d{8}$/.test(vat)) return ODOO_ID_TYPE_DNI;
+    if (/^\d{11}$/.test(vat)) return ODOO_ID_TYPE_RUC;
+    return false;
+}
+
 // --- Server-Side Fetch Utility ---
 // NOTA: Esta función DEBE usarse solo en Server Components o API Routes.
 // No la uses directamente en Client Components porque process.env no estará disponible.
