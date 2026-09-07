@@ -54,10 +54,12 @@ export interface ClientPdfDetails {
     email?: string;
     vat?: string;
     address?: string;
-    // Segundo cliente (cónyuge/conviviente) cuando la compra es a nombre
-    // de los dos — solo nombre + DNI/RUC, ver LocalQuoteClient.
+    // Segundo cliente (cónyuge/conviviente, hijo/a, sobrino/a, etc.) cuando
+    // la compra es a nombre de los dos — nombre + DNI/RUC + relación (texto
+    // libre), ver LocalQuoteClient.
     secondClientName?: string;
     secondClientVat?: string;
+    secondClientRelacion?: string;
 }
 
 export const exportQuoteToPdf = async (
@@ -224,7 +226,8 @@ export const exportQuoteToPdf = async (
             ['Dirección:', { content: val(clientDetails.address), colSpan: 3 } as any],
         ];
         if (hasSecondClient) {
-            clientBody.push(['Cónyuge/Conviviente:', val(clientDetails.secondClientName), 'DNI/RUC:', val(clientDetails.secondClientVat)]);
+            const relacionLabel = clientDetails.secondClientRelacion?.trim() || 'Cónyuge/Conviviente';
+            clientBody.push([`${relacionLabel}:`, val(clientDetails.secondClientName), 'DNI/RUC:', val(clientDetails.secondClientVat)]);
         }
 
         autoTable(doc, {

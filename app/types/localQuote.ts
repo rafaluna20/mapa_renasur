@@ -33,6 +33,10 @@ export interface LocalQuoteClient {
     // cliente principal de arriba); solo aparece en pantalla y en el PDF.
     secondClientName?: string;
     secondClientVat?: string;
+    // Parentesco/relación con el cliente principal (ej. "Cónyuge",
+    // "Hijo/a", "Sobrino/a") — texto libre, no un catálogo cerrado: la
+    // compra conjunta en Perú no está limitada a cónyuge/conviviente.
+    secondClientRelacion?: string;
 }
 
 export interface LocalQuote {
