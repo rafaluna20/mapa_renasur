@@ -109,6 +109,38 @@ function anguloEntreAristas(
 // medio natural entre paralelo (0°) y perpendicular (90°).
 const UMBRAL_PARALELO_GRADOS = 45;
 
+/**
+ * De las aristas candidatas a "fondo" (paralelas al frente por ángulo), se
+ * queda solo con el tramo CONTIGUO (en el orden de recorrido desde el
+ * frente) de mayor longitud total — no la primera que aparece, ni la de
+ * más aristas. Ver nota completa donde se llama, en
+ * derivarColindanciasYDimensiones: sin esto, una arista corta y aislada
+ * que por ángulo también califica como "paralela" le roba el turno de
+ * fondo a la que en realidad es el lado opuesto real, y descuadra toda la
+ * clasificación de derecha/izquierda que viene después.
+ */
+function mayorTramoContiguo(
+    ordenDesdeFrente: number[],
+    paralelas: number[],
+    edges: Edge[]
+): number[] {
+    const esParalela = new Set(paralelas);
+    const tramos: number[][] = [];
+    let actual: number[] = [];
+    for (const idx of ordenDesdeFrente) {
+        if (esParalela.has(idx)) {
+            actual.push(idx);
+        } else if (actual.length > 0) {
+            tramos.push(actual);
+            actual = [];
+        }
+    }
+    if (actual.length > 0) tramos.push(actual);
+
+    const longitudTramo = (tramo: number[]) => tramo.reduce((suma, idx) => suma + edges[idx].longitud, 0);
+    return tramos.reduce((mejor, t) => (longitudTramo(t) > longitudTramo(mejor) ? t : mejor));
+}
+
 // Área con signo (fórmula del shoelace, sin dividir entre 2: el signo es lo
 // único que importa acá). Con Este=x creciendo al este y Norte=y creciendo
 // al norte (UTM estándar), un polígono digitalizado en sentido antihorario
@@ -241,9 +273,25 @@ export function derivarColindanciasYDimensiones(
         ordenDesdeFrente.map((idx) => [idx, anguloEntreAristas(frente, edges[idx])])
     );
     const paralelas = ordenDesdeFrente.filter((idx) => anguloPorIndice.get(idx)! <= UMBRAL_PARALELO_GRADOS);
+
+    // El fondo real es UN SOLO tramo contiguo del recorrido (la máquina de
+    // estados de más abajo solo avanza hacia adelante: derecha -> fondo ->
+    // izquierda, sin poder volver a entrar a "fondo"). Con polígonos
+    // irregulares (5+ lados) puede haber DOS aristas "paralelas" al frente
+    // no contiguas entre sí — ej. una arista corta de esquina que por
+    // ángulo también cae bajo el umbral, separada de la arista larga que
+    // es el verdadero lado opuesto. Si se tratan ambas como fondo, la
+    // primera (corta) dispara la transición de estado antes de tiempo y la
+    // segunda (la real) termina mal clasificada como derecha/izquierda —
+    // y de paso "derecha" puede quedar completamente vacío. Verificado con
+    // el lote E01MZR045P: una arista de 5.70ml (36° del frente) y otra de
+    // 20.00ml —el verdadero fondo, casi exactamente paralelo, 1°— quedaban
+    // ambas marcadas como candidatas; solo el tramo contiguo más largo
+    // (por longitud total, no por cantidad de aristas) se queda con el
+    // rótulo de fondo; el resto vuelve a ser lateral.
     const indicesFondo = new Set(
         paralelas.length > 0
-            ? paralelas
+            ? mayorTramoContiguo(ordenDesdeFrente, paralelas, edges)
             : [ordenDesdeFrente.reduce((min, idx) => (anguloPorIndice.get(idx)! < anguloPorIndice.get(min)! ? idx : min))]
     );
 
