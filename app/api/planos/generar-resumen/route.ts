@@ -42,6 +42,18 @@ export async function POST(request: NextRequest) {
     const payloadResult = await construirPayloadPlano(defaultCode);
     if (!payloadResult.ok) return payloadResult.response;
 
+    // Lados que cayeron al genérico "Calle" (ver agregarColindancia en
+    // colindanciasUtils.ts): no hay una calle real digitalizada que
+    // coincida con ese lado — el documento igual se genera (no bloquea la
+    // descarga), pero el staff necesita saber que ese texto es un
+    // placeholder sin confirmar, no un dato verificado. Se avisa por header
+    // en vez de por el propio PDF: es una señal interna para quien lo
+    // descarga, no algo que deba aparecer en un documento potencialmente
+    // notarial.
+    const colindanciasSinConfirmar = (
+      (payloadResult.payload.colindancias as { tipo: string; nombre: string }[] | undefined) || []
+    ).filter((c) => c.tipo === 'calle' && c.nombre === 'Calle').length;
+
     // Identidad de quién pide el resumen — solo para auditoría en plan_pro
     // (ver PlanoDescarga), plan_pro no la usa para nada del dibujo. El
     // `config` que decide "solo linderos + copia" lo fuerza plan_pro del
@@ -75,6 +87,7 @@ export async function POST(request: NextRequest) {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': planosResponse.headers.get('content-disposition') || `attachment; filename="resumen_${defaultCode}.pdf"`,
+        'X-Colindancias-Sin-Confirmar': String(colindanciasSinConfirmar),
       },
     });
 

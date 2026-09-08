@@ -56,7 +56,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
     // cualquier staff, no solo administradores. A diferencia de planoState,
     // no hay polling: plan_pro lo genera y responde en la misma request, así
     // que solo hace falta saber si está en curso o si falló.
-    const [resumenState, setResumenState] = useState<{ status: 'idle' | 'generando' | 'error'; error?: string }>({ status: 'idle' });
+    const [resumenState, setResumenState] = useState<{ status: 'idle' | 'generando' | 'error'; error?: string; colindanciasSinConfirmar?: number }>({ status: 'idle' });
     const [showStatsModal, setShowStatsModal] = useState(false);
 
     // 🎯 ENTERPRISE SOLUTION: Use refs to track current lot and prevent stale updates
@@ -263,6 +263,12 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                 setResumenState({ status: 'error', error: data?.error?.message || 'No se pudo generar el resumen' });
                 return;
             }
+            // Cuántos lados del documento quedaron con "Calle" genérica en
+            // vez de un nombre real (ver X-Colindancias-Sin-Confirmar en la
+            // ruta): no bloquea la descarga, pero el staff debería revisar
+            // esos lados antes de entregar el documento — no es un dato
+            // verificado, es un placeholder.
+            const sinConfirmar = parseInt(res.headers.get('X-Colindancias-Sin-Confirmar') || '0', 10) || 0;
             const blob = await res.blob();
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -272,7 +278,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            setResumenState({ status: 'idle' });
+            setResumenState({ status: 'idle', colindanciasSinConfirmar: sinConfirmar });
         } catch (error) {
             setResumenState({ status: 'error', error: error instanceof Error ? error.message : 'Error de red' });
         }
@@ -588,6 +594,16 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                                         <div className="flex items-start gap-2 text-red-600 dark:text-red-400 text-xs mt-2">
                                             <AlertTriangle size={14} className="shrink-0 mt-0.5" />
                                             <span>{resumenState.error}</span>
+                                        </div>
+                                    )}
+                                    {resumenState.status === 'idle' && (resumenState.colindanciasSinConfirmar ?? 0) > 0 && (
+                                        <div className="flex items-start gap-2 text-amber-600 dark:text-amber-400 text-xs mt-2">
+                                            <AlertTriangle size={14} className="shrink-0 mt-0.5" />
+                                            <span>
+                                                {resumenState.colindanciasSinConfirmar} lado{resumenState.colindanciasSinConfirmar === 1 ? '' : 's'} del documento
+                                                {resumenState.colindanciasSinConfirmar === 1 ? ' quedó' : ' quedaron'} como &quot;Calle&quot; genérica (sin
+                                                una calle real digitalizada que coincida) — revisá antes de entregarlo.
+                                            </span>
                                         </div>
                                     )}
                                 </div>
