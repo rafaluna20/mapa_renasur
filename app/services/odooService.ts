@@ -1,6 +1,7 @@
 import { apiFetch } from '@/app/lib/apiFetch';
 import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 import { ArcoMetadata } from '@/app/utils/arcoUtils';
+import { callOdooJsonRpc } from '@/app/services/odooRpc';
 
 // --- Type Definitions ---
 export interface OdooUser {
@@ -64,6 +65,12 @@ export function inferIdentificationTypeId(vat: string): number | false {
 // --- Server-Side Fetch Utility ---
 // NOTA: Esta función DEBE usarse solo en Server Components o API Routes.
 // No la uses directamente en Client Components porque process.env no estará disponible.
+//
+// Wrapper fino sobre callOdooJsonRpc (app/services/odooRpc.ts) con la cuenta
+// admin de siempre (ODOO_USER_ID/ODOO_PASSWORD) — comportamiento idéntico al
+// de antes de extraer el transporte, solo cambió dónde vive. Para la cuenta
+// pública mínima usada por la landing de anuncios, ver odooPublicService.ts,
+// que llama al mismo callOdooJsonRpc con sus propias credenciales.
 export async function fetchOdoo(
     model: string,
     method: string,
@@ -76,56 +83,18 @@ export async function fetchOdoo(
         console.error("Missing ODOO_URL. Ensure this is called server-side.");
     }
 
-    const payload = {
-        jsonrpc: "2.0",
-        method: "call",
-        params: {
-            service: "object",
-            method: "execute_kw",
-            args: [
-                process.env.ODOO_DB,
-                parseInt(process.env.ODOO_USER_ID || "0"),
-                process.env.ODOO_PASSWORD,
-                model,
-                method,
-                args,
-                kwargs
-            ]
+    return callOdooJsonRpc(
+        {
+            url: url!,
+            db: process.env.ODOO_DB!,
+            uid: parseInt(process.env.ODOO_USER_ID || "0"),
+            password: process.env.ODOO_PASSWORD!,
         },
-        id: 2
-    };
-
-    try {
-        const res = await fetch(url!, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify(payload),
-            cache: "no-store",
-        });
-
-        if (!res.ok) {
-            const text = await res.text();
-            throw new Error(`Odoo HTTP Error ${res.status}: ${text}`);
-        }
-
-        const data = await res.json();
-
-        if (data.error) {
-            console.error("Odoo JSON-RPC Error:", JSON.stringify(data.error, null, 2));
-            throw new Error(`Odoo Error: ${data.error.message} - ${data.error.data?.message || ''}`);
-        }
-
-
-
-
-
-        return data.result;
-    } catch (error) {
-        console.error("Fetch Odoo Error:", error);
-        throw error;
-    }
+        model,
+        method,
+        args,
+        kwargs
+    );
 }
 
 // Registro crudo del modelo Odoo 'elemento.urbano' (módulo elemento_urbano_geometry).
@@ -163,15 +132,23 @@ interface OdooElementoUrbanoCapa {
     sin_borde: boolean;
 }
 
+// Firma común de fetchOdoo (admin) y fetchOdooPublic (odooPublicService.ts)
+// — permite compartir la lógica de parseo/paginado/join de abajo entre las
+// dos credenciales sin duplicarla (la duplicación es exactamente lo que
+// causó el bug histórico del domain mal envuelto, documentado más abajo).
+type OdooRpcFn = (model: string, method: string, args: unknown[], kwargs?: Record<string, unknown>) => Promise<unknown>;
+
 /**
  * Trae calles/áreas verdes/etc. desde el modelo Odoo 'elemento.urbano' —
  * intencionalmente NO es product.template, así que nunca puede colarse en
- * mergeLotsData, stats de ventas, ni la página de cotización. Server-side
- * solamente (usa fetchOdoo, que requiere las env vars de servidor).
+ * mergeLotsData, stats de ventas, ni la página de cotización. Recibe la
+ * función de transporte JSON-RPC como parámetro (fetchOdoo admin, o
+ * fetchOdooPublic con la credencial mínima de la landing) para poder
+ * reusar exactamente la misma lógica desde ambos server-sides.
  * Si el módulo aún no está instalado o la consulta falla, devuelve []
  * silenciosamente (no debe tumbar el mapa ni la generación de planos).
  */
-export async function fetchElementosUrbanos(): Promise<ElementoUrbano[]> {
+export async function fetchElementosUrbanosVia(rpc: OdooRpcFn): Promise<ElementoUrbano[]> {
     try {
         // Un elemento es válido con UN polígono (x_geometry_utm) O un
         // círculo completo (x_geometry_circulo) — no hace falta el
@@ -193,7 +170,7 @@ export async function fetchElementosUrbanos(): Promise<ElementoUrbano[]> {
         // enteras que quedaron después del corte (ej. "Veredas" desapareció
         // del mapa así, sin que sus datos en Odoo tuvieran nada malo).
         for (let offset = 0; ; offset += PAGE_SIZE) {
-            const pagina: OdooElementoUrbano[] = await fetchOdoo(
+            const pagina = (await rpc(
                 'elemento.urbano',
                 'search_read',
                 [domain],
@@ -202,7 +179,7 @@ export async function fetchElementosUrbanos(): Promise<ElementoUrbano[]> {
                     limit: PAGE_SIZE,
                     offset,
                 }
-            );
+            )) as OdooElementoUrbano[];
             registros.push(...pagina);
             if (pagina.length < PAGE_SIZE) break;
         }
@@ -218,12 +195,12 @@ export async function fetchElementosUrbanos(): Promise<ElementoUrbano[]> {
         // JSON-RPC, así que el color/mostrar_etiqueta/es_area de cada capa
         // se resuelve en un solo search_read adicional por los ids usados.
         const capaIds = [...new Set(validos.map((r) => (r.capa_id as [number, string])[0]))];
-        const capas: OdooElementoUrbanoCapa[] = await fetchOdoo(
+        const capas = (await rpc(
             'elemento.urbano.capa',
             'search_read',
             [[['id', 'in', capaIds]]],
             { fields: ['id', 'codigo', 'color_borde', 'color_relleno', 'mostrar_etiqueta', 'mostrar_en_mapa', 'es_area', 'sin_relleno', 'sin_borde'] }
-        );
+        )) as OdooElementoUrbanoCapa[];
         const capaPorId = new Map(capas.map((c) => [c.id, c]));
 
         return validos
@@ -255,6 +232,13 @@ export async function fetchElementosUrbanos(): Promise<ElementoUrbano[]> {
         console.warn('No se pudieron obtener elementos urbanos desde Odoo (¿módulo elemento_urbano_geometry instalado?):', error);
         return [];
     }
+}
+
+// Wrapper de siempre con la cuenta admin — comportamiento idéntico al de
+// antes de extraer fetchElementosUrbanosVia. Para la landing pública, ver
+// getPublicElementosUrbanos() en odooPublicService.ts.
+export async function fetchElementosUrbanos(): Promise<ElementoUrbano[]> {
+    return fetchElementosUrbanosVia(fetchOdoo);
 }
 
 // Registro crudo del modelo Odoo 'proyecto.inmobiliario' (módulo

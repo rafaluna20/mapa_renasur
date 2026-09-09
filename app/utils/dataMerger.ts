@@ -134,7 +134,13 @@ export function mergeLotsData(
         }
     });
 
-    console.log("[SYNC_DEBUG] Odoo Map entries:", odooMap.size);
+    // Solo en dev: esta función también la usa /venta (público) — sin el
+    // guard, cualquier visitante veía conteos internos de sincronización en
+    // su consola del navegador. No es dato sensible (PII), pero es ruido
+    // operativo que no debería salir en producción.
+    if (process.env.NODE_ENV !== 'production') {
+        console.log("[SYNC_DEBUG] Odoo Map entries:", odooMap.size);
+    }
     const integratedCodes = new Set<string>();
     const integratedIds = new Set<string>();
 
@@ -251,6 +257,8 @@ export function mergeLotsData(
     });
 
     const finalResult = [...matched, ...dynamicLots, ...fallbackLots];
-    console.log(`[MAP_SYNC] Local: ${matched.length}, Odoo: ${dynamicLots.length}, Fallback: ${fallbackLots.length}`);
+    if (process.env.NODE_ENV !== 'production') {
+        console.log(`[MAP_SYNC] Local: ${matched.length}, Odoo: ${dynamicLots.length}, Fallback: ${fallbackLots.length}`);
+    }
     return finalResult;
 }

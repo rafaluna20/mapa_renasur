@@ -81,14 +81,20 @@ function readCookie(request: Request, name: string): string | null {
     return match ? decodeURIComponent(match.slice(name.length + 1)) : null;
 }
 
-export async function getStaffSession(request: Request): Promise<StaffSessionPayload | null> {
+/**
+ * Valida directamente el valor crudo de la cookie de staff (sin depender de
+ * un objeto `Request`) — así se puede llamar también desde un Server
+ * Component (ej. app/page.tsx vía next/headers `cookies()`), no solo desde
+ * los Route Handlers de /api/odoo/*. `getStaffSession` (abajo) es un wrapper
+ * fino sobre esta función para no romper el contrato que ya usan ~20 rutas.
+ */
+export async function verifyStaffSessionToken(raw: string | null | undefined): Promise<StaffSessionPayload | null> {
     const secret = process.env.NEXTAUTH_SECRET;
     if (!secret) {
         console.error('[staffAuth] NEXTAUTH_SECRET no configurado: no se puede validar la sesión de staff.');
         return null;
     }
 
-    const raw = readCookie(request, STAFF_COOKIE_NAME);
     if (!raw) return null;
 
     try {
@@ -104,6 +110,11 @@ export async function getStaffSession(request: Request): Promise<StaffSessionPay
         console.warn('[staffAuth] Cookie de staff inválida o expirada:', error);
         return null;
     }
+}
+
+export async function getStaffSession(request: Request): Promise<StaffSessionPayload | null> {
+    const raw = readCookie(request, STAFF_COOKIE_NAME);
+    return verifyStaffSessionToken(raw);
 }
 
 type StaffAuthResult =

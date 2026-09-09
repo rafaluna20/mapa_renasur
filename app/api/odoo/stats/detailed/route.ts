@@ -108,12 +108,18 @@ export async function GET(request: NextRequest) {
         const monthlyGoal = parseInt(process.env.SALES_MONTHLY_GOAL || '200000', 10);
 
         // E. Pipeline & tasa de conversión, calculados desde sale.order (draft
-        // = pipeline abierto) — NO desde crm.lead. Verificado directamente
-        // contra producción: el modelo crm.lead NO EXISTE en este Odoo (el
-        // módulo CRM nunca se instaló), así que el bloque try/catch anterior
-        // caía SIEMPRE al catch y mostraba una estimación fija (45% de
-        // conversión, cantidad de borradores × S/85,000 de pipeline) en vez
-        // de datos reales — nunca el valor real de las cotizaciones abiertas.
+        // = pipeline abierto) — NO desde crm.lead. Cuando se escribió este
+        // comentario, se había verificado contra producción que el módulo
+        // CRM no estaba instalado y crm.lead no existía, así que el bloque
+        // try/catch anterior caía SIEMPRE al catch y mostraba una estimación
+        // fija (45% de conversión, cantidad de borradores × S/85,000 de
+        // pipeline) en vez de datos reales.
+        //
+        // ACTUALIZACIÓN: el módulo CRM ya está instalado (crm.lead existe;
+        // se usa desde app/services/odooPublicService.ts para los leads de
+        // la landing pública /venta). Esta ruta sigue calculando el pipeline
+        // desde sale.order a propósito — no se cambió esta lógica, solo se
+        // corrige el dato desactualizado del comentario original.
         const draftAgg = await fetchOdoo(
             "sale.order",
             "read_group",

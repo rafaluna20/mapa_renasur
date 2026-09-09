@@ -48,7 +48,7 @@ export default function LotCard({ lot, onClick, isSelected, quoteCount }: LotCar
             </div>
             <div className="flex justify-between text-sm text-slate-500 dark:text-slate-400">
                 <span>{Number(lot.x_area).toFixed(2)} m²</span>
-                <span className="font-semibold text-slate-700 dark:text-slate-300">$ {lot.list_price.toLocaleString()}</span>
+                <span className="font-semibold text-slate-700 dark:text-slate-300">S/ {lot.list_price.toLocaleString()}</span>
             </div>
             {quoteCount && quoteCount > 1 && (
                 <div className="mt-2 flex items-center gap-1 text-xs font-bold text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/40 px-2 py-1 rounded-full w-fit">

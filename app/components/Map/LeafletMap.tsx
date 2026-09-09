@@ -64,6 +64,19 @@ interface LeafletMapProps {
     /** Click en un elemento tipo "matriz" — el caller (MapArea) decide si
      * pasar esto o no según si el usuario es admin. */
     onMatrizClick?: (elemento: ElementoUrbano) => void;
+    /** Reemplaza el zoom por defecto (16, o 17.5 en el fallback de
+     * fitBounds) con el que centra al cargar SIN selección. undefined =
+     * comportamiento de siempre — el mapa de staff (HomeClient) no pasa
+     * este prop a propósito, así que nunca cambia para él. Pedido puntual
+     * de /venta (landing pública) para verse "un poco más cerca". */
+    initialZoomOverride?: number;
+    /** Se dispara cuando el USUARIO arrastra el mapa (ver ViewChangeNotifier
+     * arriba — solo 'dragstart', nunca lo dispara un flyTo programático) —
+     * undefined = comportamiento de siempre, el mapa de staff no lo pasa.
+     * Pedido puntual de /venta: ocultar el pin "Lote aquí" apenas el
+     * usuario mueve el mapa, porque esa posición es una aproximación que
+     * solo es válida en la vista recién centrada. */
+    onViewChange?: () => void;
 }
 
 // Ícono de cámara para los puntos de interés fotográfico (capa "foto") —
@@ -127,9 +140,17 @@ function crearIconoEtiquetaLinea(nombre: string, anguloDeg: number): L.DivIcon {
     });
 }
 
-function MapController({ lots, selectedLotId, onZoomChange, proyectos, proyectoSeleccionadoId }: { lots: Lot[], selectedLotId: string | null, onZoomChange: (z: number) => void, proyectos: Proyecto[], proyectoSeleccionadoId: number | null }) {
+function MapController({ lots, selectedLotId, onZoomChange, proyectos, proyectoSeleccionadoId, initialZoomOverride }: { lots: Lot[], selectedLotId: string | null, onZoomChange: (z: number) => void, proyectos: Proyecto[], proyectoSeleccionadoId: number | null, initialZoomOverride?: number }) {
     const map = useMap();
     const initialZoomDone = useRef(false);
+    // Este efecto depende de `lots` (más abajo) porque la rama SIN selección
+    // lo necesita para el fitBounds inicial — pero eso significa que
+    // cualquier cambio de referencia en `lots` (ej. /venta cuando se toca
+    // el toggle "solo disponibles") retrigger el efecto ENTERO, incluida la
+    // rama CON selección, repitiendo el flyTo de centrado al mismo lote de
+    // siempre sin necesidad. Se recuerda a qué lote ya se voló para no
+    // repetirlo si `selectedLotId` no cambió de verdad.
+    const lastFlownLotIdRef = useRef<string | null>(null);
 
     useEffect(() => {
         onZoomChange(map.getZoom());
@@ -142,6 +163,7 @@ function MapController({ lots, selectedLotId, onZoomChange, proyectos, proyectoS
 
     useEffect(() => {
         if (selectedLotId) {
+            if (lastFlownLotIdRef.current === selectedLotId) return;
             const selectedLot = lots.find(l => l.id === selectedLotId);
             if (selectedLot && selectedLot.points && selectedLot.points.length > 0) {
                 try {
@@ -170,12 +192,16 @@ function MapController({ lots, selectedLotId, onZoomChange, proyectos, proyectoS
                                 animate: true
                             });
                         }
+                        lastFlownLotIdRef.current = selectedLotId;
                     }
                 } catch (e) {
                     console.error("Zoom to lot error", e);
                 }
             }
-        } else if (lots.length > 0 && !initialZoomDone.current) {
+        } else {
+            lastFlownLotIdRef.current = null;
+        }
+        if (!selectedLotId && lots.length > 0 && !initialZoomDone.current) {
             try {
                 // Con el filtro en "Todos los proyectos" (proyectoSeleccionadoId
                 // null), el default debe ser el proyecto de menor 'orden', NO
@@ -201,7 +227,7 @@ function MapController({ lots, selectedLotId, onZoomChange, proyectos, proyectoS
                             'EPSG:4326',
                             [proyectoDefault.centroEste, proyectoDefault.centroNorte]
                         );
-                        map.flyTo([lat, lng], 16, {
+                        map.flyTo([lat, lng], initialZoomOverride ?? 16, {
                             animate: true,
                             duration: 1.2,
                             easeLinearity: 0.1
@@ -222,7 +248,7 @@ function MapController({ lots, selectedLotId, onZoomChange, proyectos, proyectoS
 
                     if (bounds.isValid()) {
                         // Zoom inicial suave al cargar el mapa
-                        map.flyTo(bounds.getCenter(), 17.5, {
+                        map.flyTo(bounds.getCenter(), initialZoomOverride ?? 17.5, {
                             animate: true,
                             duration: 1.2,
                             easeLinearity: 0.1
@@ -234,7 +260,7 @@ function MapController({ lots, selectedLotId, onZoomChange, proyectos, proyectoS
                 console.error("FitBounds error", e);
             }
         }
-    }, [selectedLotId, map, lots, proyectos, proyectoSeleccionadoId]);
+    }, [selectedLotId, map, lots, proyectos, proyectoSeleccionadoId, initialZoomOverride]);
 
     useEffect(() => {
         const handleCenterMap = (event: Event) => {
@@ -273,6 +299,27 @@ function MapBoundsController({ onBoundsChange }: { onBoundsChange: (bounds: L.La
             map.off('zoomend', updateBounds);
         };
     }, [map, onBoundsChange]);
+
+    return null;
+}
+
+// Avisa cuando el USUARIO arrastra el mapa — a propósito SOLO 'dragstart',
+// no 'zoomstart'/'moveend': Leaflet nunca dispara 'dragstart' por un
+// panTo/flyTo programático (a diferencia de zoomstart, que si lo dispararía
+// el flyTo de centrado al seleccionar un lote, dando un falso positivo
+// inmediato). Con esto no hace falta ninguna ventana de gracia por tiempo —
+// el evento en sí ya es inequívocamente del usuario. Optativo: el mapa de
+// staff no lo pasa, así que no cambia nada para él.
+function ViewChangeNotifier({ onViewChange }: { onViewChange?: () => void }) {
+    const map = useMap();
+
+    useEffect(() => {
+        if (!onViewChange) return;
+        map.on('dragstart', onViewChange);
+        return () => {
+            map.off('dragstart', onViewChange);
+        };
+    }, [map, onViewChange]);
 
     return null;
 }
@@ -389,7 +436,7 @@ function MeasurementController({ selectedLotId, lots }: { selectedLotId: string 
     return <SideMeasurementTooltips lot={selectedLot} map={map} />;
 }
 
-export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proyectos = [], proyectoSeleccionadoId = null, selectedLotId, onLotSelect, mapType, userLocation, preferCanvas = true, showMeasurements = true, onPhotoPointClick, onMatrizClick }: LeafletMapProps) {
+export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proyectos = [], proyectoSeleccionadoId = null, selectedLotId, onLotSelect, mapType, userLocation, preferCanvas = true, showMeasurements = true, onPhotoPointClick, onMatrizClick, initialZoomOverride, onViewChange }: LeafletMapProps) {
     const center: [number, number] = [-12.0464, -77.0428];
 
     // Zona UTM real por proyecto (17S/18S/19S) — id de proyecto.inmobiliario
@@ -571,14 +618,30 @@ export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proy
             style={{ height: '100%', width: '100%', background: mapType === 'blank' ? '#ffffff' : mapType === 'dark' ? '#1e293b' : '#ddd' }}
             className="z-0"
         >
+            {/* 'street'/'dark' usaban CartoDB (basemaps.cartocdn.com) hasta que
+                CARTO empezó a exigir API key incluso en sus basemaps gratuitos
+                — el mapa (staff y público) quedó mostrando el watermark
+                "carto.com/basemaps/apikey" sobre toda la tile. Se reemplaza
+                por los basemaps "Canvas" de Esri (mismo dominio
+                arcgisonline.com que ya usa 'satellite' sin key, gratuitos sin
+                cuenta): Base (el color de fondo) + Reference (calles/etiquetas,
+                PNG transparente) apiladas, igual que Esri documenta su uso. */}
             {mapType === 'street' && (
-                <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors'
-                    url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-                    maxNativeZoom={19}
-                    updateWhenZooming={false} // Evita recargar tiles durante la animación de zoom (ahorra CPU en móvil)
-                    updateWhenIdle={true} // Solo carga tiles cuando el mapa está quieto
-                />
+                <>
+                    <TileLayer
+                        attribution='Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors, and the GIS user community'
+                        url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+                        maxNativeZoom={16}
+                        updateWhenZooming={false} // Evita recargar tiles durante la animación de zoom (ahorra CPU en móvil)
+                        updateWhenIdle={true} // Solo carga tiles cuando el mapa está quieto
+                    />
+                    <TileLayer
+                        url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}"
+                        maxNativeZoom={16}
+                        updateWhenZooming={false}
+                        updateWhenIdle={true}
+                    />
+                </>
             )}
             {mapType === 'satellite' && (
                 <TileLayer
@@ -590,13 +653,21 @@ export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proy
                 />
             )}
             {mapType === 'dark' && (
-                <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors'
-                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                    maxNativeZoom={19}
-                    updateWhenZooming={false}
-                    updateWhenIdle={true}
-                />
+                <>
+                    <TileLayer
+                        attribution='Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors, and the GIS user community'
+                        url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+                        maxNativeZoom={16}
+                        updateWhenZooming={false}
+                        updateWhenIdle={true}
+                    />
+                    <TileLayer
+                        url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}"
+                        maxNativeZoom={16}
+                        updateWhenZooming={false}
+                        updateWhenIdle={true}
+                    />
+                </>
             )}
 
             {/* SUPERPOSICIÓN DEL PLANO MASTER (RENDER) */}
@@ -837,8 +908,9 @@ export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proy
                 );
             })}
 
-            <MapController lots={lots} selectedLotId={selectedLotId} onZoomChange={setZoom} proyectos={proyectos} proyectoSeleccionadoId={proyectoSeleccionadoId} />
+            <MapController lots={lots} selectedLotId={selectedLotId} onZoomChange={setZoom} proyectos={proyectos} proyectoSeleccionadoId={proyectoSeleccionadoId} initialZoomOverride={initialZoomOverride} />
             <MapBoundsController onBoundsChange={setMapBounds} />
+            {onViewChange && <ViewChangeNotifier onViewChange={onViewChange} />}
             {showMeasurements && <MeasurementController selectedLotId={selectedLotId} lots={lots} />}
         </MapContainer>
     );

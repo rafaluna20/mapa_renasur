@@ -1,5 +1,8 @@
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { fetchOdoo, fetchElementosUrbanos, fetchProyectos, OdooProduct } from '@/app/services/odooService';
 import { mergeElementosUrbanos } from '@/app/data/elementosUrbanos';
+import { STAFF_COOKIE_NAME, verifyStaffSessionToken } from '@/app/lib/staffAuth';
 import HomeClient from '@/app/components/HomeClient';
 
 // Force dynamic rendering because Odoo data changes regularly
@@ -15,6 +18,16 @@ let serverSideLotsCache: CacheContainer | null = null;
 const CACHE_TTL = 30000; // 30 segundos de caché de alto rendimiento en memoria del servidor
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ refresh?: string }> }) {
+  // Guard de sesión del lado del servidor: antes de esto, esta página fetcheaba
+  // el inventario completo (incluido x_cliente, nombre real de compradores) y
+  // lo pasaba como props a HomeClient sin ninguna verificación en el servidor
+  // — el único control era un useEffect client-side en HomeClient, que ya
+  // llega tarde: Next.js serializa los props en el payload RSC antes de que
+  // ese redirect se ejecute. Ver app/lib/staffAuth.ts para el mecanismo.
+  const cookieStore = await cookies();
+  const session = await verifyStaffSessionToken(cookieStore.get(STAFF_COOKIE_NAME)?.value);
+  if (!session) redirect('/login');
+
   const resolvedParams = await searchParams;
   const forceRefresh = resolvedParams?.refresh === 'true';
 

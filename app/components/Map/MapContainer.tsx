@@ -30,6 +30,8 @@ interface MapContainerProps {
     showMeasurements?: boolean;
     onPhotoPointClick?: (elemento: ElementoUrbano) => void;
     onMatrizClick?: (elemento: ElementoUrbano) => void;
+    initialZoomOverride?: number;
+    onViewChange?: () => void;
 }
 
 export default function MapContainerWrapper(props: MapContainerProps) {
