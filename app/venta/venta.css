@@ -48,7 +48,42 @@
   overflow: hidden;
   padding: 5rem 1.5rem 3rem;
   text-align: center;
-  background: var(--bg);
+  background-color: var(--bg);
+  /* Foto real de la entrada del proyecto (pedido del cliente). Versión
+     actual: pedido explícito de que la foto se note detrás de TODO el
+     contenido del hero (título, precio, subtítulo, CTAs), no solo detrás
+     del badge — el fondo sólido recién empieza en la caja de
+     estadísticas ("1,345 Total de lotes"). Medido en vivo con
+     getBoundingClientRect (% del alto real de .venta-hero):
+       h1          20.7% - 39.9%
+       precio      42.4% - 49.0%   (el "DESDE" es texto muted, bajo contraste)
+       subtítulo   51.9% - 59.5%   (texto muted en todo el bloque)
+       fila CTAs   64.1% - 71.5%   (los botones tienen su propio fondo sólido)
+       stats       78.4%           (acá SÍ debe estar 100% sólido)
+     Se descartó un experimento anterior con velo NEGRO: oscurecer el
+     fondo debajo de texto oscuro/muted mata el contraste (probado en
+     vivo, el precio quedó casi ilegible). Con un velo BLANCO (el mismo
+     --bg de la página) pasa lo contrario: aclara el fondo, que es
+     exactamente lo que necesita texto oscuro/rosa para seguir
+     leyéndose — por eso se puede estirar el degradado mucho más abajo
+     sin arriesgar nada. La opacidad sube rápido ANTES de cada bloque de
+     texto (no en medio ni después), así cada uno cae ya sobre una base
+     mayormente clara. Termina 100% sólido en el 78% exacto, justo donde
+     arranca la caja de estadísticas, tal como se pidió. */
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(248, 247, 252, 0.1) 0%,
+      rgba(248, 247, 252, 0.5) 18%,
+      rgba(248, 247, 252, 0.75) 38%,
+      rgba(248, 247, 252, 0.9) 50%,
+      rgba(248, 247, 252, 0.97) 64%,
+      var(--bg) 78%
+    ),
+    url('/venta-hero-portada.jpg');
+  background-size: cover;
+  background-position: center 32%;
+  background-repeat: no-repeat;
 }
 .venta-hero::before,
 .venta-hero::after {
@@ -199,11 +234,16 @@
 }
 .venta-stat {
   background: var(--surface);
-  border: 1px solid var(--border);
+  /* Pedido del cliente: que la tarjeta "se note un poco más" — antes casi
+     se perdía contra el fondo pastel claro (borde al 8% de opacidad,
+     sombra muy pegada al 25%). Se sube a --border-strong (14%) y una
+     sombra más amplia/visible (38%, menos pegada al borde) para que el
+     recuadro blanco se separe con claridad, sin llegar a verse pesado. */
+  border: 1px solid var(--border-strong);
   border-radius: 16px;
   padding: 1.2rem 1rem;
   text-align: center;
-  box-shadow: 0 10px 30px -18px rgba(23, 25, 51, 0.25);
+  box-shadow: 0 14px 34px -16px rgba(23, 25, 51, 0.38);
 }
 .venta-stat strong {
   display: block;
@@ -243,19 +283,32 @@
   font-size: 0.95rem;
 }
 
+/* Pedido del cliente: flotante en la parte central-superior-derecha del
+   mapa, en vez de una fila normal arriba de él. Se mueve DENTRO de
+   .venta-map-frame (ver PublicMapSection.tsx) y se posiciona igual que el
+   .ribbon de la esquina opuesta — misma esquina superior, mismo pill de
+   fondo — para que ambos elementos flotantes se lean como parte del mismo
+   lenguaje visual, no como dos cosas distintas pegadas encima del mapa. */
 .venta-map-toggle-row {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 1.3rem;
+  position: absolute;
+  top: 0.9rem;
+  right: 0.9rem;
+  z-index: 20;
 }
 .venta-toggle-label {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.5rem;
   font-weight: 600;
-  font-size: 0.85rem;
-  color: var(--text-muted);
+  font-size: 0.78rem;
+  color: var(--text);
   cursor: pointer;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  padding: 0.45rem 0.7rem;
+  border-radius: 999px;
+  box-shadow: 0 6px 16px -10px rgba(23, 25, 51, 0.35);
+  white-space: nowrap;
 }
 .venta-switch {
   position: relative;
@@ -491,25 +544,27 @@ button.venta-map-hint:active:not(:disabled) {
   justify-content: space-between;
   gap: 0.75rem;
 }
-.venta-lot-panel-head h3 {
+.venta-lot-panel-head h3.venta-lot-title-line {
   font-family: var(--font-venta), 'Plus Jakarta Sans', sans-serif;
   font-weight: 800;
-  font-size: 1.4rem;
+  font-size: 1.15rem;
   letter-spacing: -0.01em;
   color: var(--text);
   margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem;
+  row-gap: 0.15rem;
 }
-.venta-lot-meta {
-  margin: 0.3rem 0 0;
-  font-size: 0.82rem;
+.venta-lot-meta-inline {
+  font-weight: 500;
+  font-size: 0.78rem;
   color: var(--text-muted);
 }
-.venta-lot-price {
-  margin: 0.5rem 0 0;
-  display: block;
-  font-family: var(--font-venta), 'Plus Jakarta Sans', sans-serif;
+.venta-lot-price-inline {
   font-weight: 800;
-  font-size: 1.5rem;
+  font-size: 1.05rem;
   color: var(--pink);
 }
 .venta-lot-close {
@@ -557,7 +612,13 @@ button.venta-map-hint:active:not(:disabled) {
 .venta-field {
   width: 100%;
   margin-bottom: 0.7rem;
-  padding: 0.75rem 0.9rem;
+  /* Padding vertical -10% a pedido del cliente (0.75rem -> 0.675rem).
+     Verificado en vivo: queda en ~45px de alto real (medido con
+     getBoundingClientRect), todavía por encima del mínimo táctil
+     recomendado de 44px (Apple HIG / Material Design) que esta misma
+     página protege en otros botones (ver .venta-lot-close) — la reducción
+     no compromete el área de toque. */
+  padding: 0.675rem 0.9rem;
   border: 1px solid var(--border-strong);
   border-radius: 12px;
   font-family: var(--font-venta), 'Plus Jakarta Sans', sans-serif;
@@ -679,6 +740,24 @@ button.venta-map-hint:active:not(:disabled) {
   .venta-map-canvas {
     height: 50vh;
   }
+  /* -10% a pedido del cliente (2rem -> 1.8rem). El subtítulo (.venta-sub2)
+     se deja igual a propósito — pedido explícito de no tocarlo. */
+  .venta-lots h2 {
+    font-size: 1.8rem;
+  }
+  /* En una pantalla angosta, el pill del switch en horizontal (label +
+     control uno al lado del otro) compite por ancho con el .ribbon de la
+     esquina opuesta ("Mapa interactivo en tiempo real"), ambos en la misma
+     fila superior. Se apila el texto arriba del control (columna en vez de
+     fila) para que el pill ocupe mucho menos ancho — el switch en sí no se
+     achica, mantiene su tamaño táctil. */
+  .venta-toggle-label {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.3rem;
+    font-size: 0.62rem;
+    padding: 0.4rem 0.55rem;
+  }
   /* 4 tarjetas en una sola fila de 4 columnas se aprietan mucho por debajo
      de ~640px — se pasa a una grilla de 2×2, y se reduce el número grande
      y el padding para que cada tarjeta quede cómoda en la mitad del ancho.
@@ -705,5 +784,37 @@ button.venta-map-hint:active:not(:disabled) {
   .venta-whatsapp-float {
     right: 1rem;
     bottom: 1rem;
+  }
+
+  /* Reporte real (captura de celular real): el panel del lote ocupaba
+     demasiada altura, dejando solo una franja mínima de mapa visible
+     arriba. Pedido: ~30% menos de alto. A propósito NO se toca el padding
+     de .venta-field ni de .venta-submit — son el formulario y el botón de
+     conversión, necesitan mantener un área táctil de al menos ~44px; la
+     reducción sale de espacios y del encabezado redundante, no del
+     formulario mismo. LeafletMap.tsx lee la altura real de este panel
+     (getBoundingClientRect) para centrar el lote seleccionado justo
+     arriba — si esta altura cambia, ese centrado se sigue ajustando solo. */
+  .venta-lot-panel {
+    padding: 0.9rem 1rem;
+  }
+  .venta-lot-panel-head h3 {
+    font-size: 1.1rem;
+  }
+  .venta-lot-meta {
+    margin-top: 0.15rem;
+  }
+  .venta-lot-price {
+    margin-top: 0.3rem;
+    font-size: 1.15rem;
+  }
+  /* "¡Sepáralo hoy mismo!" es redundante en una pantalla chica — el precio
+     en rosa y el botón "Quiero que me llamen" ya dejan clara la intención.
+     Se mantiene en desktop, donde el espacio no es un problema. */
+  .venta-lot-form-heading {
+    display: none;
+  }
+  .venta-field {
+    margin-bottom: 0.5rem;
   }
 }

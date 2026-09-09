@@ -70,12 +70,15 @@ interface LeafletMapProps {
      * este prop a propósito, así que nunca cambia para él. Pedido puntual
      * de /venta (landing pública) para verse "un poco más cerca". */
     initialZoomOverride?: number;
-    /** Se dispara cuando el USUARIO arrastra el mapa (ver ViewChangeNotifier
-     * arriba — solo 'dragstart', nunca lo dispara un flyTo programático) —
+    /** Se dispara cuando el USUARIO mueve el mapa de verdad — arrastrando
+     * (ver ViewChangeNotifier abajo, 'dragstart' inmediato: nunca lo
+     * dispara un flyTo programático) o haciendo zoom (ver MapController,
+     * 'zoomstart' con arranque diferido ~1.8s tras seleccionar un lote,
+     * para no confundirlo con el zoom del propio flyTo de centrado).
      * undefined = comportamiento de siempre, el mapa de staff no lo pasa.
      * Pedido puntual de /venta: ocultar el pin "Lote aquí" apenas el
-     * usuario mueve el mapa, porque esa posición es una aproximación que
-     * solo es válida en la vista recién centrada. */
+     * usuario se aleja, porque esa posición es una aproximación que solo
+     * es válida en la vista recién centrada. */
     onViewChange?: () => void;
 }
 
@@ -140,7 +143,7 @@ function crearIconoEtiquetaLinea(nombre: string, anguloDeg: number): L.DivIcon {
     });
 }
 
-function MapController({ lots, selectedLotId, onZoomChange, proyectos, proyectoSeleccionadoId, initialZoomOverride }: { lots: Lot[], selectedLotId: string | null, onZoomChange: (z: number) => void, proyectos: Proyecto[], proyectoSeleccionadoId: number | null, initialZoomOverride?: number }) {
+function MapController({ lots, selectedLotId, onZoomChange, proyectos, proyectoSeleccionadoId, initialZoomOverride, onViewChange }: { lots: Lot[], selectedLotId: string | null, onZoomChange: (z: number) => void, proyectos: Proyecto[], proyectoSeleccionadoId: number | null, initialZoomOverride?: number, onViewChange?: () => void }) {
     const map = useMap();
     const initialZoomDone = useRef(false);
     // Este efecto depende de `lots` (más abajo) porque la rama SIN selección
@@ -151,6 +154,32 @@ function MapController({ lots, selectedLotId, onZoomChange, proyectos, proyectoS
     // siempre sin necesidad. Se recuerda a qué lote ya se voló para no
     // repetirlo si `selectedLotId` no cambió de verdad.
     const lastFlownLotIdRef = useRef<string | null>(null);
+
+    // Reporte real: al hacer zoom (alejarse con la rueda/pellizco) después
+    // de seleccionar un lote, el pin "congelado" (que asume que el lote
+    // sigue en el centro del canvas) queda apuntando a otro sitio. Ya se
+    // avisa `onViewChange` con 'dragstart' (ver ViewChangeNotifier, sin
+    // ambigüedad — nunca lo dispara un flyTo programático) — pero
+    // 'zoomstart' SÍ lo dispara el flyTo de centrado de esta misma
+    // selección, así que escucharlo sin más generaría un falso positivo
+    // inmediato (el pin desaparecería apenas aparece). Se arma la escucha
+    // recién pasado el tiempo que dura ese flyTo (1.5s, ver más abajo) —
+    // después de eso, cualquier zoomstart es del usuario de verdad.
+    useEffect(() => {
+        if (!onViewChange || !selectedLotId) return;
+        let armed = false;
+        const handleZoomStart = () => {
+            if (armed) onViewChange();
+        };
+        map.on('zoomstart', handleZoomStart);
+        const armTimer = setTimeout(() => {
+            armed = true;
+        }, 1800);
+        return () => {
+            clearTimeout(armTimer);
+            map.off('zoomstart', handleZoomStart);
+        };
+    }, [map, onViewChange, selectedLotId]);
 
     useEffect(() => {
         onZoomChange(map.getZoom());
@@ -177,9 +206,29 @@ function MapController({ lots, selectedLotId, onZoomChange, proyectos, proyectoS
                         const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
                         if (isMobile) {
-                            // En móvil, usamos fitBounds con padding inferior para empujar el lote a la parte superior
+                            // En móvil, usamos fitBounds con padding inferior para empujar el lote a la parte superior.
+                            // Reporte real (captura de celular): con el valor fijo de 300px el lote
+                            // quedaba mal centrado, casi cortado en el borde. Usar directo la altura
+                            // TOTAL del panel (.venta-lot-panel) sería sobre-estimar: buena parte de
+                            // esa altura cae por DEBAJO del mapa (sobre la leyenda de colores), no
+                            // encima del mapa mismo — lo que importa para Leaflet es solo el solape
+                            // real entre el panel y el contenedor del mapa (.venta-map-canvas). Se
+                            // calcula ese solape en vez de adivinar o usar la altura completa; se
+                            // sigue ajustando solo si el panel cambia de alto (disponible con
+                            // formulario vs. no disponible con solo un mensaje corto). El mapa de
+                            // staff no tiene estos elementos en el DOM, así que cae directo al valor
+                            // de siempre (300).
+                            let bottomPadding = 300;
+                            if (typeof document !== 'undefined') {
+                                const canvasEl = document.querySelector('.venta-map-canvas');
+                                const panelEl = document.querySelector('.venta-lot-panel');
+                                if (canvasEl && panelEl) {
+                                    const overlap = canvasEl.getBoundingClientRect().bottom - panelEl.getBoundingClientRect().top;
+                                    if (overlap > 0) bottomPadding = overlap;
+                                }
+                            }
                             map.fitBounds(bounds, {
-                                paddingBottomRight: [0, 300], // 300px de padding inferior para dejar espacio al modal
+                                paddingBottomRight: [0, bottomPadding],
                                 animate: true,
                                 duration: 1.5,  // Snappy, premium transition
                                 maxZoom: 20
@@ -908,7 +957,7 @@ export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proy
                 );
             })}
 
-            <MapController lots={lots} selectedLotId={selectedLotId} onZoomChange={setZoom} proyectos={proyectos} proyectoSeleccionadoId={proyectoSeleccionadoId} initialZoomOverride={initialZoomOverride} />
+            <MapController lots={lots} selectedLotId={selectedLotId} onZoomChange={setZoom} proyectos={proyectos} proyectoSeleccionadoId={proyectoSeleccionadoId} initialZoomOverride={initialZoomOverride} onViewChange={onViewChange} />
             <MapBoundsController onBoundsChange={setMapBounds} />
             {onViewChange && <ViewChangeNotifier onViewChange={onViewChange} />}
             {showMeasurements && <MeasurementController selectedLotId={selectedLotId} lots={lots} />}

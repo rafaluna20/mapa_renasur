@@ -44,9 +44,18 @@ export default function PublicLotPanel({ lot, onClose, utmSource, utmMedium, utm
         <div className="venta-lot-panel">
             <div className="venta-lot-panel-head">
                 <div>
-                    <h3>Lote {lot.x_mz}{lot.x_lote}</h3>
-                    <p className="venta-lot-meta">{lot.x_area} m² · {estadoLabel}</p>
-                    {precio && <p className="venta-lot-price">{precio}</p>}
+                    {/* Pedido del cliente: código, área, estado y precio en
+                        una sola línea (antes 3 elementos apilados) — un
+                        <h3> con <span> inline en vez de <p> separados, para
+                        que siga siendo UN solo bloque de texto que envuelve
+                        junto si el ancho no alcanza, no 3 líneas fijas. */}
+                    <h3 className="venta-lot-title-line">
+                        Lote {lot.x_mz}{lot.x_lote}
+                        <span className="venta-lot-meta-inline">
+                            ({lot.x_area} m² · {estadoLabel})
+                        </span>
+                        {precio && <span className="venta-lot-price-inline">{precio}</span>}
+                    </h3>
                 </div>
                 <button onClick={onClose} aria-label="Cerrar" className="venta-lot-close">
                     <X size={20} />
