@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { derivarColindanciasYDimensiones } from './colindanciasUtils';
 import type { Lot } from '@/app/data/lotsData';
+import type { ElementoUrbano } from '@/app/data/elementosUrbanos';
 
 function makeLot(overrides: Partial<Lot> & { points: [number, number][] }): Lot {
     return {
@@ -85,6 +86,69 @@ describe('derivarColindanciasYDimensiones', () => {
         expect(izquierda).toHaveLength(1);
         expect(izquierda[0].nombre).toContain('46');
         expect(dimensiones.ladoIzquierdo).toBeCloseTo(7.97, 1);
+    });
+
+    // Caso real reportado: E01MZS081P — un lote con el frente partido en 2
+    // tramos sobre una calle curva ("calle 08"). Uno de esos 2 tramos
+    // también calificaba, por ángulo, como la arista más "paralela" al
+    // frente (candidata a fondo) — y hasta ganaba esa carrera por longitud
+    // (ver mayorTramoContiguo) — para terminar igual reclasificado como
+    // frente por dar a la misma calle, dejando el fondo real (otra arista,
+    // más corta, con menos coincidencia angular) totalmente vacío.
+    it('no deja "fondo" vacío cuando un tramo extra del frente también calificaba como candidata a fondo (lote real E01MZS081P)', () => {
+        const v1: [number, number] = [308334.8837, 8623081.6040];
+        const v2: [number, number] = [308330.3076, 8623079.4776];
+        const v3: [number, number] = [308329.7650, 8623061.5199];
+        const v4: [number, number] = [308336.6098, 8623061.8678];
+        const v5: [number, number] = [308343.3118, 8623063.4666];
+
+        const lote81 = makeLot({
+            default_code: 'E01MZS081P',
+            name: 'Etapa 1 Mz S Lote 81',
+            points: [v1, v2, v3, v4, v5],
+        });
+        const lote80 = makeLot({
+            default_code: 'E01MZS080P',
+            name: 'Etapa 1 Mz S Lote 80',
+            points: [v2, v3, [v3[0] - 5, v3[1] - 5], [v2[0] - 5, v2[1] - 5]],
+        });
+        const lote82 = makeLot({
+            default_code: 'E01MZS082P',
+            name: 'Etapa 1 Mz S Lote 82',
+            points: [v5, v1, [v1[0] + 5, v1[1] + 5], [v5[0] + 5, v5[1] + 5]],
+        });
+        const calle08: ElementoUrbano = {
+            codigo: 'CALLE08',
+            nombre: 'calle 08',
+            tipo: 'calle',
+            colorBorde: '#000',
+            colorRelleno: '#000',
+            mostrarEtiqueta: true,
+            mostrarEnMapa: true,
+            esArea: false,
+            sinRelleno: false,
+            sinBorde: false,
+            points: [v3, v4, v5, [v3[0], v3[1] - 5]],
+        };
+
+        const { colindancias, dimensiones } = derivarColindanciasYDimensiones(
+            lote81,
+            [lote81, lote80, lote82],
+            [calle08]
+        );
+
+        const porLado = (lado: string) => colindancias.filter((c) => c.lado === lado);
+
+        // Los 2 tramos sobre la misma calle deben seguir sumando a frente.
+        expect(porLado('frente')).toHaveLength(2);
+        expect(dimensiones.frente).toBeCloseTo(13.74, 1);
+
+        // El bug reportado: esto quedaba vacío.
+        expect(porLado('fondo').length).toBeGreaterThan(0);
+        expect(dimensiones.fondo).toBeGreaterThan(0);
+
+        expect(porLado('derecha')[0]?.nombre).toContain('82');
+        expect(porLado('izquierda')[0]?.nombre).toContain('80');
     });
 
     // Regresión: un rectángulo simple (el caso común, sin ninguna arista

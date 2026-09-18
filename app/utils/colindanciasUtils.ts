@@ -264,15 +264,32 @@ export function derivarColindanciasYDimensiones(
         ordenDesdeFrente.push((frente.index + paso) % n);
     }
 
+    // Aristas que en realidad son tramos ADICIONALES del frente (calle
+    // curva/poligonal partida en varios segmentos rectos, ver
+    // mismaCalleQueFrente más abajo) — se calcula ACÁ, antes de elegir el
+    // fondo, para poder excluirlas de la carrera por "fondo". Sin esto: una
+    // arista que da a la MISMA calle que el frente y que además, por pura
+    // geometría, cae casi paralela a él (ej. el segundo tramo de una curva
+    // suave) compite y hasta puede GANAR el puesto de fondo por ángulo/
+    // longitud — para terminar igual reclasificada como frente más abajo,
+    // dejando fondo vacío sin necesidad aunque hubiera otra arista real que
+    // sí calificaba. Verificado con el lote E01MZS081P (frente partido en 2
+    // tramos sobre "calle 08": el tramo corto también era la arista más
+    // paralela al frente y se quedaba con el turno de fondo antes de ser
+    // reclasificado).
+    const esTramoDeFrenteExtra = (edge: Edge): boolean =>
+        frente.vecinoUrbano?.tipo === 'calle' && edge.vecinoUrbano?.codigo === frente.vecinoUrbano.codigo;
+
     // Clasificar cada arista restante por ángulo respecto al frente (ver
     // anguloEntreAristas más arriba): "paralela" = candidata a fondo,
     // "lateral" = candidata a derecha/izquierda. Si ninguna califica
     // (polígono muy irregular), se usa la de menor ángulo como único fondo
     // — mismo respaldo que antes, para que fondo nunca quede vacío.
+    const ordenParaFondo = ordenDesdeFrente.filter((idx) => !esTramoDeFrenteExtra(edges[idx]));
     const anguloPorIndice = new Map<number, number>(
         ordenDesdeFrente.map((idx) => [idx, anguloEntreAristas(frente, edges[idx])])
     );
-    const paralelas = ordenDesdeFrente.filter((idx) => anguloPorIndice.get(idx)! <= UMBRAL_PARALELO_GRADOS);
+    const paralelas = ordenParaFondo.filter((idx) => anguloPorIndice.get(idx)! <= UMBRAL_PARALELO_GRADOS);
 
     // El fondo real es UN SOLO tramo contiguo del recorrido (la máquina de
     // estados de más abajo solo avanza hacia adelante: derecha -> fondo ->
@@ -292,7 +309,9 @@ export function derivarColindanciasYDimensiones(
     const indicesFondo = new Set(
         paralelas.length > 0
             ? mayorTramoContiguo(ordenDesdeFrente, paralelas, edges)
-            : [ordenDesdeFrente.reduce((min, idx) => (anguloPorIndice.get(idx)! < anguloPorIndice.get(min)! ? idx : min))]
+            : ordenParaFondo.length > 0
+                ? [ordenParaFondo.reduce((min, idx) => (anguloPorIndice.get(idx)! < anguloPorIndice.get(min)! ? idx : min))]
+                : []
     );
 
     let ladoDerechoLongitud = 0;
@@ -381,10 +400,7 @@ export function derivarColindanciasYDimensiones(
         // en el mismo lote) — ese lado sigue la clasificación normal de la
         // máquina de estados (derecha/fondo/izquierda), porque un lote de
         // esquina entre dos calles tiene un solo frente, no dos.
-        const mismaCalleQueFrente =
-            frente.vecinoUrbano?.tipo === 'calle' &&
-            edge.vecinoUrbano?.codigo === frente.vecinoUrbano.codigo;
-        const ladoFinal: ColindanciaDerivada['lado'] = mismaCalleQueFrente ? 'frente' : estado;
+        const ladoFinal: ColindanciaDerivada['lado'] = esTramoDeFrenteExtra(edge) ? 'frente' : estado;
 
         if (ladoFinal === 'frente') frenteLongitudExtra += edge.longitud;
         else if (ladoFinal === 'derecha') ladoDerechoLongitud += edge.longitud;

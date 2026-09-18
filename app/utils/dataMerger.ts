@@ -19,31 +19,46 @@ interface ResolvedGeometry {
 }
 
 // Tolerancia para considerar dos vértices "el mismo punto" — solo para
-// detectar el cierre duplicado de abajo, no para matching de vecinos
+// detectar vértices duplicados de abajo, no para matching de vecinos
 // (eso usa su propia tolerancia en colindanciasUtils.ts).
 const TOLERANCIA_CIERRE_METROS = 0.01;
 
 /**
- * Quita el último vértice si coincide con el primero. Todo el código que
- * consume Lot.points asume una lista de vértices SIN el punto de cierre
- * repetido (recorre aristas con `pts[(i+1) % n]`, que ya cierra el
- * polígono solo). Algunas geometrías llegan digitalizadas con la
- * convención GeoJSON estándar (primer punto = último punto, ej. lotes
- * exportados desde QGIS/AutoCAD en vez de digitalizados directo en el
- * editor de mapa_renasur) — sin este ajuste, esa arista de "cierre"
- * fantasma (largo ~0, entre el vértice N y el vértice 1 que son el mismo
- * punto) genera un vértice extra irreal (Vn+1 solapado con V1 en el
- * plano) y una colindancia fantasma de "0.00 ml" en la Memoria
- * Descriptiva (ver derivarColindanciasYDimensiones).
+ * Quita vértices consecutivos duplicados (mismo punto repetido, distancia
+ * < TOLERANCIA_CIERRE_METROS) en cualquier posición del anillo — no solo
+ * el cierre (primer == último). Todo el código que consume Lot.points
+ * asume una lista de vértices SIN puntos repetidos (recorre aristas con
+ * `pts[(i+1) % n]`, que ya cierra el polígono solo). Dos casos reales
+ * confirmados:
+ * 1. Cierre estilo GeoJSON (primer punto == último, ej. lotes exportados
+ *    desde QGIS/AutoCAD en vez de digitalizados directo en el editor de
+ *    mapa_renasur).
+ * 2. Duplicado EN MEDIO del polígono (ej. doble clic al digitalizar un
+ *    vértice) — mismo síntoma que el caso 1 pero en cualquier posición,
+ *    no solo el cierre. Confirmado con datos reales: lote E01MZS081P
+ *    tenía V4 y V5 en las mismas coordenadas exactas.
+ * Sin este ajuste, la arista fantasma (largo ~0) entre dos vértices
+ * duplicados genera un vértice extra irreal en el plano y una colindancia
+ * fantasma de "0.00 ml" en la Memoria Descriptiva — y de paso descuadra
+ * la clasificación frente/fondo/derecha/izquierda de
+ * derivarColindanciasYDimensiones, que recorre el polígono asumiendo que
+ * cada arista es real.
  */
-function quitarVerticeDeCierreDuplicado(vertices: [number, number][]): [number, number][] {
+function quitarVerticesDuplicados(vertices: [number, number][]): [number, number][] {
     if (vertices.length < 4) return vertices;
-    const primero = vertices[0];
-    const ultimo = vertices[vertices.length - 1];
-    if (calculateDistance(primero, ultimo) < TOLERANCIA_CIERRE_METROS) {
-        return vertices.slice(0, -1);
+    const limpios: [number, number][] = [vertices[0]];
+    for (let i = 1; i < vertices.length; i++) {
+        if (calculateDistance(limpios[limpios.length - 1], vertices[i]) >= TOLERANCIA_CIERRE_METROS) {
+            limpios.push(vertices[i]);
+        }
     }
-    return vertices;
+    if (limpios.length >= 4 && calculateDistance(limpios[0], limpios[limpios.length - 1]) < TOLERANCIA_CIERRE_METROS) {
+        limpios.pop();
+    }
+    // Nunca devolver menos de 3 vértices (polígono inválido) — si el
+    // colapso llegara a eso, algo más grave pasa con el dato y es mejor
+    // dejarlo tal cual para que el error se note, no ocultarlo.
+    return limpios.length >= 3 ? limpios : vertices;
 }
 
 /**
@@ -57,7 +72,7 @@ function resolveGeometry(
     arcos?: ArcoMetadata[] | false
 ): ResolvedGeometry | null {
     if (Array.isArray(odooVertices) && odooVertices.length >= 3) {
-        const vertices = quitarVerticeDeCierreDuplicado(odooVertices);
+        const vertices = quitarVerticesDuplicados(odooVertices);
         return {
             points: vertices,
             measurements: calculateLotMeasurements(vertices, arcos || undefined),
