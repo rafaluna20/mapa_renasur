@@ -100,6 +100,23 @@ export async function POST(request: Request) {
         const financedAmount = netPrice - downPayment;
         const monthlyAmount = financedAmount / order.x_plazo_meses;
 
+        // 4b. Modo de fechas de las cuotas elegido en la cotización ('month_end' = todas las
+        // cuotas, 1ra incluida, a fin de mes). Se lee APARTE y en un try/catch: si Odoo aún no
+        // tiene el campo en sale.order (módulo sin actualizar) el contrato sale "mismo día",
+        // igual que antes, en vez de fallar.
+        let installmentDateMode: 'same_day' | 'month_end' = 'same_day';
+        try {
+            const modeRows = await fetchOdoo(
+                'sale.order',
+                'read',
+                [[orderIdNum]],
+                { fields: ['x_installment_date_mode'] }
+            );
+            if (modeRows?.[0]?.x_installment_date_mode === 'month_end') installmentDateMode = 'month_end';
+        } catch {
+            console.warn('⚠️ sale.order sin x_installment_date_mode: contrato con fechas "mismo día"');
+        }
+
         // 5. Preparar datos del contrato
         const contractData = {
             name: `Contrato Manual - ${orderLinesCheck[0].name}`,
@@ -113,7 +130,9 @@ export async function POST(request: Request) {
             amount: monthlyAmount,
             date_first_installment: order.x_date_first_installment || new Date().toISOString().split('T')[0],
             date_next_billing: order.x_date_first_installment || new Date().toISOString().split('T')[0],
-            interval_type: 'months'
+            interval_type: 'months',
+            // Solo se envía cuando aplica: reduce el acoplamiento con la versión del módulo.
+            ...(installmentDateMode === 'month_end' ? { installment_date_mode: 'month_end' } : {})
         };
 
         // 6. Crear el contrato
@@ -162,7 +181,8 @@ export async function POST(request: Request) {
                 res_id: parseInt(saleOrderId),
                 body: `✅ Contrato recurrente creado: #${contractId}<br/>` +
                     `📊 Cuotas: ${order.x_plazo_meses}<br/>` +
-                    `💰 Mensualidad: $${monthlyAmount.toFixed(2)}`,
+                    `📅 Fechas: ${installmentDateMode === 'month_end' ? 'fin de mes' : 'mismo día de cada mes'}<br/>` +
+                    `💰 Mensualidad: S/ ${monthlyAmount.toFixed(2)}`,
                 message_type: 'notification'
             }]
         );

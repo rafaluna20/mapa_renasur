@@ -58,6 +58,13 @@ export async function POST(request: Request) {
             if (quoteDetails.downPayment) orderData.x_down_payment = parseFloat(quoteDetails.downPayment);
             if (quoteDetails.discount) orderData.x_discount_amount = parseFloat(quoteDetails.discount);
             if (quoteDetails.firstInstallmentDate) orderData.x_date_first_installment = quoteDetails.firstInstallmentDate;
+            // Modo de fechas de las cuotas de la cotización -> lo usa create_contract para
+            // crear el contrato con el MISMO cronograma que vio el cliente en el PDF.
+            // 'end_of_month' = fin de mes (todas las cuotas, 1ra incluida) | 'fixed_day' = mismo día.
+            if (quoteDetails.scheduleType) {
+                orderData.x_installment_date_mode =
+                    quoteDetails.scheduleType === 'end_of_month' ? 'month_end' : 'same_day';
+            }
         }
 
         // Assign the logged-in user as the salesperson
@@ -90,11 +97,27 @@ export async function POST(request: Request) {
 
         console.log('📤 Creating Sale Order with data:', JSON.stringify(orderData, null, 2));
 
-        const orderId = await fetchOdoo(
-            'sale.order',
-            'create',
-            [orderData]
-        );
+        let orderId: number;
+        try {
+            orderId = await fetchOdoo(
+                'sale.order',
+                'create',
+                [orderData]
+            );
+        } catch (createError: unknown) {
+            // Ventana de despliegue: si esta app se publica ANTES de actualizar el módulo
+            // de Odoo, sale.order todavía no tiene x_installment_date_mode y el create
+            // fallaría (se caerían TODAS las cotizaciones). Se reintenta sin ese campo:
+            // el contrato saldrá "mismo día" (comportamiento histórico) en vez de perder la cotización.
+            const message = createError instanceof Error ? createError.message : String(createError);
+            if (orderData.x_installment_date_mode && message.includes('x_installment_date_mode')) {
+                console.warn('⚠️ Odoo sin x_installment_date_mode en sale.order: reintentando sin ese campo');
+                delete orderData.x_installment_date_mode;
+                orderId = await fetchOdoo('sale.order', 'create', [orderData]);
+            } else {
+                throw createError;
+            }
+        }
 
         console.log(`✅ Sale Order Created: SO-${orderId} for Partner ${partnerId}`);
 

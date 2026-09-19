@@ -117,7 +117,7 @@ export default function QuotePage({ params }: QuotePageProps) {
     
     // 🆕 Fechas separadas para cuota inicial y primera cuota (ISO interno)
     const [initialPaymentDate, setInitialPaymentDate] = useState<string>(
-        new Date().toISOString().split('T')[0]
+        financeService.toISODate(new Date())
     );
     const [firstInstallmentDate, setFirstInstallmentDate] = useState<string>(() => {
         const today = new Date();
@@ -125,7 +125,7 @@ export default function QuotePage({ params }: QuotePageProps) {
             today.getFullYear(),
             today.getMonth() + 1
         );
-        return lastDay.toISOString().split('T')[0];
+        return financeService.toISODate(lastDay);
     });
 
     // 🗓️ Display states en formato dd/mm/yy
@@ -135,12 +135,12 @@ export default function QuotePage({ params }: QuotePageProps) {
         return `${d}/${m}/${y.slice(2)}`;
     };
     const [initialPaymentDateDisplay, setInitialPaymentDateDisplay] = useState<string>(
-        () => isoToDisplay(new Date().toISOString().split('T')[0])
+        () => isoToDisplay(financeService.toISODate(new Date()))
     );
     const [firstInstallmentDateDisplay, setFirstInstallmentDateDisplay] = useState<string>(() => {
         const today = new Date();
         const lastDay = financeService.getLastDayOfMonth(today.getFullYear(), today.getMonth() + 1);
-        return isoToDisplay(lastDay.toISOString().split('T')[0]);
+        return isoToDisplay(financeService.toISODate(lastDay));
     });
 
     // Formatea mientras el usuario tipea y parsea a ISO cuando está completo
@@ -220,9 +220,6 @@ export default function QuotePage({ params }: QuotePageProps) {
 
     // 🆕 Tipo de Cronograma
     const [scheduleType, setScheduleType] = useState<'end_of_month' | 'fixed_day'>('end_of_month');
-
-    // Mantener startDate para compatibilidad (usar initialPaymentDate)
-    const [startDate] = useState<string>(new Date().toISOString().split('T')[0]);
 
     // Cliente (Búsqueda de Odoo)
     const [searchTerm, setSearchTerm] = useState('');
@@ -589,7 +586,7 @@ export default function QuotePage({ params }: QuotePageProps) {
                     numInstallments: Number(numInstallments) || 0,
                     monthlyInstallment: calculations.monthlyInstallment,
                     remainingBalance: calculations.remainingBalance,
-                    startDate,
+                    startDate: initialPaymentDate, // campo legado del borrador local
                     scheduleType
                 },
                 createdAt: new Date().toISOString(),
@@ -676,7 +673,14 @@ export default function QuotePage({ params }: QuotePageProps) {
                     installments: Number(numInstallments) || 0,
                     downPayment: initialPaymentTotal,
                     discount: Number(discountAmount) || 0,
-                    firstInstallmentDate: startDate
+                    // La fecha REAL de la 1ra cuota (ya ajustada a fin de mes si el modo lo
+                    // pide), no una fecha "de hoy": antes se enviaba un estado congelado con
+                    // la fecha de la cotización y todos los contratos nacían con la 1ra cuota
+                    // ese mismo día.
+                    firstInstallmentDate: financeService.toISODate(
+                        calculations.firstInstallmentDate ?? financeService.parseLocalDate(firstInstallmentDate)
+                    ),
+                    scheduleType
                 },
                 pdfFile, // Pass the generated PDF file
                 user?.uid // Pass the logged-in user's ID
@@ -1542,7 +1546,9 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                 </label>
                                             </div>
                                             <p className="text-xs text-slate-500 mt-1.5">
-                                                {scheduleType === 'end_of_month' ? 'Las cuotas se programarán para el último día de cada mes.' : 'Las cuotas mantendrán el mismo día de la primera cuota.'}
+                                                {scheduleType === 'end_of_month'
+                                                    ? `Todas las cuotas, incluida la primera, se programan para el último día de cada mes${calculations?.firstInstallmentDate ? ` (1ra cuota: ${financeService.formatDate(calculations.firstInstallmentDate)})` : ''}.`
+                                                    : 'Las cuotas mantendrán el mismo día de la primera cuota.'}
                                             </p>
                                         </div>
                                     </div>

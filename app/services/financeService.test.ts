@@ -30,10 +30,32 @@ describe('financeService.calculateQuote', () => {
         expect(result.remainingBalance).toBeCloseTo(50000, 4);
     });
 
-    it('respeta una fecha de primera cuota manual en vez de calcular una', () => {
+    it('en modo fixed_day respeta una fecha de primera cuota manual tal cual', () => {
         const manualDate = new Date(2026, 5, 15); // 15 jun 2026
-        const result = financeService.calculateQuote(100000, 0, 0, 3, undefined, manualDate);
+        const result = financeService.calculateQuote(100000, 0, 0, 3, undefined, manualDate, 'fixed_day');
         expect(result.installments[0].date.getTime()).toBe(manualDate.getTime());
+        expect(result.firstInstallmentDate?.getTime()).toBe(manualDate.getTime());
+    });
+
+    it('en modo end_of_month (por defecto) la PRIMERA cuota tambien cae a fin de mes', () => {
+        // Regla acordada con el contrato de Odoo (modo "Fin de mes"): 15 jun -> 30 jun
+        const manualDate = new Date(2026, 5, 15);
+        const result = financeService.calculateQuote(100000, 0, 0, 3, undefined, manualDate);
+        expect(result.installments[0].date.getTime()).toBe(new Date(2026, 5, 30).getTime());
+        expect(result.installments[1].date.getTime()).toBe(new Date(2026, 6, 31).getTime());
+        expect(result.firstInstallmentDate?.getTime()).toBe(new Date(2026, 5, 30).getTime());
+    });
+
+    it('en fin de mes: una primera fecha que ya es fin de mes no cambia, y febrero bisiesto cae en 29', () => {
+        const first = new Date(2027, 10, 30); // 30 nov 2027
+        const result = financeService.calculateQuote(100000, 0, 0, 4, undefined, first, 'end_of_month');
+        expect(result.installments[0].date.getTime()).toBe(first.getTime());
+        expect(result.installments[3].date.getTime()).toBe(new Date(2028, 1, 29).getTime());
+    });
+
+    it('sin fecha manual, la primera cuota es el ultimo dia del mes siguiente a la inicial', () => {
+        const result = financeService.calculateQuote(100000, 0, 0, 2, new Date(2026, 9, 5));
+        expect(result.installments[0].date.getTime()).toBe(new Date(2026, 10, 30).getTime());
     });
 
     it('en modo fixed_day, todas las cuotas mantienen el mismo dia del mes', () => {
@@ -89,5 +111,22 @@ describe('financeService.roundTo2Decimals / roundTo4Decimals', () => {
     it('redondea correctamente a 2 y 4 decimales', () => {
         expect(financeService.roundTo2Decimals(1.006)).toBeCloseTo(1.01, 2);
         expect(financeService.roundTo4Decimals(1.00006)).toBeCloseTo(1.0001, 4);
+    });
+});
+
+
+describe('financeService.toISODate', () => {
+    it('devuelve la fecha LOCAL sin corrimiento de dia (a diferencia de toISOString)', () => {
+        // 11 pm hora local: toISOString() en UTC-5 daria el dia siguiente
+        const lateEvening = new Date(2026, 8, 19, 23, 30);
+        expect(financeService.toISODate(lateEvening)).toBe('2026-09-19');
+    });
+
+    it('es el inverso de parseLocalDate', () => {
+        expect(financeService.toISODate(financeService.parseLocalDate('2026-02-28'))).toBe('2026-02-28');
+    });
+
+    it('rellena con ceros mes y dia', () => {
+        expect(financeService.toISODate(new Date(2026, 0, 5))).toBe('2026-01-05');
     });
 });

@@ -699,6 +699,7 @@ export const odooService = {
             downPayment?: number;
             discount?: number;
             firstInstallmentDate?: string;
+            scheduleType?: 'end_of_month' | 'fixed_day';
         }
     ): Promise<number> {
         try {
@@ -820,6 +821,7 @@ export const odooService = {
             downPayment: number;
             discount: number;
             firstInstallmentDate: string;
+            scheduleType?: 'end_of_month' | 'fixed_day';
         },
         pdfFile?: File, // Archivo de cotización PDF opcional
         userId?: number // ID del usuario logueado para asignar como vendedor

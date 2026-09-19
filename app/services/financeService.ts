@@ -7,6 +7,9 @@
  * - Cuota 0 (inicial) con fecha manual
  * - Cuota 1 (primera) con fecha manual
  * - Todas las cuotas mensuales caen en el último día del mes
+ * ACTUALIZADO: 2026-09-19
+ * - En modo 'end_of_month' la primera cuota TAMBIÉN se ajusta a fin de mes
+ * - toISODate(): fecha local -> YYYY-MM-DD sin el corrimiento de día de toISOString()
  */
 
 export interface Installment {
@@ -44,6 +47,18 @@ export const financeService = {
         const date = new Date(year, month - 1, day);
         date.setHours(0, 0, 0, 0);
         return date;
+    },
+
+    /**
+     * Fecha LOCAL -> "YYYY-MM-DD". Usar en vez de `date.toISOString().split('T')[0]`:
+     * toISOString() convierte a UTC, y en Perú (UTC-5) después de las 7 pm ese
+     * truco devuelve el día SIGUIENTE. Es el inverso de parseLocalDate().
+     */
+    toISODate: (date: Date): string => {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
     },
 
     /**
@@ -185,10 +200,17 @@ export const financeService = {
         const installments: Installment[] = [];
         let currentBalance = remainingBalance;
 
-        // 🆕 Usar fecha manual o calcular primera cuota (último día del mes siguiente)
-        const firstDate = firstInstallmentDate || financeService.getNextInstallmentDate(
+        // 🆕 Usar fecha manual o calcular primera cuota (último día del mes siguiente).
+        // En modo 'end_of_month' la PRIMERA cuota también cae a fin de mes (el de su
+        // propio mes): mismo criterio que el modo "Fin de mes" del contrato en Odoo
+        // (simple_recurring_contract v3.14), para que el PDF que recibe el cliente y
+        // el contrato que se crea muestren exactamente las mismas fechas.
+        const baseFirstDate = firstInstallmentDate || financeService.getNextInstallmentDate(
             initialPaymentDate || new Date()
         );
+        const firstDate = scheduleType === 'end_of_month'
+            ? financeService.getLastDayOfMonth(baseFirstDate.getFullYear(), baseFirstDate.getMonth())
+            : baseFirstDate;
 
         // Variable para rastrear la fecha de la cuota anterior
         let previousDate = firstDate;
