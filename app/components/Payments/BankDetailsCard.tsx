@@ -36,16 +36,18 @@ export default function BankDetailsCard({ paymentReference, amount, currency = '
                         />
 
                         <DetailRow
-                            label={`💳 Cuenta Corriente (${currencyName(currency)})`}
+                            label={`💳 N° de cuenta (${currencyName(currency)})`}
                             value={account.account}
                             copyable
                         />
 
-                        <DetailRow
-                            label="🔢 CCI (Interbancario)"
-                            value={account.cci}
-                            copyable
-                        />
+                        {account.cci && (
+                            <DetailRow
+                                label="🔢 CCI (Interbancario)"
+                                value={account.cci}
+                                copyable
+                            />
+                        )}
 
                         <DetailRow
                             label="👤 Titular"
