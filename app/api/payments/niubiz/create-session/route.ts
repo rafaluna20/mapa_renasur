@@ -2,6 +2,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { niubizService } from '@/app/services/niubizService';
 import { paymentService } from '@/app/services/paymentService';
+import { normalizeCurrency } from '@/app/utils/money';
 
 /**
  * POST /api/payments/niubiz/create-session
@@ -41,6 +42,16 @@ export async function POST(request: Request) {
                 success: false,
                 error: 'No autorizado para pagar esta factura'
             }, { status: 403 });
+        }
+
+        // La pasarela solo cobra en soles: esta ruta no envía moneda a Niubiz. Una cuota en dólares
+        // (contrato firmado en USD) se habría cobrado como si fueran soles -3.6 veces menos de lo
+        // debido-. Se bloquea hasta que la pasarela maneje moneda.
+        if (normalizeCurrency(invoice.currency_id) !== 'PEN') {
+            return Response.json({
+                success: false,
+                error: 'Esta cuota está en dólares. El pago con tarjeta solo está disponible para cuotas en soles: por favor pague por transferencia a la cuenta en dólares y suba su comprobante.'
+            }, { status: 422 });
         }
 
         // Crear sesión en Niubiz

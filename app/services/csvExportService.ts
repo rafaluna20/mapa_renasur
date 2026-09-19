@@ -98,6 +98,52 @@ export function buildInvoicesSections(data: PaidInvoicesReportData): CsvSection[
         });
     }
 
+    // Otras monedas (dólares): secciones APARTE, con la moneda en cada título. Nunca se suman a soles.
+    for (const f of Object.values(data.foreignCurrencies ?? {})) {
+        if (!(f.totalCollected > 0 || f.totalOverdue > 0)) continue;
+        const cur = f.currency;
+        sections.push({
+            title: `EN ${cur} — CIFRAS APARTE, NO SE SUMAN A SOLES — Total recaudado (${cur}): ${f.totalCollected.toFixed(2)} | Total vencido a hoy (${cur}): ${f.totalOverdue.toFixed(2)}`,
+            rows: [],
+        });
+        if (f.blocks.length > 0) {
+            sections.push({
+                title: `RESUMEN POR MANZANA (${cur})`,
+                rows: [
+                    ['Etapa', 'Manzana', 'Lotes con Pagos', 'Facturas Pagadas', `Monto Recaudado (${cur})`],
+                    ...f.blocks.map(b => [b.etapa || '', b.mz, b.uniqueLotsCount, b.invoicesCount, b.totalAmount.toFixed(2)]),
+                ],
+            });
+        }
+        if (f.recentPayments.length > 0) {
+            sections.push({
+                title: `FACTURAS PAGADAS EN ${cur} (DETALLE)`,
+                rows: [
+                    ['Factura', 'Tipo de Cuota', 'Fecha de Pago', 'Etapa', 'Manzana', 'Lote', 'Cliente', `Monto Pagado (${cur})`],
+                    ...f.recentPayments.map(p => [p.invoice, p.cuotaLabel || '', p.date, p.etapa || '', p.mz, p.lot, p.client, p.paidAmount.toFixed(2)]),
+                ],
+            });
+        }
+        if (f.aging.length > 0 && f.totalOverdue > 0) {
+            sections.push({
+                title: `ANTIGÜEDAD DE SALDOS VENCIDOS EN ${cur} (A HOY)`,
+                rows: [
+                    ['Antigüedad', 'Facturas Vencidas', `Monto Vencido (${cur})`],
+                    ...f.aging.map(a => [`${a.bucket} días`, a.invoicesCount, a.totalAmount.toFixed(2)]),
+                ],
+            });
+        }
+        if (f.overdueDetail.length > 0) {
+            sections.push({
+                title: `DETALLE DE FACTURAS VENCIDAS EN ${cur}`,
+                rows: [
+                    ['Factura', 'Cliente', 'Lote', 'Días Vencido', `Saldo Pendiente (${cur})`],
+                    ...f.overdueDetail.map(o => [o.invoice, o.client, o.lot, o.daysOverdue, o.amountDue.toFixed(2)]),
+                ],
+            });
+        }
+    }
+
     return sections;
 }
 

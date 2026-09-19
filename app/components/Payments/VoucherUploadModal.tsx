@@ -5,11 +5,14 @@ import { X, Upload, FileText, Loader2, AlertCircle, Calendar, Building2, Hash, C
 import { validateFileType } from '@/app/utils/fileValidation';
 import { useFocusTrap } from '@/app/hooks/useFocusTrap';
 import BankDetailsCard from './BankDetailsCard';
+import { formatMoney, currencySymbol, type CurrencyCode } from '@/app/utils/money';
 
 interface VoucherUploadModalProps {
     invoiceId: number;
     paymentReference: string;
     amount: number;
+    /** Moneda de la cuota (por defecto soles): define etiquetas, mensajes y cuenta bancaria. */
+    currency?: CurrencyCode;
     onClose: () => void;
     onSuccess: () => void;
 }
@@ -18,6 +21,7 @@ export default function VoucherUploadModal({
     invoiceId,
     paymentReference,
     amount,
+    currency = 'PEN',
     onClose,
     onSuccess
 }: VoucherUploadModalProps) {
@@ -86,7 +90,7 @@ export default function VoucherUploadModal({
 
         if (!isNaN(numValue) && Math.abs(numValue - amount) > tolerance) {
             setAmountWarning(
-                `⚠️ El monto ingresado (S/ ${numValue.toFixed(2)}) difiere del monto de la factura (S/ ${amount.toFixed(2)})`
+                `⚠️ El monto ingresado (${formatMoney(numValue, currency)}) difiere del monto de la factura (${formatMoney(amount, currency)})`
             );
         } else {
             setAmountWarning('');
@@ -192,6 +196,7 @@ export default function VoucherUploadModal({
                             <BankDetailsCard 
                                 paymentReference={paymentReference}
                                 amount={amount}
+                                currency={currency}
                             />
 
                             {error && (
@@ -266,7 +271,7 @@ export default function VoucherUploadModal({
 
                                 <div>
                                     <label htmlFor="reported-amount" className="block text-sm font-bold text-slate-700 mb-2">
-                                        Monto Transferido (S/)
+                                        Monto Transferido ({currencySymbol(currency)})
                                     </label>
                                     <input
                                         id="reported-amount"

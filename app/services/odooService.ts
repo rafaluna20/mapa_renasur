@@ -1016,6 +1016,28 @@ export const odooService = {
         }
     },
 
+    // Moneda y precio pactado del contrato vigente de un lote (null si no tiene contrato o falla).
+    // Sirve para mostrar Valor total / Saldo en la moneda del contrato (contratos en dólares).
+    async getLotContract(productCode: string): Promise<{
+        contractId: number;
+        state: string;
+        currency: string;
+        finalPrice: number;
+    } | null> {
+        try {
+            const response = await apiFetch('/api/odoo/get_lot_contract', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ productCode })
+            });
+            const result = await response.json();
+            return result.success ? (result.contract ?? null) : null;
+        } catch (error) {
+            console.error("Error fetching lot contract:", error);
+            return null;
+        }
+    },
+
     // --- MOCK: Reservation Logic with Evidence (Legacy/Simple) ---
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     async reserveLotWithEvidence(productId: number, userId: number, file: File, notes: string): Promise<unknown> {

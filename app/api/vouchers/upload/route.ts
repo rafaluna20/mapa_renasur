@@ -2,6 +2,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { put } from '@vercel/blob';
 import { fetchOdoo } from '@/app/services/odooService';
+import { formatMoney, normalizeCurrency, type CurrencyCode } from '@/app/utils/money';
 
 // ✅ Simple rate limiting usando Map en memoria (para desarrollo)
 // En producción, usar Redis/Upstash
@@ -125,13 +126,16 @@ export async function POST(request: Request) {
 
         console.log(`[VOUCHER] ✅ File signature validated: ${signatureValidation.type}`);
 
-        // ✅ Validar que el monto reportado coincida con la factura
+        // ✅ Validar que el monto reportado coincida con la factura (EN LA MONEDA DE LA FACTURA:
+        // una cuota en dólares se transfiere y se valida en dólares, nunca como "S/").
+        let invoiceCurrency: CurrencyCode = 'PEN';
         try {
             const invoice = await fetchOdoo('account.move', 'read', [[parseInt(invoiceId)]], {
-                fields: ['amount_residual']
+                fields: ['amount_residual', 'currency_id']
             });
 
             if (invoice && invoice[0]) {
+                invoiceCurrency = normalizeCurrency(invoice[0].currency_id);
                 const invoiceAmount = invoice[0].amount_residual;
                 const reportedAmountNum = parseFloat(reportedAmount);
                 const tolerance = 0.01;
@@ -140,7 +144,7 @@ export async function POST(request: Request) {
                     console.warn(`[VOUCHER] ⚠️ Amount mismatch: reported ${reportedAmountNum}, expected ${invoiceAmount}`);
                     return Response.json({
                         success: false,
-                        error: `El monto reportado (S/ ${reportedAmountNum.toFixed(2)}) no coincide con el monto de la factura (S/ ${invoiceAmount.toFixed(2)})`
+                        error: `El monto reportado (${formatMoney(reportedAmountNum, invoiceCurrency)}) no coincide con el monto de la factura (${formatMoney(invoiceAmount, invoiceCurrency)})`
                     }, { status: 400 });
                 }
             }
@@ -275,7 +279,7 @@ export async function POST(request: Request) {
 **Factura ID:** ${invoiceId}
 
 ### Datos Reportados por el Cliente
-- **Monto:** S/ ${reportedAmount}
+- **Monto:** ${formatMoney(parseFloat(reportedAmount) || 0, invoiceCurrency)}
 - **Fecha Transferencia:** ${transferDate || 'No especificada'}
 - **Banco Origen:** ${bankName || 'No especificado'}
 - **Nro. Operación:** ${operationNumber || 'No especificado'}
@@ -293,8 +297,8 @@ ${blobUrl ? `🔗 URL: ${blobUrl}` : '⚠️ URL Blob no disponible'}
 4. ✅ Confirmar que el dinero esté en la cuenta bancaria
 5. ✅ Registrar el pago manualmente desde Odoo:
    - Ir a la factura → Botón "Registrar Pago"
-   - Monto: S/ ${reportedAmount}
-   - Diario: Seleccionar banco
+   - Monto: ${formatMoney(parseFloat(reportedAmount) || 0, invoiceCurrency)}
+   - Diario: Seleccionar el banco ${invoiceCurrency === 'PEN' ? '(cuenta en soles)' : `(cuenta en ${invoiceCurrency}: la misma moneda de la factura)`}
    - Ref: Incluir nro de operación ${operationNumber || ''}
 6. ✅ La factura cambiará a "Pagado" automáticamente
 7. ✅ Marcar esta tarea como completada

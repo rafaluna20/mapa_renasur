@@ -1,6 +1,7 @@
 'use client';
 
 import { DollarSign, AlertTriangle, CheckCircle, Receipt, FileText, Calendar } from 'lucide-react';
+import { formatMoney as formatMoneyWithCurrency, normalizeCurrency, type CurrencyCode } from '@/app/utils/money';
 
 export interface StatementInvoice {
     id: number;
@@ -11,6 +12,8 @@ export interface StatementInvoice {
     invoice_date_due: string;
     amount_total: number;
     amount_residual: number;
+    /** Moneda de la factura ([id, 'USD'] de Odoo o el código). Vacío = soles. */
+    currency_id?: [number, string] | string | false;
     payment_state: string;
     // Fecha real de pago (usada por el PDF de Estado de Cuenta, no en pantalla).
     invoice_payments_widget?: { content?: { date?: string }[] } | false;
@@ -27,7 +30,10 @@ interface LotFinancialStatementProps {
     mz?: string | null;
     etapa?: string | null;
     numeroLote?: string | null;
+    /** Valor total en la moneda del lote (precio pactado del contrato si es en dólares; 0 = no disponible). */
     listPrice: number;
+    /** Moneda del lote; si falta se deduce de sus facturas (y en su defecto, soles). */
+    currency?: CurrencyCode;
     invoices: StatementInvoice[];
     loading?: boolean;
 }
@@ -37,8 +43,7 @@ interface LotFinancialStatementProps {
 // compartido: ese archivo tiene mucha lógica propia alrededor (mensaje de
 // WhatsApp de mora, etc.) y no vale el riesgo de tocarlo para ahorrar
 // ~100 líneas. Si diverge con el tiempo, no es grave — es solo formato.
-const formatMoney = (amount: number) =>
-    `S/ ${amount.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+// (El formateador ahora lleva la moneda: US$ para contratos en dólares, S/ para soles.)
 
 function parseCuotaLabel(inv: { name: string; ref?: string; payment_reference?: string }): { label: string; isInitial: boolean } {
     const ref = inv.ref || inv.payment_reference || inv.name || '';
@@ -52,7 +57,11 @@ function parseCuotaLabel(inv: { name: string; ref?: string; payment_reference?: 
     return { label: inv.name || 'Factura', isInitial: false };
 }
 
-export default function LotFinancialStatement({ lotLabel, mz, etapa, numeroLote, listPrice, invoices, loading }: LotFinancialStatementProps) {
+export default function LotFinancialStatement({ lotLabel, mz, etapa, numeroLote, listPrice, currency, invoices, loading }: LotFinancialStatementProps) {
+    // Todos los montos de este estado de cuenta se muestran en la moneda del lote.
+    const lotCurrency: CurrencyCode = currency ?? normalizeCurrency(invoices[0]?.currency_id);
+    const priceKnown = lotCurrency === 'PEN' || listPrice > 0;
+    const formatMoney = (amount: number) => formatMoneyWithCurrency(amount, lotCurrency);
     const realTotalPaid = invoices
         .filter((i) => i.payment_state === 'paid')
         .reduce((sum, inv) => sum + (inv.amount_total || 0), 0);
@@ -111,11 +120,11 @@ export default function LotFinancialStatement({ lotLabel, mz, etapa, numeroLote,
                 <div className="grid grid-cols-2 gap-4 mb-4">
                     <div>
                         <p className="text-[10px] text-slate-500 font-semibold">Valor Total (Precio)</p>
-                        <p className="text-sm font-bold text-slate-800">{formatMoney(listPrice)}</p>
+                        <p className="text-sm font-bold text-slate-800">{priceKnown ? formatMoney(listPrice) : '—'}</p>
                     </div>
                     <div className="text-right">
                         <p className="text-[10px] text-slate-500 font-semibold">Saldo Deudor Pendiente</p>
-                        <p className="text-sm font-bold text-red-600">{formatMoney(pendingBalance)}</p>
+                        <p className="text-sm font-bold text-red-600">{priceKnown ? formatMoney(pendingBalance) : '—'}</p>
                     </div>
                 </div>
 

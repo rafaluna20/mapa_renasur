@@ -2,13 +2,19 @@
 
 import { Building2, Copy, Check } from 'lucide-react';
 import { useCopyToClipboard } from '@/app/utils/clipboard';
+import { formatMoney, currencyName, type CurrencyCode } from '@/app/utils/money';
+import { BANK_ACCOUNTS } from '@/app/lib/bankAccounts';
 
 interface BankDetailsCardProps {
     paymentReference: string;
     amount: number;
+    /** Moneda de la cuota; determina la cuenta a mostrar y el monto. Por defecto soles. */
+    currency?: CurrencyCode;
 }
 
-export default function BankDetailsCard({ paymentReference, amount }: BankDetailsCardProps) {
+export default function BankDetailsCard({ paymentReference, amount, currency = 'PEN' }: BankDetailsCardProps) {
+    // Cuenta de ESTA moneda: nunca se muestra la de soles para una cuota en dólares.
+    const account = BANK_ACCOUNTS[currency];
     return (
         <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-5 space-y-4">
             <div className="flex items-center gap-3 mb-3">
@@ -22,32 +28,46 @@ export default function BankDetailsCard({ paymentReference, amount }: BankDetail
             </div>
 
             <div className="space-y-3">
-                <DetailRow 
-                    label="🏦 Banco" 
-                    value="BCP - Banco de Crédito del Perú"
-                />
-                
-                <DetailRow 
-                    label="💳 Cuenta Corriente" 
-                    value="194-2468127-0-52"
-                    copyable 
-                />
-                
-                <DetailRow 
-                    label="🔢 CCI (Interbancario)" 
-                    value="00219400246812705239"
-                    copyable 
-                />
-                
-                <DetailRow
-                    label="👤 Titular"
-                    value="RENACIMIENTO DEL SUR S.A.C."
-                />
+                {account ? (
+                    <>
+                        <DetailRow
+                            label="🏦 Banco"
+                            value={account.bank}
+                        />
+
+                        <DetailRow
+                            label={`💳 Cuenta Corriente (${currencyName(currency)})`}
+                            value={account.account}
+                            copyable
+                        />
+
+                        <DetailRow
+                            label="🔢 CCI (Interbancario)"
+                            value={account.cci}
+                            copyable
+                        />
+
+                        <DetailRow
+                            label="👤 Titular"
+                            value={account.holder}
+                        />
+                    </>
+                ) : (
+                    <div className="bg-amber-50 border border-amber-300 rounded-lg p-3" role="note">
+                        <p className="text-sm font-bold text-amber-900">
+                            Esta cuota es en {currencyName(currency)}
+                        </p>
+                        <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                            Solicita a tu asesor los datos de la cuenta en {currencyName(currency)} antes de
+                            transferir. No transfieras a una cuenta en otra moneda.
+                        </p>
+                    </div>
+                )}
                 
                 <div className="border-t border-blue-200 pt-3 mt-3">
                     <DetailRow 
                         label="💰 Monto a Transferir" 
-                        value={`S/ ${amount.toFixed(2)}`}
+                        value={formatMoney(amount, currency)}
                         highlight
                     />
                     

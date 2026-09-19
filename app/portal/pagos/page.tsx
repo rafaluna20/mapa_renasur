@@ -11,6 +11,7 @@ import VoucherStatusBadge from '@/app/components/Payments/VoucherStatusBadge';
 import VoucherStatusAlert from '@/app/components/Payments/VoucherStatusAlert';
 import VoucherTimeline from '@/app/components/Payments/VoucherTimeline';
 import LotFinancialStatement, { type StatementInvoice } from '@/app/components/Payments/LotFinancialStatement';
+import { formatMoney, normalizeCurrency, sumByCurrency, type CurrencyCode } from '@/app/utils/money';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -21,7 +22,18 @@ interface StatementLot {
     etapa: string | null;
     numeroLote: string | null;
     listPrice: number;
+    /** Moneda del lote (contratos en dólares facturan en USD). */
+    currency?: CurrencyCode;
     invoices: StatementInvoice[];
+}
+
+/** "S/ 1,500.00 + US$ 3,000.00": totales por moneda, nunca mezclados en una sola cifra. */
+function formatTotalsByCurrency(totals: Partial<Record<CurrencyCode, number>>): string {
+    const parts = (Object.entries(totals) as [CurrencyCode, number][])
+        .filter(([, amount]) => amount > 0.004)
+        .sort(([a], [b]) => (a === 'PEN' ? -1 : b === 'PEN' ? 1 : a.localeCompare(b)));
+    if (parts.length === 0) return formatMoney(0, 'PEN');
+    return parts.map(([cur, amount]) => formatMoney(amount, cur)).join(' + ');
 }
 
 export default function PaymentsPortal() {
@@ -65,6 +77,7 @@ export default function PaymentsPortal() {
                     etapa: lot.etapa,
                     numeroLote: lot.numeroLote,
                     listPrice: lot.listPrice,
+                    currency: lot.currency,
                     invoices: lot.invoices,
                 })),
             });
@@ -272,6 +285,7 @@ export default function PaymentsPortal() {
                                 etapa={lot.etapa}
                                 numeroLote={lot.numeroLote}
                                 listPrice={lot.listPrice}
+                                currency={lot.currency}
                                 invoices={lot.invoices}
                             />
                         ))}
@@ -285,7 +299,10 @@ export default function PaymentsPortal() {
                             <div>
                                 <p className="text-xs text-slate-500 font-medium">Total Pendiente</p>
                                 <p className="text-xl font-bold text-slate-800 mt-1">
-                                    S/ {invoices.reduce((sum, inv) => sum + inv.amount_residual, 0).toFixed(2)}
+                                    {formatTotalsByCurrency(sumByCurrency(invoices.map((inv) => ({
+                                        amount: inv.amount_residual,
+                                        currency: normalizeCurrency(inv.currency_id),
+                                    }))))}
                                 </p>
                             </div>
                             <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
@@ -381,6 +398,10 @@ function InvoiceCard({ invoice, onPaymentComplete }: {
 }) {
     const isOverdue = new Date(invoice.invoice_date_due) < new Date();
     const [showPaymentModal, setShowPaymentModal] = useState(false);
+    // La pasarela con tarjeta solo cobra en soles: una cuota en dólares se paga por transferencia
+    // a la cuenta en dólares (el servidor también lo bloquea en create-session/authorize).
+    const invoiceCurrency = normalizeCurrency(invoice.currency_id);
+    const cardPaymentAvailable = invoiceCurrency === 'PEN';
     const [showVoucherModal, setShowVoucherModal] = useState(false);
 
     return (
@@ -438,19 +459,21 @@ function InvoiceCard({ invoice, onPaymentComplete }: {
                     <div className="flex flex-col md:items-end gap-2">
                         <div className="text-right">
                             <span className="text-2xl font-bold text-[#A145F5]">
-                                S/ {invoice.amount_residual.toFixed(2)}
+                                {formatMoney(invoice.amount_residual, invoiceCurrency)}
                             </span>
                         </div>
 
                         <div className="flex gap-2">
-                            <button
-                                onClick={() => setShowPaymentModal(true)}
-                                className="flex-1 md:flex-none bg-[#A145F5] text-white px-5 py-2.5 rounded-lg font-bold hover:bg-[#8D32DF] transition-colors flex items-center justify-center gap-2 shadow-md text-sm"
-                                aria-label={`Pagar cuota ${invoice.payment_reference} con tarjeta`}
-                            >
-                                <CreditCard size={16} />
-                                <span>Pagar con Tarjeta</span>
-                            </button>
+                            {cardPaymentAvailable && (
+                                <button
+                                    onClick={() => setShowPaymentModal(true)}
+                                    className="flex-1 md:flex-none bg-[#A145F5] text-white px-5 py-2.5 rounded-lg font-bold hover:bg-[#8D32DF] transition-colors flex items-center justify-center gap-2 shadow-md text-sm"
+                                    aria-label={`Pagar cuota ${invoice.payment_reference} con tarjeta`}
+                                >
+                                    <CreditCard size={16} />
+                                    <span>Pagar con Tarjeta</span>
+                                </button>
+                            )}
                             <button
                                 onClick={() => setShowVoucherModal(true)}
                                 className="flex-1 md:flex-none bg-white border-2 border-[#A145F5] text-[#A145F5] px-5 py-2.5 rounded-lg font-bold hover:bg-[#A145F5]/10 transition-colors flex items-center justify-center gap-2 text-sm"
@@ -479,7 +502,7 @@ function InvoiceCard({ invoice, onPaymentComplete }: {
             </div>
 
             {/* Modales funcionales */}
-            {showPaymentModal && (
+            {showPaymentModal && cardPaymentAvailable && (
                 <NiubizPaymentModal
                     invoiceId={invoice.id}
                     amount={invoice.amount_residual}
@@ -494,6 +517,7 @@ function InvoiceCard({ invoice, onPaymentComplete }: {
                     invoiceId={invoice.id}
                     paymentReference={invoice.payment_reference}
                     amount={invoice.amount_residual}
+                    currency={invoiceCurrency}
                     onClose={() => setShowVoucherModal(false)}
                     onSuccess={onPaymentComplete}
                 />

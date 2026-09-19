@@ -2,6 +2,8 @@ import { niubizService } from '@/app/services/niubizService';
 import { fetchOdoo } from '@/app/services/odooService';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { paymentService } from '@/app/services/paymentService';
+import { normalizeCurrency } from '@/app/utils/money';
 
 /**
  * POST /api/payments/niubiz/authorize
@@ -27,6 +29,16 @@ export async function POST(request: Request) {
                 success: false,
                 error: 'Parámetros incompletos'
             }, { status: 400 });
+        }
+
+        // Defensa en profundidad (create-session ya lo bloquea): nunca autorizar un cobro con
+        // tarjeta contra una factura en moneda distinta de soles. Se valida ANTES de cobrar.
+        const invoiceToCharge = await paymentService.getInvoiceById(parseInt(invoiceId));
+        if (invoiceToCharge && normalizeCurrency(invoiceToCharge.currency_id) !== 'PEN') {
+            return Response.json({
+                success: false,
+                error: 'Esta cuota está en dólares. El pago con tarjeta solo está disponible para cuotas en soles: por favor pague por transferencia a la cuenta en dólares y suba su comprobante.'
+            }, { status: 422 });
         }
 
         // Autorizar con Niubiz

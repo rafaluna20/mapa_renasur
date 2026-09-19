@@ -1,4 +1,5 @@
 import { fetchOdoo } from './odooService';
+import { normalizeCurrency } from '../utils/money';
 
 /**
  * Estructura de una factura pendiente
@@ -9,6 +10,8 @@ export interface PendingInvoice {
     payment_reference: string;
     amount_total: number;
     amount_residual: number;
+    /** Moneda de la factura ([id, 'USD'] de Odoo): los contratos en dólares facturan en USD. */
+    currency_id?: [number, string] | false;
     invoice_date_due: string;
     payment_state: 'not_paid' | 'in_payment' | 'partial' | 'paid';
     state: string;
@@ -34,6 +37,8 @@ export interface PaymentHistory {
     id: number;
     name: string;
     amount: number;
+    /** Código de moneda del pago ('PEN' | 'USD'); sin él se asume soles. */
+    currency?: string;
     date: string;
     state: string;
     payment_method_id: [number, string];
@@ -60,6 +65,7 @@ export const paymentService = {
             'payment_reference',
             'amount_total',
             'amount_residual',
+            'currency_id',
             'invoice_date_due',
             'payment_state',
             'state',
@@ -156,6 +162,7 @@ export const paymentService = {
         const fields = [
             'name',
             'amount_total',
+            'currency_id',
             'invoice_date',
             'state',
             'payment_state'
@@ -168,6 +175,7 @@ export const paymentService = {
             id: inv.id as number,
             name: inv.name,
             amount: inv.amount_total,
+            currency: normalizeCurrency(inv.currency_id),
             date: inv.invoice_date,
             state: inv.payment_state,
             payment_method_id: [0, 'Vía Factura'],
@@ -222,6 +230,7 @@ export const paymentService = {
             'payment_reference',
             'amount_total',
             'amount_residual',
+            'currency_id',
             'invoice_date_due',
             'payment_state',
             'state',

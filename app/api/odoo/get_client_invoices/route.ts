@@ -82,6 +82,7 @@ export async function POST(request: Request) {
             'payment_state',
             'amount_total',
             'amount_residual',
+            'currency_id',         // Moneda de la factura ([id, 'USD']): contratos en dólares
             'invoice_payments_widget' // Fecha real de pago (para el PDF de Estado de Cuenta)
         ];
 

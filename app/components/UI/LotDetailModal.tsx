@@ -5,6 +5,7 @@ import ReservationModal from './ReservationModal';
 import RefundModal from './RefundModal';
 import DescargasStatsModal from './DescargasStatsModal';
 import { odooService, OdooUser } from '@/app/services/odooService';
+import { formatMoney as formatMoneyWithCurrency, normalizeCurrency } from '@/app/utils/money';
 import { SHADOW_FLOATING, BORDER_FLOATING } from '@/app/lib/designTokens';
 
 interface StatusConfigItem {
@@ -39,9 +40,12 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
     const [showRefundModal, setShowRefundModal] = useState(false);
     const [reservationOwner, setReservationOwner] = useState<{ id: number; name: string; partnerId?: number; clientName?: string; clientPhone?: string | null; clientEmail?: string | null; clientDni?: string | null; totalInstallments?: number; orderId?: number; separationAmount?: number | null } | null>(null);
     const [activeTab, setActiveTab] = useState<'info' | 'pagos'>('info');
-    const [invoices, setInvoices] = useState<{ id: number; name: string; ref?: string; payment_reference?: string; invoice_date: string; invoice_date_due: string; amount_total: number; amount_residual: number; payment_state: string; invoice_payments_widget?: { content?: { date?: string }[] } | false }[]>([]);
+    const [invoices, setInvoices] = useState<{ id: number; name: string; ref?: string; payment_reference?: string; invoice_date: string; invoice_date_due: string; amount_total: number; amount_residual: number; currency_id?: [number, string] | string | false; payment_state: string; invoice_payments_widget?: { content?: { date?: string }[] } | false }[]>([]);
     const [loadingInvoices, setLoadingInvoices] = useState(false);
     const [downloadingStatement, setDownloadingStatement] = useState(false);
+    // Moneda y precio pactado del contrato vigente (solo se consulta si las facturas están en moneda
+    // extranjera): el precio de catálogo de `lot.list_price` está en soles y no sirve para un contrato en USD.
+    const [lotContract, setLotContract] = useState<{ currency: string; finalPrice: number } | null>(null);
 
     // ─── Generación de Plano y Memoria Descriptiva (plan_pro) ───────────────
     const [planoState, setPlanoState] = useState<{
@@ -83,6 +87,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
 
         // RESET COMPLETO E INMEDIATO - Esto garantiza que la UI se limpie
         setInvoices([]);
+        setLotContract(null);
         setReservationOwner(null);
         setActiveTab('info');
         setLoadingInvoices(false);
@@ -171,7 +176,18 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                     console.log(`✅ [REQUEST #${thisRequestId}] Facturas recibidas: ${validInvoices.length} para lote ${lot.name}`);
                     console.log(`📋 [REQUEST #${thisRequestId}] IDs de facturas:`, validInvoices.map((inv: any) => inv.id || inv.name).join(', '));
                     
+                    // Contrato en moneda extranjera -> traer su moneda/precio pactado para el resumen financiero
+                    let contractData: { currency: string; finalPrice: number } | null = null;
+                    if (validInvoices.some((inv: { currency_id?: unknown }) => normalizeCurrency(inv.currency_id) !== 'PEN')) {
+                        contractData = await odooService.getLotContract(lot.default_code);
+                        if (currentLotIdRef.current !== lotId || thisRequestId !== requestIdRef.current) {
+                            setLoadingInvoices(false);
+                            return;
+                        }
+                    }
+
                     setInvoices(validInvoices as any);
+                    setLotContract(contractData);
                     setLoadingInvoices(false);
                     
                     console.log(`🎉 [REQUEST #${thisRequestId}] COMPLETADO EXITOSAMENTE`);
@@ -300,8 +316,11 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
         .filter(i => i.payment_state === 'paid')
         .reduce((sum, inv) => sum + (inv.amount_total || 0), 0);
 
-    // Formatter - Soles Peruanos
-    const formatMoney = (amount: number) => `S/ ${amount.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    // Moneda del lote = la de sus facturas (lo que realmente se le cobra al cliente). Todo monto de
+    // facturas se muestra en ESA moneda: antes todo llevaba "S/" fijo y US$1,500 se veía como S/ 1,500.
+    const lotCurrency = normalizeCurrency(invoices[0]?.currency_id);
+    const isForeignCurrency = lotCurrency !== 'PEN';
+    const formatMoney = (amount: number, currency = lotCurrency) => formatMoneyWithCurrency(amount, currency);
 
     // ─── Parser de referencia de factura (CONTRATOMANUAL-E01MZD148P-C013 / INIT) ────
     const parseCuotaLabel = (inv: { name: string; ref?: string; payment_reference?: string }): { label: string; isInitial: boolean; cuotaNum: number | null } => {
@@ -322,7 +341,15 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
     };
 
     // ─── KPIs Financieros y Morosidad (Estado de Cuenta) ─────────────────────────
-    const listPrice = lot.list_price || 0;
+    // Contrato en moneda extranjera: el valor total es el PRECIO PACTADO del contrato (en su moneda).
+    // Restar cobros en dólares al precio de catálogo en soles daba un saldo sin sentido
+    // (S/360,633.60 - US$1,500). Si aún no se pudo leer el contrato, no se inventa un número
+    // en la moneda equivocada: la pantalla muestra "—".
+    const priceKnown = !isForeignCurrency
+        || (lotContract !== null && normalizeCurrency(lotContract.currency) === lotCurrency);
+    const listPrice = isForeignCurrency
+        ? (priceKnown ? (lotContract?.finalPrice || 0) : 0)
+        : (lot.list_price || 0);
     const realTotalPaid = totalInvoiced;
     // Tolerancia de redondeo: dividir el precio en N cuotas iguales rara vez
     // da un resultado exacto (ej. E01MZS034P: 28000/12 = 2333.33... cada
@@ -394,7 +421,8 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                     mz: lot?.x_mz || null,
                     etapa: lot?.x_etapa || null,
                     numeroLote: lot?.x_lote || null,
-                    listPrice: lot?.list_price || 0,
+                    listPrice,
+                    currency: lotCurrency,
                     invoices,
                 }],
             });
@@ -459,7 +487,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                         <div className="grid grid-cols-2 gap-3">
                             <div className="bg-white dark:bg-slate-800 p-3 rounded-lg text-center border border-slate-100 dark:border-slate-700 shadow-sm flex flex-col justify-center">
                                 <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Precio Lista</p>
-                                <p className="font-bold text-slate-800 dark:text-slate-100 text-base">{formatMoney(lot.list_price)}</p>
+                                <p className="font-bold text-slate-800 dark:text-slate-100 text-base">{formatMoney(lot.list_price, 'PEN')}</p>
                             </div>
                             <div className="bg-white dark:bg-slate-800 p-3 rounded-lg text-center border border-slate-100 dark:border-slate-700 shadow-sm flex flex-col justify-center">
                                 <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Área Total</p>
@@ -658,11 +686,11 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                             <div className="grid grid-cols-2 gap-4 mb-4">
                                 <div>
                                     <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">Valor Total (Precio)</p>
-                                    <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{formatMoney(listPrice)}</p>
+                                    <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{priceKnown ? formatMoney(listPrice) : '—'}</p>
                                 </div>
                                 <div className="text-right">
                                     <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">Saldo Deudor Pendiente</p>
-                                    <p className="text-sm font-bold text-red-600 dark:text-red-400">{formatMoney(pendingBalance)}</p>
+                                    <p className="text-sm font-bold text-red-600 dark:text-red-400">{priceKnown ? formatMoney(pendingBalance) : '—'}</p>
                                 </div>
                             </div>
 

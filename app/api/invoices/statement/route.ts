@@ -1,6 +1,8 @@
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { fetchOdoo } from '@/app/services/odooService';
+import { fetchLotContractInfo } from '@/app/lib/lotContract';
+import { normalizeCurrency } from '@/app/utils/money';
 
 interface ExtendedUser {
     odooPartnerId?: number;
@@ -16,6 +18,8 @@ interface OdooInvoice {
     payment_state: string;
     amount_total: number;
     amount_residual: number;
+    // Moneda de la factura ([id, 'USD'] | false): los contratos en dólares facturan en USD.
+    currency_id?: [number, string] | false;
     // Único lugar donde vive la fecha real de pago (no existe como campo
     // plano en account.move) — la usa el PDF de Estado de Cuenta para la
     // columna "Fecha de Pago" / "Días de atraso-adelanto".
@@ -81,7 +85,7 @@ export async function GET() {
                 ['move_type', '=', 'out_invoice'],
                 ['state', '=', 'posted'],
             ]], {
-                fields: ['id', 'name', 'ref', 'payment_reference', 'invoice_date', 'invoice_date_due', 'payment_state', 'amount_total', 'amount_residual', 'invoice_payments_widget'],
+                fields: ['id', 'name', 'ref', 'payment_reference', 'invoice_date', 'invoice_date_due', 'payment_state', 'amount_total', 'amount_residual', 'currency_id', 'invoice_payments_widget'],
                 limit: 500,
                 order: 'invoice_date asc',
             }) as Promise<OdooInvoice[]>,
@@ -113,8 +117,20 @@ export async function GET() {
             }
         }
 
+        // Contrato vigente por lote: aporta la MONEDA y, si es en moneda extranjera, el precio
+        // pactado (el list_price del catálogo está en soles y no sirve para un contrato en dólares).
+        const contratosPorCodigo = await fetchLotContractInfo(codigos);
+
         const lots = [...grupos.entries()].map(([codigo, invs]) => {
             const producto = productosPorCodigo.get(codigo);
+            const contrato = contratosPorCodigo.get(codigo);
+            // La moneda sale de las facturas (lo que realmente se le cobra al cliente); el contrato
+            // solo se usa para el precio cuando ambos son en moneda extranjera.
+            const currency = normalizeCurrency(invs[0]?.currency_id);
+            const esMonedaExtranjera = currency !== 'PEN';
+            const listPrice = esMonedaExtranjera
+                ? (contrato && contrato.currency === currency ? contrato.finalPrice : 0)
+                : (producto?.list_price || 0);
             const label = codigo === 'SIN_LOTE'
                 ? 'Otros pagos'
                 : producto
@@ -127,7 +143,10 @@ export async function GET() {
                 mz: producto?.x_mz || null,
                 etapa: producto?.x_etapa || null,
                 numeroLote: producto?.x_lote || null,
-                listPrice: producto?.list_price || 0,
+                // En dólares: precio pactado del contrato (0 si no se pudo leer: la UI muestra
+                // "—" en vez de un número en la moneda equivocada). En soles: catálogo, como antes.
+                listPrice,
+                currency,
                 invoices: invs,
             };
         });

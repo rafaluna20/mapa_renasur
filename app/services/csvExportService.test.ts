@@ -57,6 +57,43 @@ describe('buildInvoicesSections', () => {
     });
 });
 
+describe('buildInvoicesSections — dólares aparte', () => {
+    it('las cifras en dólares van en secciones propias con la moneda en el título, sin tocar las de soles', () => {
+        const sections = buildInvoicesSections({
+            totalCollected: 2000,
+            blocks: [{ mz: 'S', etapa: 'E01', totalAmount: 2000, invoicesCount: 1, uniqueLotsCount: 1 }],
+            recentPayments: [],
+            foreignCurrencies: {
+                USD: {
+                    currency: 'USD',
+                    totalCollected: 1500,
+                    blocks: [{ mz: 'S', etapa: 'E01', totalAmount: 1500, invoicesCount: 1, uniqueLotsCount: 1 }],
+                    recentPayments: [{ invoice: 'B-6', date: '2026-09-02', client: 'Cliente Dolares', lot: 'E01MZS090P', mz: 'S', paidAmount: 1500 }],
+                    totalOverdue: 11676,
+                    aging: [{ bucket: '90+', totalAmount: 11676, invoicesCount: 2 }],
+                    overdueDetail: [{ invoice: 'B-3', client: 'Cliente Dolares', lot: 'E01MZS090P', daysOverdue: 200, amountDue: 10176 }],
+                },
+            },
+        });
+        const titles = sections.map((s) => s.title || '');
+        // soles intacto
+        const solesManzana = sections.find((s) => s.title === 'RESUMEN POR MANZANA')!;
+        expect(solesManzana.rows[1]).toEqual(['E01', 'S', 1, 1, '2000.00']);
+        // dólares aparte, con la moneda en cada título
+        expect(titles.some((t) => t.startsWith('EN USD') && t.includes('NO SE SUMAN A SOLES'))).toBe(true);
+        const usdManzana = sections.find((s) => s.title === 'RESUMEN POR MANZANA (USD)')!;
+        expect(usdManzana.rows[0]).toContain('Monto Recaudado (USD)');
+        expect(usdManzana.rows[1]).toEqual(['E01', 'S', 1, 1, '1500.00']);
+        expect(sections.find((s) => s.title === 'DETALLE DE FACTURAS VENCIDAS EN USD')!.rows[1])
+            .toEqual(['B-3', 'Cliente Dolares', 'E01MZS090P', 200, '10176.00']);
+    });
+
+    it('sin datos en dólares no agrega secciones nuevas', () => {
+        const base = { totalCollected: 10, blocks: [], recentPayments: [] };
+        expect(buildInvoicesSections({ ...base, foreignCurrencies: {} }).length).toBe(buildInvoicesSections(base).length);
+    });
+});
+
 describe('buildGeneralSections', () => {
     it('incluye KPIs, manzanas y ranking de asesores con formato numérico correcto', () => {
         const sections = buildGeneralSections({

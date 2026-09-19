@@ -7,6 +7,7 @@
 
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { formatMoney, normalizeCurrency, currencyName, currencySymbol, type CurrencyCode } from '../utils/money';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 export interface ReportData {
@@ -56,8 +57,9 @@ const BRAND = {
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-const currency = (n: number) =>
-    `S/ ${n.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+// Por defecto soles (todos los reportes históricos); el estado de cuenta pasa la moneda del lote
+// para que un contrato en dólares NO se imprima con "S/".
+const currency = (n: number, cur: CurrencyCode = 'PEN') => formatMoney(n, cur);
 
 const pct = (v: number, total: number) =>
     total > 0 ? `${Math.min(100, Math.round((v / total) * 100))}%` : '0%';
@@ -1278,6 +1280,24 @@ export interface PaidInvoicesReportData {
         totalCollected: { value: number; change: number; trend: 'up' | 'down' | 'stable' };
         invoicesCount: { value: number; change: number; trend: 'up' | 'down' | 'stable' };
     };
+    /**
+     * Cobros y saldos vencidos en otra moneda (dólares), calculados APARTE: los campos de arriba son
+     * SOLO soles. Nunca se suman a los de soles (US$1,500 no es S/1,500). Se imprimen en su propia
+     * sección del reporte.
+     */
+    foreignCurrencies?: Record<string, ForeignCurrencyReportData>;
+}
+
+export interface ForeignCurrencyReportData {
+    /** Código de moneda, ej. 'USD'. */
+    currency: string;
+    totalCollected: number;
+    blocks: { mz: string; etapa?: string; totalAmount: number; invoicesCount: number; uniqueLotsCount: number }[];
+    recentPayments: { invoice: string; cuotaLabel?: string; date: string; client: string; lot: string; etapa?: string; mz: string; paidAmount: number }[];
+    totalOverdue: number;
+    aging: { bucket: '0-30' | '31-60' | '61-90' | '90+'; totalAmount: number; invoicesCount: number }[];
+    overdueDetail: { invoice: string; client: string; lot: string; daysOverdue: number; amountDue: number }[];
+    comparison?: PaidInvoicesReportData['comparison'];
 }
 
 export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): Promise<void> {
@@ -1337,7 +1357,8 @@ export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): 
     doc.setLineWidth(0.5);
     doc.roundedRect(W - margin - 75, 28, 75, kpiBoxH, 2, 2, 'FD');
     setFont(doc, 8, BRAND.greenLight, 'bold');
-    doc.text('TOTAL RECAUDADO EFECTIVO', W - margin - 4, 34, { align: 'right' });
+    const hasForeign = Object.values(data.foreignCurrencies ?? {}).some((f) => f.totalCollected > 0 || f.totalOverdue > 0);
+    doc.text(hasForeign ? 'TOTAL RECAUDADO EFECTIVO (SOLES)' : 'TOTAL RECAUDADO EFECTIVO', W - margin - 4, 34, { align: 'right' });
     setFont(doc, 14, BRAND.darkBg, 'bold');
     doc.text(currency(data.totalCollected), W - margin - 4, 43, { align: 'right' });
 
@@ -1475,7 +1496,7 @@ export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): 
         doc.setLineWidth(0.5);
         doc.roundedRect(W - margin - 75, y - 6, 75, 20, 2, 2, 'FD');
         setFont(doc, 8, BRAND.red, 'bold');
-        doc.text('TOTAL SALDO VENCIDO (A HOY)', W - margin - 4, y, { align: 'right' });
+        doc.text(hasForeign ? 'TOTAL SALDO VENCIDO (A HOY · SOLES)' : 'TOTAL SALDO VENCIDO (A HOY)', W - margin - 4, y, { align: 'right' });
         setFont(doc, 14, BRAND.darkBg, 'bold');
         doc.text(currency(data.totalOverdue || 0), W - margin - 4, y + 9, { align: 'right' });
 
@@ -1540,6 +1561,90 @@ export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): 
         }
     }
 
+    // ── Sección en moneda extranjera (dólares): cifras APARTE, nunca sumadas a las de soles ──
+    let foreignStartPage: number | null = null;
+    const foreignSections = Object.values(data.foreignCurrencies ?? {})
+        .filter((f) => f.totalCollected > 0 || f.totalOverdue > 0);
+    for (const f of foreignSections) {
+        const cur = normalizeCurrency(f.currency);
+        const sym = currencySymbol(cur);
+        doc.addPage();
+        if (foreignStartPage === null) foreignStartPage = doc.getNumberOfPages();
+        drawRect(doc, 0, 0, W, H, BRAND.pageBg);
+        y = 22;
+
+        drawSectionHeader(doc, `EN ${currencyName(cur).toUpperCase()} (${sym}) — CIFRAS APARTE, NO SE SUMAN A SOLES`, margin, y, BRAND.purple);
+        drawLine(doc, margin, y + 2.5, W - margin, y + 2.5, BRAND.borderLight, 0.15);
+        y += 10;
+
+        const kpiW = (contentW - 6) / 2;
+        const drawKpi = (x: number, label: string, value: string, color: [number, number, number]) => {
+            doc.setFillColor(...BRAND.white);
+            doc.setDrawColor(...color);
+            doc.setLineWidth(0.5);
+            doc.roundedRect(x, y, kpiW, 20, 2, 2, 'FD');
+            setFont(doc, 7.5, color, 'bold');
+            doc.text(label, x + 4, y + 7);
+            setFont(doc, 14, BRAND.darkBg, 'bold');
+            doc.text(value, x + 4, y + 16);
+        };
+        drawKpi(margin, `TOTAL RECAUDADO (${sym})`, currency(f.totalCollected, cur), BRAND.greenLight);
+        drawKpi(margin + kpiW + 6, `TOTAL SALDO VENCIDO A HOY (${sym})`, currency(f.totalOverdue, cur), BRAND.red);
+        y += 28;
+
+        const tableStyles = {
+            styles: { font: 'helvetica', fontSize: 7.5, cellPadding: { top: 3, bottom: 3, left: 4, right: 4 }, textColor: BRAND.textLight },
+            headStyles: { fillColor: BRAND.panelBg, textColor: BRAND.darkBg, fontStyle: 'bold' as const, fontSize: 6.5 },
+            alternateRowStyles: { fillColor: [250, 252, 254] as [number, number, number] },
+            margin: { left: margin, right: margin },
+        };
+
+        if (f.aging.length > 0 && f.totalOverdue > 0) {
+            drawSectionHeader(doc, `ANTIGÜEDAD DE SALDOS VENCIDOS (${sym})`, margin, y, BRAND.red);
+            drawLine(doc, margin, y + 2.5, W - margin, y + 2.5, BRAND.borderLight, 0.15);
+            y += 5;
+            autoTable(doc, {
+                startY: y,
+                head: [['ANTIGÜEDAD', 'FACTURAS VENCIDAS', `MONTO VENCIDO (${sym})`, 'PARTICIPACIÓN']],
+                body: f.aging.map((a) => [`${a.bucket} días`, `${a.invoicesCount} facturas`, currency(a.totalAmount, cur), pct(a.totalAmount, f.totalOverdue)]),
+                theme: 'plain',
+                ...tableStyles,
+                columnStyles: { 2: { fontStyle: 'bold', textColor: BRAND.red, halign: 'right' }, 3: { halign: 'center' } },
+            });
+            y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+        }
+
+        if (f.overdueDetail.length > 0) {
+            drawSectionHeader(doc, `DETALLE DE FACTURAS VENCIDAS (${sym}) — TOP 15 MÁS URGENTES`, margin, y, BRAND.amber);
+            drawLine(doc, margin, y + 2.5, W - margin, y + 2.5, BRAND.borderLight, 0.15);
+            y += 5;
+            autoTable(doc, {
+                startY: y,
+                head: [['FACTURA', 'CLIENTE', 'LOTE', 'DÍAS VENCIDO', `SALDO PENDIENTE (${sym})`]],
+                body: f.overdueDetail.map((o) => [o.invoice, o.client, o.lot, `${o.daysOverdue} días`, currency(o.amountDue, cur)]),
+                theme: 'plain',
+                ...tableStyles,
+                columnStyles: { 3: { halign: 'center' }, 4: { fontStyle: 'bold', textColor: BRAND.red, halign: 'right' } },
+            });
+            y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+        }
+
+        if (f.recentPayments.length > 0) {
+            drawSectionHeader(doc, `COBROS DEL PERÍODO (${sym})`, margin, y, BRAND.greenLight);
+            drawLine(doc, margin, y + 2.5, W - margin, y + 2.5, BRAND.borderLight, 0.15);
+            y += 5;
+            autoTable(doc, {
+                startY: y,
+                head: [['FACTURA', 'CUOTA', 'FECHA', 'CLIENTE', 'LOTE', `MONTO PAGADO (${sym})`]],
+                body: f.recentPayments.slice(0, 30).map((r) => [r.invoice, r.cuotaLabel || '', r.date, r.client, r.lot, currency(r.paidAmount, cur)]),
+                theme: 'plain',
+                ...tableStyles,
+                columnStyles: { 5: { fontStyle: 'bold', textColor: BRAND.greenLight, halign: 'right' } },
+            });
+            y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+        }
+    }
+
     y = drawTraceabilitySection(doc, margin, y, contentW, reportId);
 
     // ── Post Procesamiento
@@ -1556,11 +1661,14 @@ export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): 
             // resto — antes esta banda era siempre verde sin importar que
             // la página tratara de deuda vencida (contradecía sus propias
             // secciones en rojo).
-            const isAgingPage = agingStartPage !== null && p >= agingStartPage;
-            const bannerColor = isAgingPage ? BRAND.red : BRAND.greenLight;
-            const bannerLabel = isAgingPage
-                ? 'Terra Lima · Antigüedad de Saldos Vencidos'
-                : 'Terra Lima · Reporte de Recaudación (Facturas Pagadas)';
+            const isForeignPage = foreignStartPage !== null && p >= foreignStartPage;
+            const isAgingPage = !isForeignPage && agingStartPage !== null && p >= agingStartPage;
+            const bannerColor = isForeignPage ? BRAND.purple : isAgingPage ? BRAND.red : BRAND.greenLight;
+            const bannerLabel = isForeignPage
+                ? 'Terra Lima · Recaudación y Saldos en Dólares (US$) — aparte de soles'
+                : isAgingPage
+                    ? 'Terra Lima · Antigüedad de Saldos Vencidos'
+                    : 'Terra Lima · Reporte de Recaudación (Facturas Pagadas)';
 
             drawRect(doc, 0, 0, W, 16, BRAND.panelBg);
             drawLine(doc, 0, 16, W, 16, BRAND.borderLight, 0.3);
@@ -1597,6 +1705,8 @@ export interface ClientStatementInvoice {
     invoice_date_due: string;
     amount_total: number;
     amount_residual: number;
+    /** Moneda de la factura ([id, 'USD'] de Odoo, o el código). Vacío = soles. */
+    currency_id?: [number, string] | string | false;
     payment_state: string;
     invoice_payments_widget?: InvoicePaymentsWidget | false;
 }
@@ -1612,7 +1722,11 @@ export interface ClientStatementLot {
     mz?: string | null;
     etapa?: string | null;
     numeroLote?: string | null;
+    /** Valor total en la moneda del lote. En un lote en moneda extranjera es el precio pactado
+     *  del contrato; 0 = no disponible (el PDF imprime "—" en vez de un número en otra moneda). */
     listPrice: number;
+    /** Moneda del lote; si falta se deduce de sus facturas (y en su defecto, soles). */
+    currency?: CurrencyCode;
     invoices: ClientStatementInvoice[];
 }
 
@@ -1848,6 +1962,10 @@ export async function generateClientStatementReport(data: ClientStatementReportD
             y = drawInfoBox(doc, margin, y, contentW, 'DATOS DEL LOTE', loteItems, BRAND.purple, 3);
         }
 
+        // Moneda del lote: TODOS los montos de este estado de cuenta se imprimen en ella.
+        const cur: CurrencyCode = lot.currency ?? normalizeCurrency(lot.invoices[0]?.currency_id);
+        const priceKnown = cur === 'PEN' || lot.listPrice > 0;
+
         const realTotalPaid = lot.invoices
             .filter((i) => i.payment_state === 'paid')
             .reduce((sum, inv) => sum + (inv.amount_total || 0), 0);
@@ -1876,12 +1994,12 @@ export async function generateClientStatementReport(data: ClientStatementReportD
         doc.text('VALOR TOTAL (PRECIO)', margin + 5, y + 7);
         doc.text('SALDO DEUDOR PENDIENTE', W - margin - 5, y + 7, { align: 'right' });
         setFont(doc, 12, BRAND.darkBg, 'bold');
-        doc.text(currency(lot.listPrice), margin + 5, y + 13.5);
+        doc.text(priceKnown ? currency(lot.listPrice, cur) : '—', margin + 5, y + 13.5);
         setFont(doc, 12, BRAND.red, 'bold');
-        doc.text(currency(pendingBalance), W - margin - 5, y + 13.5, { align: 'right' });
+        doc.text(priceKnown ? currency(pendingBalance, cur) : '—', W - margin - 5, y + 13.5, { align: 'right' });
 
         setFont(doc, 7.5, BRAND.greenLight, 'bold');
-        doc.text(`Total Pagado: ${currency(realTotalPaid)}`, margin + 5, y + 20.5);
+        doc.text(`Total Pagado: ${currency(realTotalPaid, cur)}`, margin + 5, y + 20.5);
         doc.text(`${financialProgress}%`, W - margin - 5, y + 20.5, { align: 'right' });
         drawRect(doc, margin + 5, y + 22.5, contentW - 10, 1.8, BRAND.borderLight, 0.9);
         // roundedRect con ancho 0 (0% pagado, ej. cuota inicial aún sin
@@ -1899,7 +2017,7 @@ export async function generateClientStatementReport(data: ClientStatementReportD
             drawRect(doc, margin, y, contentW, bannerH, [254, 242, 242] as [number, number, number], 2);
             setFont(doc, 8, BRAND.red, 'bold');
             doc.text(
-                `ATRASO DETECTADO (${overdueInvoices.length} ${overdueInvoices.length === 1 ? 'CUOTA' : 'CUOTAS'}) · DEUDA EXIGIBLE: ${currency(totalOverdueAmount)}`,
+                `ATRASO DETECTADO (${overdueInvoices.length} ${overdueInvoices.length === 1 ? 'CUOTA' : 'CUOTAS'}) · DEUDA EXIGIBLE: ${currency(totalOverdueAmount, cur)}`,
                 margin + 5, y + 6
             );
             setFont(doc, 6.5, BRAND.textMuted);
@@ -1945,8 +2063,8 @@ export async function generateClientStatementReport(data: ClientStatementReportD
             diasInfo[i].texto,
             ...(MOSTRAR_COLUMNA_FACTURA ? [inv.name || inv.ref || 'S/N'] : []),
             filaEstado(inv),
-            currency(inv.amount_total),
-            inv.payment_state === 'paid' ? '—' : currency(inv.amount_residual),
+            currency(inv.amount_total, cur),
+            inv.payment_state === 'paid' ? '—' : currency(inv.amount_residual, cur),
         ]);
 
         // ESTADO/MONTO/SALDO se corren cuando FACTURA está oculta — se

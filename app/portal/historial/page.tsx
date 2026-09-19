@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { History, Loader2, AlertCircle, CheckCircle2, XCircle, Clock, FileText, CreditCard } from 'lucide-react';
 import type { PaymentHistory } from '@/app/services/paymentService';
+import { formatMoney, normalizeCurrency, sumByCurrency, type CurrencyCode } from '@/app/utils/money';
 
 // Force dynamic rendering since this page depends on user data
 export const dynamic = 'force-dynamic';
@@ -52,7 +53,14 @@ export default function PaymentHistoryPage() {
         );
     }
 
-    const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+    // Total pagado POR MONEDA: sumar dólares como si fueran soles daría una cifra sin sentido.
+    const totalsByCurrency = sumByCurrency(
+        payments.map((p) => ({ amount: p.amount, currency: normalizeCurrency(p.currency) }))
+    );
+    const totalPaidLabel = (Object.entries(totalsByCurrency) as [CurrencyCode, number][])
+        .sort(([a], [b]) => (a === 'PEN' ? -1 : b === 'PEN' ? 1 : a.localeCompare(b)))
+        .map(([cur, amount]) => formatMoney(amount, cur))
+        .join(' + ') || formatMoney(0, 'PEN');
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-stone-50">
@@ -91,7 +99,7 @@ export default function PaymentHistoryPage() {
                         <div>
                             <p className="text-sm text-slate-500 font-medium">Total Pagado</p>
                             <p className="text-3xl font-bold text-emerald-600 mt-1">
-                                S/ {totalPaid.toFixed(2)}
+                                {totalPaidLabel}
                             </p>
                         </div>
                         <div className="text-right">
@@ -232,7 +240,7 @@ function PaymentCard({ payment }: { payment: PaymentHistory }) {
                 <div className="flex flex-col md:items-end gap-3">
                     <div className="text-right">
                         <span className="text-3xl font-bold text-emerald-600">
-                            S/ {payment.amount.toFixed(2)}
+                            {formatMoney(payment.amount, normalizeCurrency(payment.currency))}
                         </span>
                     </div>
 

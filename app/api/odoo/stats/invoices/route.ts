@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchOdoo } from '@/app/services/odooService';
 import { requireStaffSession } from '@/app/lib/staffAuth';
+import { normalizeCurrency } from '@/app/utils/money';
 
 /**
  * Parser del código de lote Terra Lima: E01MZD148P
@@ -36,6 +37,8 @@ interface OdooInvoice {
     name: string;
     amount_total: number;
     amount_residual: number;
+    /** Moneda de la factura ([id, 'USD'] de Odoo). Los montos NUNCA se suman entre monedas distintas. */
+    currency_id?: [number, string] | false;
     invoice_date: string;
     invoice_date_due?: string;
     partner_id: [number, string] | false;
@@ -88,17 +91,28 @@ async function computeOverdueAging() {
             ["payment_state", "in", ["not_paid", "partial"]],
             ["invoice_date_due", "<", todayStr]
         ]],
-        { fields: ["id", "name", "amount_total", "amount_residual", "invoice_date_due", "partner_id", "invoice_line_ids"] }
+        { fields: ["id", "name", "amount_total", "amount_residual", "currency_id", "invoice_date_due", "partner_id", "invoice_line_ids"] }
     ) as OdooInvoice[];
 
-    const agingMap: Record<AgingBucket, { totalAmount: number; invoicesCount: number }> = {
-        '0-30': { totalAmount: 0, invoicesCount: 0 },
-        '31-60': { totalAmount: 0, invoicesCount: 0 },
-        '61-90': { totalAmount: 0, invoicesCount: 0 },
-        '90+': { totalAmount: 0, invoicesCount: 0 },
+    // Un acumulador POR MONEDA: los soles y los dólares se calculan por separado (sumar US$1,500
+    // como S/1,500 daba totales sin sentido). Soles conserva su forma de siempre.
+    type OverdueRow = { invoice: string; client: string; lot: string; daysOverdue: number; amountDue: number };
+    type OverdueAcc = {
+        agingMap: Record<AgingBucket, { totalAmount: number; invoicesCount: number }>;
+        overdueDetail: OverdueRow[];
+        totalOverdue: number;
     };
-    const overdueDetail: { invoice: string; client: string; lot: string; daysOverdue: number; amountDue: number }[] = [];
-    let totalOverdue = 0;
+    const newOverdueAcc = (): OverdueAcc => ({
+        agingMap: {
+            '0-30': { totalAmount: 0, invoicesCount: 0 },
+            '31-60': { totalAmount: 0, invoicesCount: 0 },
+            '61-90': { totalAmount: 0, invoicesCount: 0 },
+            '90+': { totalAmount: 0, invoicesCount: 0 },
+        },
+        overdueDetail: [],
+        totalOverdue: 0,
+    });
+    const accByCurrency: Record<string, OverdueAcc> = { PEN: newOverdueAcc() };
 
     if (overdueInvoices.length > 0) {
         const todayMs = Date.now();
@@ -132,9 +146,10 @@ async function computeOverdueAging() {
             const daysOverdue = Math.max(0, Math.floor((todayMs - dueDateMs) / 86400000));
             const bucket = bucketFor(daysOverdue);
 
-            agingMap[bucket].totalAmount += amountDue;
-            agingMap[bucket].invoicesCount++;
-            totalOverdue += amountDue;
+            const acc = (accByCurrency[normalizeCurrency(inv.currency_id)] ??= newOverdueAcc());
+            acc.agingMap[bucket].totalAmount += amountDue;
+            acc.agingMap[bucket].invoicesCount++;
+            acc.totalOverdue += amountDue;
 
             const invLines = overdueLines.filter(l => l.move_id && l.move_id[0] === inv.id);
             let primaryLot: OdooProduct | null = null;
@@ -148,7 +163,7 @@ async function computeOverdueAging() {
                 }
             }
 
-            overdueDetail.push({
+            acc.overdueDetail.push({
                 invoice: inv.name,
                 client: inv.partner_id ? inv.partner_id[1] : 'Desconocido',
                 lot: primaryLot?.default_code || 'S/N',
@@ -158,16 +173,23 @@ async function computeOverdueAging() {
         }
     }
 
-    // Los más urgentes primero (más días vencidos)
-    overdueDetail.sort((a, b) => b.daysOverdue - a.daysOverdue);
+    const summarize = (acc: OverdueAcc) => ({
+        totalOverdue: acc.totalOverdue,
+        aging: AGING_BUCKETS.map((bucket) => ({
+            bucket,
+            totalAmount: acc.agingMap[bucket].totalAmount,
+            invoicesCount: acc.agingMap[bucket].invoicesCount,
+        })),
+        // Los más urgentes primero (más días vencidos)
+        overdueDetail: [...acc.overdueDetail].sort((a, b) => b.daysOverdue - a.daysOverdue).slice(0, 15),
+    });
 
-    const aging = AGING_BUCKETS.map((bucket) => ({
-        bucket,
-        totalAmount: agingMap[bucket].totalAmount,
-        invoicesCount: agingMap[bucket].invoicesCount,
-    }));
-
-    return { totalOverdue, aging, overdueDetail: overdueDetail.slice(0, 15) };
+    // Soles: mismos campos de siempre. Otras monedas (dólares): aparte, en `foreign`.
+    const foreign: Record<string, ReturnType<typeof summarize>> = {};
+    for (const [cur, acc] of Object.entries(accByCurrency)) {
+        if (cur !== 'PEN' && acc.totalOverdue > 0) foreign[cur] = summarize(acc);
+    }
+    return { ...summarize(accByCurrency.PEN), foreign };
 }
 
 function pctChange(curr: number, prev: number): number {
@@ -209,13 +231,18 @@ async function computePreviousPeriodTotals(startDate: string | null, endDate: st
             ["invoice_date", ">=", toDateStr(prevStartD)],
             ["invoice_date", "<=", toDateStr(prevEndD)]
         ]],
-        { fields: ["amount_total", "amount_residual"], groupby: [] }
-    ) as { __count?: number; amount_total?: number; amount_residual?: number }[];
+        // Agrupado por moneda: el período anterior se compara contra el actual DE LA MISMA moneda.
+        { fields: ["amount_total", "amount_residual"], groupby: ["currency_id"], lazy: false }
+    ) as { __count?: number; amount_total?: number; amount_residual?: number; currency_id?: [number, string] | false }[];
 
-    return {
-        prevTotalCollected: (prevAgg[0]?.amount_total || 0) - (prevAgg[0]?.amount_residual || 0),
-        prevInvoicesCount: prevAgg[0]?.__count || 0,
-    };
+    const byCurrency: Record<string, { prevTotalCollected: number; prevInvoicesCount: number }> = {};
+    for (const group of prevAgg || []) {
+        byCurrency[normalizeCurrency(group.currency_id)] = {
+            prevTotalCollected: (group.amount_total || 0) - (group.amount_residual || 0),
+            prevInvoicesCount: group.__count || 0,
+        };
+    }
+    return byCurrency;
 }
 
 export async function GET(request: NextRequest) {
@@ -252,10 +279,11 @@ export async function GET(request: NextRequest) {
         const overdueData = await computeOverdueAging();
         const prevPeriodTotals = await computePreviousPeriodTotals(startDate, endDate);
 
-        const buildComparison = (currentTotalCollected: number, currentInvoicesCount: number) => {
+        const buildComparison = (currentTotalCollected: number, currentInvoicesCount: number, cur = 'PEN') => {
             if (!prevPeriodTotals) return undefined;
-            const totalCollectedChange = pctChange(currentTotalCollected, prevPeriodTotals.prevTotalCollected);
-            const invoicesCountChange = pctChange(currentInvoicesCount, prevPeriodTotals.prevInvoicesCount);
+            const prev = prevPeriodTotals[cur] ?? { prevTotalCollected: 0, prevInvoicesCount: 0 };
+            const totalCollectedChange = pctChange(currentTotalCollected, prev.prevTotalCollected);
+            const invoicesCountChange = pctChange(currentInvoicesCount, prev.prevInvoicesCount);
             return {
                 totalCollected: { value: currentTotalCollected, change: totalCollectedChange, trend: trendOf(totalCollectedChange) },
                 invoicesCount: { value: currentInvoicesCount, change: invoicesCountChange, trend: trendOf(invoicesCountChange) },
@@ -268,14 +296,23 @@ export async function GET(request: NextRequest) {
             "search_read",
             [domain],
             {
-                fields: ["id", "name", "amount_total", "amount_residual", "invoice_date", "partner_id", "invoice_line_ids"]
+                fields: ["id", "name", "amount_total", "amount_residual", "currency_id", "invoice_date", "partner_id", "invoice_line_ids"]
             }
         ) as OdooInvoice[];
 
         if (!invoices || !Array.isArray(invoices) || invoices.length === 0) {
             return NextResponse.json({
                 success: true,
-                data: { totalCollected: 0, blocks: [], recentPayments: [], ...overdueData, comparison: buildComparison(0, 0) }
+                data: {
+                    totalCollected: 0, blocks: [], recentPayments: [],
+                    totalOverdue: overdueData.totalOverdue, aging: overdueData.aging, overdueDetail: overdueData.overdueDetail,
+                    // Sin cobros en el período, pero puede haber deuda vencida en dólares
+                    foreignCurrencies: Object.fromEntries(Object.entries(overdueData.foreign).map(([cur, o]) => [cur, {
+                        currency: cur, totalCollected: 0, blocks: [], recentPayments: [],
+                        comparison: buildComparison(0, 0, cur), ...o,
+                    }])),
+                    comparison: buildComparison(0, 0)
+                }
             });
         }
 
@@ -313,80 +350,110 @@ export async function GET(request: NextRequest) {
         const productMap: Record<number, OdooProduct> = {};
         products.forEach(p => productMap[p.id] = p);
 
-        // Calculate
-        let totalCollected = 0;
-        const mzMap: Record<string, { totalAmount: number; invoicesCount: number; lots: Set<string>; etapa: string }> = {};
+        // Resumen de cobros de las facturas de UNA misma moneda (soles y dólares nunca se mezclan)
+        const summarizeCollected = (invoicesOfCurrency: OdooInvoice[]) => {
+            let totalCollected = 0;
+            const mzMap: Record<string, { totalAmount: number; invoicesCount: number; lots: Set<string>; etapa: string }> = {};
 
-        const recentPayments: {
-            invoice: string; cuotaLabel: string; date: string; client: string;
-            lot: string; etapa: string; mz: string; paidAmount: number;
-        }[] = [];
+            const recentPayments: {
+                invoice: string; cuotaLabel: string; date: string; client: string;
+                lot: string; etapa: string; mz: string; paidAmount: number;
+            }[] = [];
 
-        for (const inv of invoices) {
-            // Monto realmente pagado (Total - Saldo pendiente)
-            const paidAmount = inv.amount_total - (inv.amount_residual || 0);
-            if (paidAmount <= 0) continue;
+            for (const inv of invoicesOfCurrency) {
+                // Monto realmente pagado (Total - Saldo pendiente)
+                const paidAmount = inv.amount_total - (inv.amount_residual || 0);
+                if (paidAmount <= 0) continue;
 
-            totalCollected += paidAmount;
+                totalCollected += paidAmount;
 
-            // Buscar el lote principal de esta factura (primera línea con código de 10 chars)
-            const invLines = lines.filter(l => l.move_id && l.move_id[0] === inv.id);
-            let primaryLot: OdooProduct | null = null;
+                // Buscar el lote principal de esta factura (primera línea con código de 10 chars)
+                const invLines = lines.filter(l => l.move_id && l.move_id[0] === inv.id);
+                let primaryLot: OdooProduct | null = null;
             
-            for (const line of invLines) {
-                if (line.product_id) {
-                    const prod = productMap[line.product_id[0]];
-                    if (prod && prod.default_code && prod.default_code.trim().length === 10) {
-                        primaryLot = prod;
-                        break;
+                for (const line of invLines) {
+                    if (line.product_id) {
+                        const prod = productMap[line.product_id[0]];
+                        if (prod && prod.default_code && prod.default_code.trim().length === 10) {
+                            primaryLot = prod;
+                            break;
+                        }
                     }
                 }
+
+                // Parsear código del lote para extraer etapa y manzana exactas
+                const lotParsed = parseLotCode(primaryLot?.default_code);
+                const mz = lotParsed?.manzana
+                    || (primaryLot?.x_mz ? String(primaryLot.x_mz).trim() : null)
+                    || 'S/M';
+                const etapa = lotParsed?.etapa || 'S/E';
+                const lotCode = primaryLot?.default_code || 'S/N';
+
+                // Parsear la referencia de la factura para etiqueta de cuota
+                const cuota = parseCuotaRef((inv as OdooInvoice & { ref?: string }).ref || inv.name);
+                const cuotaLabel = cuota.label || inv.name;
+
+                // Agrupar por manzana
+                if (!mzMap[mz]) {
+                    mzMap[mz] = { totalAmount: 0, invoicesCount: 0, lots: new Set(), etapa };
+                }
+                mzMap[mz].totalAmount += paidAmount;
+                mzMap[mz].invoicesCount++;
+                if (lotCode !== 'S/N') mzMap[mz].lots.add(lotCode);
+
+                recentPayments.push({
+                    invoice: inv.name,
+                    cuotaLabel,
+                    date: inv.invoice_date,
+                    client: inv.partner_id ? inv.partner_id[1] : 'Desconocido',
+                    lot: lotCode,
+                    etapa,
+                    mz,
+                    paidAmount
+                });
             }
 
-            // Parsear código del lote para extraer etapa y manzana exactas
-            const lotParsed = parseLotCode(primaryLot?.default_code);
-            const mz = lotParsed?.manzana
-                || (primaryLot?.x_mz ? String(primaryLot.x_mz).trim() : null)
-                || 'S/M';
-            const etapa = lotParsed?.etapa || 'S/E';
-            const lotCode = primaryLot?.default_code || 'S/N';
+            const blocks = Object.entries(mzMap)
+                .map(([mz, stats]) => ({
+                    mz,
+                    etapa: stats.etapa,
+                    totalAmount: stats.totalAmount,
+                    invoicesCount: stats.invoicesCount,
+                    uniqueLotsCount: stats.lots.size
+                }))
+                .sort((a, b) => a.mz.localeCompare(b.mz)); // Orden alfabético por manzana
 
-            // Parsear la referencia de la factura para etiqueta de cuota
-            const cuota = parseCuotaRef((inv as OdooInvoice & { ref?: string }).ref || inv.name);
-            const cuotaLabel = cuota.label || inv.name;
+            // Ordenar pagos: más recientes primero
+            recentPayments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            return { totalCollected, blocks, recentPayments };
+        };
 
-            // Agrupar por manzana
-            if (!mzMap[mz]) {
-                mzMap[mz] = { totalAmount: 0, invoicesCount: 0, lots: new Set(), etapa };
-            }
-            mzMap[mz].totalAmount += paidAmount;
-            mzMap[mz].invoicesCount++;
-            if (lotCode !== 'S/N') mzMap[mz].lots.add(lotCode);
-
-            recentPayments.push({
-                invoice: inv.name,
-                cuotaLabel,
-                date: inv.invoice_date,
-                client: inv.partner_id ? inv.partner_id[1] : 'Desconocido',
-                lot: lotCode,
-                etapa,
-                mz,
-                paidAmount
-            });
+        const invoicesByCurrency: Record<string, OdooInvoice[]> = {};
+        for (const inv of invoices) {
+            (invoicesByCurrency[normalizeCurrency(inv.currency_id)] ??= []).push(inv);
         }
+        // Soles: los mismos campos de siempre. Dólares (otras monedas): bloque aparte.
+        const { totalCollected, blocks, recentPayments } = summarizeCollected(invoicesByCurrency.PEN ?? []);
 
-        const blocks = Object.entries(mzMap)
-            .map(([mz, stats]) => ({
-                mz,
-                etapa: stats.etapa,
-                totalAmount: stats.totalAmount,
-                invoicesCount: stats.invoicesCount,
-                uniqueLotsCount: stats.lots.size
-            }))
-            .sort((a, b) => a.mz.localeCompare(b.mz)); // Orden alfabético por manzana
-
-        // Ordenar pagos: más recientes primero
-        recentPayments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        const foreignCurrencies: Record<string, unknown> = {};
+        const foreignCodes = new Set([
+            ...Object.keys(invoicesByCurrency).filter((c) => c !== 'PEN'),
+            ...Object.keys(overdueData.foreign),
+        ]);
+        for (const cur of foreignCodes) {
+            const collected = summarizeCollected(invoicesByCurrency[cur] ?? []);
+            const overdue = overdueData.foreign[cur];
+            foreignCurrencies[cur] = {
+                currency: cur,
+                totalCollected: collected.totalCollected,
+                blocks: collected.blocks,
+                recentPayments: collected.recentPayments,
+                comparison: buildComparison(collected.totalCollected, collected.recentPayments.length, cur),
+                totalOverdue: overdue?.totalOverdue ?? 0,
+                aging: overdue?.aging ?? [],
+                overdueDetail: overdue?.overdueDetail ?? [],
+            };
+        }
 
         let dateRangeLabel = undefined;
         if (startDate || endDate) {
@@ -399,7 +466,11 @@ export async function GET(request: NextRequest) {
                 totalCollected,
                 blocks,
                 recentPayments,
-                ...overdueData,
+                // Soles (campos de siempre) + dólares aparte en `foreignCurrencies`
+                totalOverdue: overdueData.totalOverdue,
+                aging: overdueData.aging,
+                overdueDetail: overdueData.overdueDetail,
+                foreignCurrencies,
                 dateRangeLabel,
                 comparison: buildComparison(totalCollected, recentPayments.length)
             }
