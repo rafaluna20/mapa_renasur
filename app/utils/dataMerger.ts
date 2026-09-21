@@ -62,6 +62,30 @@ function quitarVerticesDuplicados(vertices: [number, number][]): [number, number
 }
 
 /**
+ * Misma limpieza de vértices repetidos para la geometría de RESPALDO
+ * (geometries-enriched.json), que antes entraba tal cual: los lotes que solo
+ * existen ahí no pasaban por quitarVerticesDuplicados y arrastraban el lado
+ * fantasma de "0.00 ml". Confirmado con datos reales en 8 lotes (7 con el
+ * vértice de cierre repetido estilo GeoJSON y E04MZZ001P con uno repetido en
+ * medio).
+ *
+ * Si no hay nada que limpiar devuelve el MISMO objeto (cero cambio para el
+ * resto de lotes). Si limpia, `sides` pierde solo las entradas de largo ~0 para
+ * seguir alineado 1 a 1 con los vértices; área, perímetro y centroide vienen
+ * precalculados y un vértice repetido no los altera.
+ */
+function limpiarGeometriaRegistro(geometry: EnrichedGeometry): EnrichedGeometry {
+    const coordinates = quitarVerticesDuplicados(geometry.coordinates);
+    if (coordinates.length === geometry.coordinates.length) return geometry;
+
+    const sidesSinCeros = geometry.measurements.sides.filter((s) => s >= TOLERANCIA_CIERRE_METROS);
+    const sides = sidesSinCeros.length === coordinates.length
+        ? sidesSinCeros
+        : coordinates.map((p, i) => Math.round(calculateDistance(p, coordinates[(i + 1) % coordinates.length]) * 100) / 100);
+    return { coordinates, measurements: { ...geometry.measurements, sides } };
+}
+
+/**
  * Resuelve qué geometría usar para un lote: Odoo (product_lot_geometry) es
  * la fuente preferida; el JSON estático es el fallback mientras existan
  * lotes (ej. Etapa 2) que aún no se migraron a Odoo.
@@ -79,7 +103,8 @@ function resolveGeometry(
         };
     }
     if (registryGeometry?.coordinates?.length) {
-        return { points: registryGeometry.coordinates, measurements: registryGeometry.measurements };
+        const limpia = limpiarGeometriaRegistro(registryGeometry);
+        return { points: limpia.coordinates, measurements: limpia.measurements };
     }
     return null;
 }
@@ -252,7 +277,7 @@ export function mergeLotsData(
         const normCode = normalizeCode(code);
         if (!integratedCodes.has(normCode)) {
             const metadataMatch = normCode.match(/E(\d+)MZ([A-Z]+)(\w+)/);
-            const geometry = geometriesJson[code];
+            const geometry = limpiarGeometriaRegistro(geometriesJson[code]);
             fallbackLots.push({
                 id: `fb-${normCode}`,
                 name: `Lote ${normCode} (Geometría)`,
