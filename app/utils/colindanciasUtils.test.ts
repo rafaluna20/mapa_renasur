@@ -18,6 +18,19 @@ function makeLot(overrides: Partial<Lot> & { points: [number, number][] }): Lot 
     };
 }
 
+function makeElemento(overrides: Partial<ElementoUrbano> & { codigo: string; nombre: string; tipo: string; points: [number, number][] }): ElementoUrbano {
+    return {
+        colorBorde: '#000',
+        colorRelleno: '#000',
+        mostrarEtiqueta: true,
+        mostrarEnMapa: true,
+        esArea: true,
+        sinRelleno: false,
+        sinBorde: false,
+        ...overrides,
+    };
+}
+
 describe('derivarColindanciasYDimensiones', () => {
     // Caso real reportado: E01MZR045P — un pentágono donde dos aristas no
     // consecutivas (5.70ml a 36° del frente, y 20.00ml a ~1° del frente)
@@ -149,6 +162,101 @@ describe('derivarColindanciasYDimensiones', () => {
 
         expect(porLado('derecha')[0]?.nombre).toContain('82');
         expect(porLado('izquierda')[0]?.nombre).toContain('80');
+    });
+
+    // ── Frente = calle, siempre (caso real E01MZR015P) ─────────────────────
+    // Lote de 6x20 entre un parque (lado V1-V2) y una calle (lado V3-V4).
+    // Ambos extremos miden 6.00: el desempate por orden de vértices dejaba el
+    // parque como frente. Además la calle está digitalizada con un tramo recto
+    // largo SIN vértices en las esquinas del lote, así que la coincidencia
+    // vértice-a-vértice no la reconocía y salía "Calle" genérica.
+    const V1: [number, number] = [0, 0];
+    const V2: [number, number] = [6, 0];
+    const V3: [number, number] = [6, 20];
+    const V4: [number, number] = [0, 20];
+
+    const armarEntornoR015 = (opciones: { conCalle: boolean; loteAlFondo?: boolean; elementosExtra?: ElementoUrbano[] } = { conCalle: true }) => {
+        const lote = makeLot({ default_code: 'E01MZR015P', name: 'Etapa 1 Mz R Lote 15', points: [V1, V2, V3, V4] });
+        const lote16 = makeLot({ default_code: 'E01MZR016P', name: 'Etapa 1 Mz R Lote 16', points: [V2, V3, [12, 20], [12, 0]] });
+        const lote14 = makeLot({ default_code: 'E01MZR014P', name: 'Etapa 1 Mz R Lote 14', points: [V4, V1, [-6, 0], [-6, 20]] });
+        const lotes = [lote, lote16, lote14];
+        if (opciones.loteAlFondo) lotes.push(makeLot({ default_code: 'E01MZR020P', name: 'Etapa 1 Mz R Lote 20', points: [V3, V4, [0, 26], [6, 26]] }));
+        const aporte = makeElemento({ codigo: 'APORTEREC05', nombre: 'Aporte Recreación Pública 05', tipo: 'aporte_recreacion', points: [V1, V2, [6, -30], [0, -30]] });
+        // Tramo recto de 110 m que pasa POR ENCIMA del lado V3-V4 sin ningún vértice en V3 ni V4.
+        const calle = makeElemento({ codigo: 'CALLE12', nombre: 'calle 12', tipo: 'calle', points: [[-50, 20], [60, 20], [60, 60], [-50, 60]] });
+        const elementos = [aporte, ...(opciones.conCalle ? [calle] : []), ...(opciones.elementosExtra ?? [])];
+        return { lote, lotes, elementos };
+    };
+
+    it('el frente es la calle y no el parque, aunque la calle no tenga vértices en las esquinas del lote (lote real E01MZR015P)', () => {
+        const { lote, lotes, elementos } = armarEntornoR015();
+        const { colindancias, dimensiones } = derivarColindanciasYDimensiones(lote, lotes, elementos);
+        const porLado = (lado: string) => colindancias.filter((c) => c.lado === lado);
+
+        expect(porLado('frente')).toHaveLength(1);
+        expect(porLado('frente')[0]).toMatchObject({ tipo: 'calle', nombre: 'calle 12', longitud: 6 });
+        expect(porLado('fondo')).toHaveLength(1);
+        expect(porLado('fondo')[0]).toMatchObject({ tipo: 'aporte_recreacion', nombre: 'Aporte Recreación Pública 05', longitud: 6 });
+        expect(dimensiones.frente).toBeCloseTo(6, 2);
+        expect(dimensiones.fondo).toBeCloseTo(6, 2);
+        // Los dos lotes vecinos quedan uno a cada lado.
+        const laterales = [...porLado('derecha'), ...porLado('izquierda')];
+        expect(laterales).toHaveLength(2);
+        expect(laterales.every((c) => c.tipo === 'lote')).toBe(true);
+        expect(porLado('derecha')).toHaveLength(1);
+        expect(porLado('izquierda')).toHaveLength(1);
+    });
+
+    it('sin la calle digitalizada, el lado sin confirmar es el frente y el parque queda de fondo — sin depender del orden de los vértices', () => {
+        const { lote, lotes, elementos } = armarEntornoR015({ conCalle: false });
+        // Mismo polígono con dos puntos de partida distintos: antes el resultado
+        // dependía de cuál extremo aparecía primero.
+        const rotado = makeLot({ ...lote, points: [V3, V4, V1, V2] });
+        for (const candidato of [lote, rotado]) {
+            const { colindancias } = derivarColindanciasYDimensiones(candidato, lotes, elementos);
+            const frente = colindancias.filter((c) => c.lado === 'frente');
+            const fondo = colindancias.filter((c) => c.lado === 'fondo');
+            expect(frente).toHaveLength(1);
+            expect(frente[0]).toMatchObject({ tipo: 'calle', nombre: 'Calle' });
+            expect(fondo).toHaveLength(1);
+            expect(fondo[0].tipo).toBe('aporte_recreacion');
+        }
+    });
+
+    it('el parque solo es frente como último recurso, cuando no queda ningún otro lado sin lote vecino', () => {
+        const { lote, lotes, elementos } = armarEntornoR015({ conCalle: false, loteAlFondo: true });
+        const { colindancias } = derivarColindanciasYDimensiones(lote, lotes, elementos);
+        const frente = colindancias.filter((c) => c.lado === 'frente');
+        expect(frente).toHaveLength(1);
+        expect(frente[0].tipo).toBe('aporte_recreacion');
+    });
+
+    it('una calle que solo toca una esquina del lote (lado perpendicular) NO se toma como colindante', () => {
+        // Contorno que arranca en V3 y se aleja en perpendicular: solo un extremo del
+        // lado V2-V3 (o V3-V4) cae sobre él, el otro queda a metros.
+        const calleQueRoza = makeElemento({ codigo: 'CALLE99', nombre: 'calle 99', tipo: 'calle', points: [[6, 20], [6, 60], [60, 60], [60, 20]] });
+        const { lote, lotes, elementos } = armarEntornoR015({ conCalle: false, elementosExtra: [calleQueRoza] });
+        const { colindancias } = derivarColindanciasYDimensiones(lote, lotes, elementos);
+        expect(colindancias.some((c) => c.nombre === 'calle 99')).toBe(false);
+    });
+
+    it('si un lado toca a la vez una calle y otro elemento solapado (ej. jardín), gana la calle', () => {
+        const jardin = makeElemento({ codigo: 'JARDIN1', nombre: 'jardin 1', tipo: 'jardin', points: [[-50, 20], [60, 20], [60, 30], [-50, 30]] });
+        // El jardín va PRIMERO en la lista: antes ganaba el primero que coincidía.
+        const { lote, lotes, elementos } = armarEntornoR015({ conCalle: true });
+        const { colindancias } = derivarColindanciasYDimensiones(lote, lotes, [jardin, ...elementos]);
+        const frente = colindancias.filter((c) => c.lado === 'frente');
+        expect(frente).toHaveLength(1);
+        expect(frente[0]).toMatchObject({ tipo: 'calle', nombre: 'calle 12' });
+    });
+
+    it('un lado de largo cero (vértice duplicado) no se toma como colindante de la calle (visto en E02MZW022P)', () => {
+        // Mismo lote de 6x20 pero con V3 repetido: el "lado" V3-V3 vale 0 m y cae justo sobre el contorno de la calle.
+        const { lotes, elementos } = armarEntornoR015();
+        const conDuplicado = makeLot({ default_code: 'E01MZR015P', name: 'Etapa 1 Mz R Lote 15', points: [V1, V2, V3, V3, V4] });
+        const { colindancias } = derivarColindanciasYDimensiones(conDuplicado, [conDuplicado, ...lotes.slice(1)], elementos);
+        const frente = colindancias.filter((c) => c.lado === 'frente');
+        expect(frente.every((c) => c.longitud > 0)).toBe(true);
     });
 
     // Regresión: un rectángulo simple (el caso común, sin ninguna arista

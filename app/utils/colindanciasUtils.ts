@@ -28,6 +28,9 @@ export interface DimensionesDerivadas {
 // bordes compartidos entre lotes vecinos (pequeñas diferencias de digitación).
 const TOLERANCIA_METROS = 0.5;
 
+// Por debajo de este largo un lado se considera degenerado (vértice repetido).
+const LARGO_MINIMO_LADO_METROS = 0.01;
+
 function puntosSonCercanos(p1: [number, number], p2: [number, number], tol = TOLERANCIA_METROS): boolean {
     return calculateDistance(p1, p2) <= tol;
 }
@@ -58,19 +61,65 @@ function encontrarVecino(
     return null;
 }
 
-// Busca si el lado (a,b) coincide con el borde de una calle/parque real. Se
-// verifica DESPUÉS de encontrarVecino (lote): si el lado ya colinda con otro
-// lote, no hace falta buscar aquí.
+// Distancia de un punto al segmento p-q (no a la recta infinita).
+function distanciaPuntoSegmento(pt: [number, number], p: [number, number], q: [number, number]): number {
+    const dx = q[0] - p[0];
+    const dy = q[1] - p[1];
+    const largo2 = dx * dx + dy * dy;
+    const t = largo2 === 0 ? 0 : Math.max(0, Math.min(1, ((pt[0] - p[0]) * dx + (pt[1] - p[1]) * dy) / largo2));
+    return Math.hypot(pt[0] - (p[0] + t * dx), pt[1] - (p[1] + t * dy));
+}
+
+function distanciaPuntoContorno(pt: [number, number], pts: [number, number][]): number {
+    let min = Infinity;
+    for (let i = 0; i < pts.length; i++) {
+        min = Math.min(min, distanciaPuntoSegmento(pt, pts[i], pts[(i + 1) % pts.length]));
+    }
+    return min;
+}
+
+/**
+ * El lado (a,b) "descansa sobre" el contorno de un polígono si sus dos
+ * extremos Y su punto medio caen a <= TOLERANCIA_METROS de ese contorno.
+ *
+ * edgeCompartido (arriba) exige que el polígono tenga un VÉRTICE en cada
+ * esquina del lado: eso solo pasa si quien digitalizó puso un vértice de la
+ * calle justo en cada esquina de cada lote. Una calle digitalizada con
+ * tramos rectos largos no los tiene, así que un lote pegado exactamente a su
+ * borde (0.00 m) quedaba sin calle reconocida y se imprimía "Calle" genérica
+ * (caso real E01MZR015P: el lado de 6 m está a 0.00 m del contorno de
+ * "calle 12" pero esa calle no tiene vértices ahí). El punto medio evita el
+ * falso positivo de un lado perpendicular que apenas toca la calle con un
+ * solo extremo.
+ */
+function ladoSobreContorno(a: [number, number], b: [number, number], pts: [number, number][]): boolean {
+    // Un "lado" de largo ~0 (vértice duplicado en la geometría) tiene los tres
+    // puntos en el mismo lugar: cualquier calle que pase por ahí lo daría por
+    // colindante y aparecería como un tramo de frente de 0 m (visto en
+    // E02MZW022P). No es un lado real: nunca coincide con nada.
+    if (calculateDistance(a, b) < LARGO_MINIMO_LADO_METROS) return false;
+    const medio: [number, number] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    return [a, b, medio].every((p) => distanciaPuntoContorno(p, pts) <= TOLERANCIA_METROS);
+}
+
+// Busca si el lado (a,b) colinda con una calle/parque real. Se verifica
+// DESPUÉS de encontrarVecino (lote): si el lado ya colinda con otro lote, no
+// hace falta buscar aquí.
+//
+// Primero la coincidencia exacta de vértices (el comportamiento histórico:
+// todo lo que ya se reconocía se sigue reconociendo igual) y solo si no hay
+// ninguna, la coincidencia geométrica de ladoSobreContorno. Si el lado toca
+// a la vez una calle y otro elemento (ej. una franja de jardín solapada),
+// gana la calle: es lo que define el frente.
 function encontrarVecinoUrbano(
     a: [number, number],
     b: [number, number],
     elementosUrbanos: ElementoUrbano[]
 ): ElementoUrbano | null {
-    for (const elemento of elementosUrbanos) {
-        if (!elemento.points || elemento.points.length < 3) continue;
-        if (edgeCompartido(a, b, elemento.points)) return elemento;
-    }
-    return null;
+    const validos = elementosUrbanos.filter((e) => e.points && e.points.length >= 3);
+    const exactos = validos.filter((e) => edgeCompartido(a, b, e.points));
+    const candidatos = exactos.length > 0 ? exactos : validos.filter((e) => ladoSobreContorno(a, b, e.points));
+    return candidatos.find((e) => e.tipo === 'calle') ?? candidatos[0] ?? null;
 }
 
 interface Edge {
@@ -163,7 +212,8 @@ function areaConSigno(pts: [number, number][]): number {
  * partir de la geometría real del lote, de todos los lotes del mapa, y
  * (opcional) de los elementos urbanos (calles/parques) con geometría real.
  *
- * Criterio de "frente" (en 3 niveles, de más a menos confiable):
+ * Regla de negocio: el frente SIEMPRE es la calle. Criterio de "frente" (en
+ * 4 niveles, de más a menos confiable):
  * 1. El lado que colinda con una capa de tipo "calle" real (elementosUrbanos).
  *    La longitud NO importa acá: el frente de un lote no es necesariamente
  *    el lado más largo, puede ser cualquiera — lo que lo hace frente es dar
@@ -173,11 +223,19 @@ function areaConSigno(pts: [number, number][]): number {
  *    permite un solo "frente" por lote.
  * 2. Si ningún lado tiene una calle confirmada todavía (su geometría real
  *    aún no se cargó en elemento_urbano_geometry): el lado más largo entre
- *    los que no colindan con otro lote — mismo criterio que se usaba antes
- *    de tener capas reales, como red de seguridad mientras se completa la
- *    digitalización de calles.
- * 3. Si el lote está completamente rodeado de otros lotes (caso anómalo):
+ *    los que no tienen NINGÚN vecino confirmado (ni lote ni elemento urbano)
+ *    — lo más probable es una calle sin digitalizar. Mismo criterio que se
+ *    usaba antes de tener capas reales, como red de seguridad.
+ * 3. Si todos los lados sin lote vecino están confirmados como algo que NO
+ *    es calle (parque, aporte, jardín...): el más largo de ellos. Último
+ *    recurso — un lado confirmado como parque nunca le gana a uno sin
+ *    confirmar (nivel 2).
+ * 4. Si el lote está completamente rodeado de otros lotes (caso anómalo):
  *    el lado más largo del polígono.
+ *
+ * Un lado se reconoce como colindante de una calle/parque cuando comparte
+ * sus vértices con el contorno del elemento o, si no, cuando descansa sobre
+ * ese contorno (ver ladoSobreContorno).
  *
  * Fondo/Derecha/Izquierda: caso general con N vecinos por lado. Ninguno de
  * los 3 se elige como una única arista "opuesta" por índice — eso solo
@@ -249,10 +307,18 @@ export function derivarColindanciasYDimensiones(
     }
 
     const edgesCalleConfirmada = edges.filter((e) => e.vecinoUrbano?.tipo === 'calle');
-    const edgesSinLote = edges.filter((e) => !e.vecinoLote);
+    // Ni lote ni elemento urbano reconocido: lo más probable es una calle
+    // cuya geometría todavía no se digitalizó.
+    const edgesSinConfirmar = edges.filter((e) => !e.vecinoLote && !e.vecinoUrbano);
+    // Confirmado como parque/aporte/jardín/etc. (no calle): nunca debe ganarle
+    // a un lado sin confirmar. Antes, con ambos extremos de igual largo (ej.
+    // un lote de 6x20 entre un parque y una calle) `reduce` se quedaba con el
+    // primero del orden de vértices — a veces el parque (E01MZR015P).
+    const edgesUrbanoNoCalle = edges.filter((e) => !e.vecinoLote && e.vecinoUrbano && e.vecinoUrbano.tipo !== 'calle');
     const candidatosFrente =
         edgesCalleConfirmada.length > 0 ? edgesCalleConfirmada
-        : edgesSinLote.length > 0 ? edgesSinLote
+        : edgesSinConfirmar.length > 0 ? edgesSinConfirmar
+        : edgesUrbanoNoCalle.length > 0 ? edgesUrbanoNoCalle
         : edges;
     const frente = candidatosFrente.reduce((max, e) =>
         e.longitud > max.longitud ? e : max
