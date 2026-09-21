@@ -40,7 +40,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
     const [showRefundModal, setShowRefundModal] = useState(false);
     const [reservationOwner, setReservationOwner] = useState<{ id: number; name: string; partnerId?: number; clientName?: string; clientPhone?: string | null; clientEmail?: string | null; clientDni?: string | null; totalInstallments?: number; orderId?: number; separationAmount?: number | null } | null>(null);
     const [activeTab, setActiveTab] = useState<'info' | 'pagos'>('info');
-    const [invoices, setInvoices] = useState<{ id: number; name: string; ref?: string; payment_reference?: string; invoice_date: string; invoice_date_due: string; amount_total: number; amount_residual: number; currency_id?: [number, string] | string | false; payment_state: string; invoice_payments_widget?: { content?: { date?: string }[] } | false }[]>([]);
+    const [invoices, setInvoices] = useState<{ id: number; name: string; ref?: string; payment_reference?: string; invoice_date: string; invoice_date_due: string; amount_total: number; amount_residual: number; currency_id?: [number, string] | string | false; payment_state: string; invoice_payments_widget?: { content?: { date?: string; is_exchange?: boolean }[] } | false }[]>([]);
     const [loadingInvoices, setLoadingInvoices] = useState(false);
     const [downloadingStatement, setDownloadingStatement] = useState(false);
     // Moneda y precio pactado del contrato vigente (solo se consulta si las facturas están en moneda

@@ -1693,7 +1693,7 @@ export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): 
 // de account.move — la única fuente de la fecha real de pago, ya que no existe
 // como campo plano. Un mismo move puede tener varios abonos parciales.
 export interface InvoicePaymentsWidget {
-    content?: { date?: string }[];
+    content?: { date?: string; is_exchange?: boolean }[];
 }
 
 export interface ClientStatementInvoice {
@@ -1842,11 +1842,23 @@ function formatDDMMYY(fecha: string): string {
 // (verificado con datos reales de Odoo: un pago cubre varias cuotas a la
 // vez), así que se toma la fecha del abono MÁS RECIENTE — la que efectivamente
 // la dejó pagada — no la del primero.
-function getFechaPagoRawPdf(inv: ClientStatementInvoice): string | null {
+//
+// Ojo: la lista de Odoo (`invoice_payments_widget`) trae también los asientos
+// de "Diferencia de cambio" (`is_exchange: true`) que Odoo genera al conciliar
+// una factura en dólares cuando el tipo de cambio del día del pago difiere del
+// de la emisión. NO son cobros: tienen su propia fecha (fin de mes, cuando se
+// contabilizan) y, si se cuentan, la "fecha de pago" salta semanas adelante.
+// Caso real: cuota 6 del lote E01MZQ029P, cobrada el 01/06/26 (1 día tarde)
+// pero mostrada como pagada el 30/06/26 (30 días de atraso) por el asiento
+// EXCH/2026/06/0005.
+export function getFechaPagoRawPdf(inv: ClientStatementInvoice): string | null {
     if (inv.payment_state !== 'paid') return null;
     const widget = inv.invoice_payments_widget;
     const content = widget ? widget.content || [] : [];
-    const fechas = content.map((c) => c.date).filter((d): d is string => !!d);
+    const fechas = content
+        .filter((c) => !c.is_exchange)
+        .map((c) => c.date)
+        .filter((d): d is string => !!d);
     if (fechas.length === 0) return null;
     return fechas.reduce((max, d) => (d > max ? d : max));
 }
@@ -1857,7 +1869,7 @@ function getFechaPagoRawPdf(inv: ClientStatementInvoice): string | null {
 // timezone en el conteo. Confirmado con datos reales que el adelanto puede
 // ser de varios años (pago total anticipado de cuotas con vencimiento muy
 // a futuro) — no se trunca el valor, solo se le da ancho de columna fijo.
-function calcularDiasPdf(fechaPagoRaw: string | null, fechaVencimientoRaw: string): { texto: string; color: [number, number, number] } {
+export function calcularDiasPdf(fechaPagoRaw: string | null, fechaVencimientoRaw: string): { texto: string; color: [number, number, number] } {
     if (!fechaPagoRaw || !fechaVencimientoRaw) return { texto: '—', color: BRAND.textMuted };
     const pago = new Date(fechaPagoRaw + 'T00:00:00').getTime();
     const vence = new Date(fechaVencimientoRaw + 'T00:00:00').getTime();

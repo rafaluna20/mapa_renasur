@@ -23,7 +23,7 @@ interface OdooInvoice {
     // Único lugar donde vive la fecha real de pago (no existe como campo
     // plano en account.move) — la usa el PDF de Estado de Cuenta para la
     // columna "Fecha de Pago" / "Días de atraso-adelanto".
-    invoice_payments_widget?: { content?: { date?: string }[] } | false;
+    invoice_payments_widget?: { content?: { date?: string; is_exchange?: boolean }[] } | false;
 }
 
 interface OdooProductTemplate {

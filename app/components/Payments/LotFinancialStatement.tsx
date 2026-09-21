@@ -16,7 +16,7 @@ export interface StatementInvoice {
     currency_id?: [number, string] | string | false;
     payment_state: string;
     // Fecha real de pago (usada por el PDF de Estado de Cuenta, no en pantalla).
-    invoice_payments_widget?: { content?: { date?: string }[] } | false;
+    invoice_payments_widget?: { content?: { date?: string; is_exchange?: boolean }[] } | false;
 }
 
 interface LotFinancialStatementProps {
