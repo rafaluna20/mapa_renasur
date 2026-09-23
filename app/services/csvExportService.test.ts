@@ -148,6 +148,32 @@ describe('buildOperacionesSections', () => {
 
         expect(sections.find(s => s.title === 'RESUMEN POR ESTADO')).toBeUndefined();
         expect(sections.find(s => s.title === 'OPERACIONES POR LOTE')).toBeUndefined();
+        expect(sections.find(s => s.title === 'LEADS DEL ASISTENTE VIRTUAL — RESUMEN')).toBeUndefined();
+    });
+
+    it('incluye el resumen y el detalle de los leads del bot cuando vienen datos', () => {
+        const sections = buildOperacionesSections({
+            kpis: { totalSales: 0, projectValue: 0, commission: 0, occupationRate: 0, totalLots: 0, soldLots: 0, reservedLots: 0, availableLots: 0 },
+            salesTrend: [],
+            advisorRanking: [],
+            recentActivity: [],
+            botLeads: {
+                resumen: { total: 2, porCanal: { telegram: 2 }, porTemperatura: { sin_clasificar: 1, caliente: 1 }, derivadosAAsesor: 2, conLoteInteres: 1, conConsentimiento: 2 },
+                leads: [
+                    { nombre: 'Yulisa Cuarez', canal: 'telegram', lote: 'E01MZS0252', temperatura: 'caliente', modalidadPago: 'por_definir', botActivo: false, fecha: '2026-09-21 03:48:40' },
+                    { nombre: 'Rafael', canal: 'telegram', lote: null, temperatura: 'sin_clasificar', modalidadPago: 'contado', botActivo: false, fecha: '2026-09-20 20:36:23' },
+                ],
+            },
+        });
+
+        const resumenSection = sections.find(s => s.title === 'LEADS DEL ASISTENTE VIRTUAL — RESUMEN')!;
+        expect(resumenSection.rows).toContainEqual(['Total', 2]);
+        expect(resumenSection.rows).toContainEqual(['Canal: telegram', 2]);
+        expect(resumenSection.rows).toContainEqual(['Temperatura: caliente', 1]);
+
+        const detalleSection = sections.find(s => s.title === 'LEADS DEL ASISTENTE VIRTUAL — DETALLE')!;
+        expect(detalleSection.rows[1]).toEqual(['Yulisa Cuarez', 'telegram', 'E01MZS0252', 'caliente', 'por_definir', 'Con un asesor', '2026-09-21 03:48:40']);
+        expect(detalleSection.rows[2]).toEqual(['Rafael', 'telegram', '', 'sin_clasificar', 'contado', 'Con un asesor', '2026-09-20 20:36:23']);
     });
 });
 

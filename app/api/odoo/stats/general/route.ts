@@ -454,6 +454,84 @@ export async function GET(request: NextRequest) {
         const operaciones = Array.from(masRecientePorLote.values())
             .sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0));
 
+        // 5. LEADS DEL ASISTENTE VIRTUAL (Administrador) — los que crea el bot comercial de Chatwoot
+        // (agente_comercial_renasur), reconocibles por tener x_chat_key seteado (ningún otro origen de
+        // lead en este Odoo usa ese campo). Respeta el mismo rango de fechas que "operaciones" — a
+        // diferencia del resumen de estados de lotes, un lead sí es un hecho fechado.
+        interface OdooBotLead {
+            id: number;
+            contact_name?: string | false;
+            x_canal?: string | false;
+            x_temperatura?: string | false;
+            x_modalidad_pago?: string | false;
+            x_bot_activo?: boolean;
+            x_lote_interes_id?: [number, string] | false;
+            x_consentimiento_datos?: boolean;
+            create_date?: string;
+        }
+        const botLeadsRaw = await fetchOdoo(
+            "crm.lead",
+            "search_read",
+            [[
+                ["x_chat_key", "!=", false],
+                ["create_date", ">=", startDate],
+                ["create_date", "<=", endDate]
+            ]],
+            {
+                fields: ["id", "contact_name", "x_canal", "x_temperatura", "x_modalidad_pago", "x_bot_activo", "x_lote_interes_id", "x_consentimiento_datos", "create_date"],
+                order: "create_date desc"
+            }
+        ) as OdooBotLead[];
+
+        const porCanal: Record<string, number> = {};
+        const porTemperatura: Record<string, number> = {};
+        let derivadosAAsesor = 0;
+        let conLoteInteres = 0;
+        let conConsentimiento = 0;
+
+        const botLeadsList = botLeadsRaw.map((lead) => {
+            const canal = (lead.x_canal || 'otro') as string;
+            porCanal[canal] = (porCanal[canal] || 0) + 1;
+
+            const temperatura = lead.x_temperatura || 'sin_clasificar';
+            porTemperatura[temperatura] = (porTemperatura[temperatura] || 0) + 1;
+
+            if (lead.x_bot_activo === false) derivadosAAsesor++;
+
+            // "[E01MZS0252] etapa 1 mz S lote 252 A=95.46m2" → "E01MZS0252" (mismo patrón que codeMap arriba).
+            let lote: string | null = null;
+            if (lead.x_lote_interes_id) {
+                conLoteInteres++;
+                const displayName = lead.x_lote_interes_id[1];
+                const match = displayName.match(/^\[(.+?)\]/);
+                lote = match ? match[1] : displayName;
+            }
+
+            if (lead.x_consentimiento_datos) conConsentimiento++;
+
+            return {
+                nombre: lead.contact_name || 'Sin nombre',
+                canal,
+                lote,
+                temperatura,
+                modalidadPago: lead.x_modalidad_pago || 'por_definir',
+                botActivo: lead.x_bot_activo !== false,
+                fecha: lead.create_date || ''
+            };
+        });
+
+        const botLeads = {
+            resumen: {
+                total: botLeadsList.length,
+                porCanal,
+                porTemperatura,
+                derivadosAAsesor,
+                conLoteInteres,
+                conConsentimiento
+            },
+            leads: botLeadsList
+        };
+
         return NextResponse.json({
             success: true,
             stats: {
@@ -481,6 +559,7 @@ export async function GET(request: NextRequest) {
                     otros: estadoOtros
                 },
                 operaciones,
+                botLeads,
                 comparison: {
                     totalSales: { value: totalSales, change: totalSalesChange, trend: trendOf(totalSalesChange) },
                     commission: { value: commission, change: commissionChange, trend: trendOf(commissionChange) },

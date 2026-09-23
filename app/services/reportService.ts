@@ -780,6 +780,20 @@ export interface GeneralReportData {
     // Una fila POR LOTE (la operación más reciente de cada uno), no un
     // historial completo — ver route.ts de /api/odoo/stats/general.
     operaciones?: { tipo: string; propiedad: string; asesor: string; asignado: string; fecha: string }[];
+    // Leads del asistente virtual de ventas (Chatwoot) — mismo opcional por la
+    // misma razón: el PDF de este archivo no los imprime (no pedido), solo el
+    // CSV y la tabla nueva del dashboard.
+    botLeads?: {
+        resumen: {
+            total: number;
+            porCanal: Record<string, number>;
+            porTemperatura: Record<string, number>;
+            derivadosAAsesor: number;
+            conLoteInteres: number;
+            conConsentimiento: number;
+        };
+        leads: { nombre: string; canal: string; lote: string | null; temperatura: string; modalidadPago: string; botActivo: boolean; fecha: string }[];
+    };
 }
 
 // ─── Reporte General Consolidado (Administrador) ──────────────────────────────

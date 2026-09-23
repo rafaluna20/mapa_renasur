@@ -8,7 +8,8 @@ import {
 import {
     DollarSign, TrendingUp, Users, Target, ArrowUpRight, ArrowDownRight,
     MapPin, Clock, Loader2, Award, Zap, FileDown, Calendar, Filter,
-    AlertTriangle, Sparkles, TrendingDown, Activity, BarChart3, FileSpreadsheet
+    AlertTriangle, Sparkles, TrendingDown, Activity, BarChart3, FileSpreadsheet,
+    MessageCircle, UserCheck, ShieldCheck, Flame
 } from 'lucide-react';
 import { useAuth } from '@/app/context/AuthContext';
 import { odooService } from '@/app/services/odooService';
@@ -42,6 +43,18 @@ interface EnhancedStats {
         salesCount: { value: number; change: number; trend: 'up' | 'down' | 'stable' };
     };
 }
+
+// Etiquetas legibles para los leads del bot comercial (Chatwoot) — los valores
+// crudos vienen tal cual los guarda tool_lead.js del agente (ver el workflow
+// n8n "agente comercial renasur"), no como el usuario los escribió.
+const CANAL_LABEL: Record<string, string> = { telegram: 'Telegram', whatsapp: 'WhatsApp', facebook: 'Facebook', instagram: 'Instagram', web: 'Web', otro: 'Otro' };
+const TEMP_LABEL: Record<string, string> = { caliente: 'Caliente', tibio: 'Tibio', frio: 'Frío', sin_clasificar: 'Sin clasificar' };
+const TEMP_BADGE_CLASS: Record<string, string> = {
+    caliente: 'text-red-300 bg-red-500/10 border-red-500/30',
+    tibio: 'text-amber-300 bg-amber-500/10 border-amber-500/30',
+    frio: 'text-blue-300 bg-blue-500/10 border-blue-500/30',
+};
+const tempBadgeClass = (temp: string) => TEMP_BADGE_CLASS[temp] ?? 'text-slate-400 bg-slate-800/50 border-slate-700';
 
 const formatToDDMMYY = (dateStr?: string) => {
     if (!dateStr) return '';
@@ -369,6 +382,10 @@ export default function DashboardClientImproved() {
     const [operacionesData, setOperacionesData] = useState<{
         estadoSummary: { noVender: number; disponible: number; cotizacion: number; reservado: number; vendido: number; otros: number };
         operaciones: { tipo: string; propiedad: string; asesor: string; asignado: string; fecha: string }[];
+        botLeads?: {
+            resumen: { total: number; porCanal: Record<string, number>; porTemperatura: Record<string, number>; derivadosAAsesor: number; conLoteInteres: number; conConsentimiento: number };
+            leads: { nombre: string; canal: string; lote: string | null; temperatura: string; modalidadPago: string; botActivo: boolean; fecha: string }[];
+        };
     } | null>(null);
     const [loadingOperaciones, setLoadingOperaciones] = useState(false);
 
@@ -504,6 +521,7 @@ export default function DashboardClientImproved() {
                     setOperacionesData({
                         estadoSummary: data.stats.estadoSummary,
                         operaciones: data.stats.operaciones || [],
+                        botLeads: data.stats.botLeads,
                     });
                 }
             } catch (err) {
@@ -988,7 +1006,7 @@ export default function DashboardClientImproved() {
                                 <button
                                     onClick={handleExportOperacionesCsv}
                                     disabled={generatingOperacionesCsv}
-                                    title="Exportar reporte de operaciones a CSV (Excel)"
+                                    title="Exportar reporte de operaciones y leads del bot a CSV (Excel)"
                                     className="bg-slate-900 hover:bg-slate-800 border border-blue-500/30 text-blue-300 hover:text-blue-200 disabled:opacity-50 disabled:cursor-wait px-3 py-2.5 rounded-xl font-semibold transition-all flex items-center gap-2"
                                 >
                                     {generatingOperacionesCsv ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
@@ -1213,6 +1231,129 @@ export default function DashboardClientImproved() {
                                             <div className="flex items-center justify-between mt-1.5 text-xs text-slate-400">
                                                 <span>{op.tipo} · {op.asesor}</span>
                                                 <span>{op.asignado}</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Leads del Asistente Virtual (solo Administrador) — leads que crea el agente comercial
+                    de Chatwoot (Telegram/WhatsApp), reconocibles en Odoo por tener x_chat_key. Comparte el
+                    fetch y el botón de exportar CSV con el Reporte de Operaciones de arriba (mismo endpoint,
+                    misma respuesta ampliada) — no agrega una llamada de red nueva. */}
+                {authUser?.is_system && (
+                    <div className="bg-slate-900/30 border border-slate-900 rounded-2xl shadow-xl overflow-hidden">
+                        <div className="p-6 border-b border-slate-900 flex justify-between items-center flex-wrap gap-3">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 bg-indigo-950/60 border border-indigo-500/20 text-indigo-400 rounded-xl">
+                                    <MessageCircle size={20} />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-slate-100">Leads del Asistente Virtual</h3>
+                                    <p className="text-xs text-slate-400">Contactos que dejó el bot comercial de Chatwoot (Telegram/WhatsApp) — solo administrador</p>
+                                </div>
+                            </div>
+                            {loadingOperaciones && (
+                                <span className="flex items-center gap-2 text-xs text-slate-400">
+                                    <Loader2 size={14} className="animate-spin" /> Cargando...
+                                </span>
+                            )}
+                        </div>
+
+                        <div className="p-6 grid grid-cols-2 sm:grid-cols-4 gap-4">
+                            <KPICard label="Leads Totales" value={operacionesData?.botLeads?.resumen.total ?? 0} icon={<MessageCircle size={20} />} color="indigo" />
+                            <KPICard label="Con Lote de Interés" value={operacionesData?.botLeads?.resumen.conLoteInteres ?? 0} icon={<MapPin size={20} />} color="emerald" />
+                            <KPICard label="Derivados a un Asesor" value={operacionesData?.botLeads?.resumen.derivadosAAsesor ?? 0} icon={<UserCheck size={20} />} color="amber" />
+                            <KPICard label="Con Consentimiento" value={operacionesData?.botLeads?.resumen.conConsentimiento ?? 0} icon={<ShieldCheck size={20} />} color="blue" />
+                        </div>
+
+                        {operacionesData?.botLeads && (Object.keys(operacionesData.botLeads.resumen.porCanal).length > 0 || Object.keys(operacionesData.botLeads.resumen.porTemperatura).length > 0) && (
+                            <div className="px-6 pb-6 flex flex-wrap gap-x-8 gap-y-3">
+                                {Object.keys(operacionesData.botLeads.resumen.porCanal).length > 0 && (
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Canal</span>
+                                        {Object.entries(operacionesData.botLeads.resumen.porCanal).map(([canal, n]) => (
+                                            <span key={canal} className="px-3 py-1 rounded-full text-xs font-bold border text-indigo-300 bg-indigo-500/10 border-indigo-500/30">{CANAL_LABEL[canal] ?? canal}: {n}</span>
+                                        ))}
+                                    </div>
+                                )}
+                                {Object.keys(operacionesData.botLeads.resumen.porTemperatura).length > 0 && (
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold flex items-center gap-1"><Flame size={12} /> Temperatura</span>
+                                        {Object.entries(operacionesData.botLeads.resumen.porTemperatura).map(([temp, n]) => (
+                                            <span key={temp} className={`px-3 py-1 rounded-full text-xs font-bold border ${tempBadgeClass(temp)}`}>{TEMP_LABEL[temp] ?? temp}: {n}</span>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Tabla desktop */}
+                        <div className="hidden sm:block overflow-x-auto overflow-y-auto max-h-[520px] border-t border-slate-900">
+                            <table className="w-full">
+                                <thead className="sticky top-0 z-10">
+                                    <tr className="bg-slate-950/90 text-slate-400 text-xs font-semibold uppercase tracking-wider border-b border-slate-900">
+                                        <th className="px-6 py-4 text-left">Contacto</th>
+                                        <th className="px-6 py-4 text-left">Canal</th>
+                                        <th className="px-6 py-4 text-left">Lote</th>
+                                        <th className="px-6 py-4 text-left">Temperatura</th>
+                                        <th className="px-6 py-4 text-left">Estado</th>
+                                        <th className="px-6 py-4 text-left">Fecha</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-900">
+                                    {!operacionesData?.botLeads || operacionesData.botLeads.leads.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={6} className="px-6 py-12 text-center text-slate-500 text-sm">
+                                                {loadingOperaciones ? 'Cargando leads...' : 'Todavía no hay leads del bot en este período.'}
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        operacionesData.botLeads.leads.map((lead, idx) => {
+                                            const fechaLegible = lead.fecha
+                                                ? new Date(lead.fecha.replace(' ', 'T')).toLocaleDateString('es-PE', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                                                : '—';
+                                            return (
+                                                <tr key={`${lead.nombre}-${idx}`} className="hover:bg-indigo-950/10 transition-colors">
+                                                    <td className="px-6 py-4 font-bold text-slate-200 text-sm">{lead.nombre}</td>
+                                                    <td className="px-6 py-4 text-slate-300 text-sm">{CANAL_LABEL[lead.canal] ?? lead.canal}</td>
+                                                    <td className="px-6 py-4 text-slate-300 text-sm">{lead.lote ?? '—'}</td>
+                                                    <td className="px-6 py-4">
+                                                        <span className={`px-3 py-1 rounded-full text-xs font-bold border ${tempBadgeClass(lead.temperatura)}`}>{TEMP_LABEL[lead.temperatura] ?? lead.temperatura}</span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-slate-300 text-sm">{lead.botActivo ? 'Con el bot' : 'Con un asesor'}</td>
+                                                    <td className="px-6 py-4 text-slate-400 text-xs">{fechaLegible}</td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Vista Mobile: tarjetas */}
+                        <div className="block sm:hidden divide-y divide-slate-900 overflow-y-auto max-h-[520px] border-t border-slate-900">
+                            {!operacionesData?.botLeads || operacionesData.botLeads.leads.length === 0 ? (
+                                <p className="p-6 text-center text-slate-500 text-sm">
+                                    {loadingOperaciones ? 'Cargando leads...' : 'Todavía no hay leads del bot en este período.'}
+                                </p>
+                            ) : (
+                                operacionesData.botLeads.leads.map((lead, idx) => {
+                                    const fechaLegible = lead.fecha
+                                        ? new Date(lead.fecha.replace(' ', 'T')).toLocaleDateString('es-PE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+                                        : '—';
+                                    return (
+                                        <div key={`${lead.nombre}-${idx}`} className="p-4">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="font-bold text-slate-200 text-sm">{lead.nombre}</span>
+                                                <span className="text-[10px] text-slate-500">{fechaLegible}</span>
+                                            </div>
+                                            <div className="flex items-center justify-between mt-1.5 text-xs text-slate-400">
+                                                <span>{CANAL_LABEL[lead.canal] ?? lead.canal} · {lead.lote ?? 'sin lote'}</span>
+                                                <span>{lead.botActivo ? 'Con el bot' : 'Con un asesor'}</span>
                                             </div>
                                         </div>
                                     );

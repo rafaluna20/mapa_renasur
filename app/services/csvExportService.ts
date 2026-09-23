@@ -246,6 +246,32 @@ export function buildOperacionesSections(data: GeneralReportData): CsvSection[] 
         });
     }
 
+    if (data.botLeads) {
+        const r = data.botLeads.resumen;
+        sections.push({
+            title: 'LEADS DEL ASISTENTE VIRTUAL — RESUMEN',
+            rows: [
+                ['Concepto', 'Valor'],
+                ['Total', r.total],
+                ['Con lote de interés', r.conLoteInteres],
+                ['Derivados a un asesor', r.derivadosAAsesor],
+                ['Con consentimiento de datos', r.conConsentimiento],
+                ...Object.entries(r.porCanal).map(([canal, n]) => [`Canal: ${canal}`, n]),
+                ...Object.entries(r.porTemperatura).map(([temp, n]) => [`Temperatura: ${temp}`, n]),
+            ],
+        });
+
+        if (data.botLeads.leads.length > 0) {
+            sections.push({
+                title: 'LEADS DEL ASISTENTE VIRTUAL — DETALLE',
+                rows: [
+                    ['Contacto', 'Canal', 'Lote de interés', 'Temperatura', 'Pago', 'Estado', 'Fecha'],
+                    ...data.botLeads.leads.map(l => [l.nombre, l.canal, l.lote ?? '', l.temperatura, l.modalidadPago, l.botActivo ? 'Con el bot' : 'Con un asesor', l.fecha]),
+                ],
+            });
+        }
+    }
+
     return sections;
 }
 
