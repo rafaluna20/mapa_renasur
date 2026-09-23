@@ -46,6 +46,20 @@ interface ExtraInitialPayment {
     dateDisplay: string;
 }
 
+// Opciones del desplegable "Cónyuge / Parentesco" del segundo comprador.
+// La primera es el valor por defecto histórico (el caso más común) — se
+// mantiene tal cual para que los borradores y cotizaciones ya guardadas con
+// ese texto sigan mostrándose seleccionadas.
+const RELACIONES_SEGUNDO_COMPRADOR = [
+    'Cónyuge / Conviviente',
+    'Tío/a',
+    'Sobrino/a',
+    'Socio/a',
+    'Hijo/a',
+    'Hermano/a',
+];
+const RELACION_OTRO = '__otro__';
+
 export default function QuotePage({ params }: QuotePageProps) {
     const { user } = useAuth();
     const { lotId } = use(params);
@@ -1197,14 +1211,30 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                 </div>
                                                 <div className="space-y-2">
                                                     <div>
-                                                        <label className="block text-[11px] font-medium text-slate-500 mb-0.5">Parentesco / Relación</label>
-                                                        <input
-                                                            type="text"
-                                                            placeholder="Cónyuge, hijo/a, sobrino/a, tío/a..."
-                                                            className="w-full px-2 py-1.5 text-sm border rounded bg-white text-slate-800 placeholder:text-slate-500 mb-2"
-                                                            value={secondClientRelacion}
-                                                            onChange={e => setSecondClientRelacion(e.target.value)}
-                                                        />
+                                                        <label className="block text-[11px] font-medium text-slate-500 mb-0.5">Cónyuge / Socio / Parentesco (tío, sobrino, socio)</label>
+                                                        {/* Desplegable con las relaciones más comunes; "Otro"
+                                                            deja escribir una distinta. El valor final sigue
+                                                            siendo un string en secondClientRelacion, así el
+                                                            PDF, las notas de Odoo y el borrador no cambian. */}
+                                                        <select
+                                                            className="w-full px-2 py-1.5 text-sm border rounded bg-white text-slate-800 mb-2"
+                                                            value={RELACIONES_SEGUNDO_COMPRADOR.includes(secondClientRelacion) ? secondClientRelacion : RELACION_OTRO}
+                                                            onChange={e => setSecondClientRelacion(e.target.value === RELACION_OTRO ? '' : e.target.value)}
+                                                        >
+                                                            {RELACIONES_SEGUNDO_COMPRADOR.map(r => (
+                                                                <option key={r} value={r}>{r}</option>
+                                                            ))}
+                                                            <option value={RELACION_OTRO}>Otro…</option>
+                                                        </select>
+                                                        {!RELACIONES_SEGUNDO_COMPRADOR.includes(secondClientRelacion) && (
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Especifica el parentesco (ej. primo/a, cuñado/a)"
+                                                                className="w-full px-2 py-1.5 text-sm border rounded bg-white text-slate-800 placeholder:text-slate-500 mb-2"
+                                                                value={secondClientRelacion}
+                                                                onChange={e => setSecondClientRelacion(e.target.value)}
+                                                            />
+                                                        )}
                                                     </div>
                                                     <div>
                                                         <div className="flex gap-2">
