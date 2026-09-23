@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { OdooProduct, Proyecto } from '@/app/services/odooService';
 import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 import { lotsData } from '@/app/data/lotsData';
@@ -31,6 +31,10 @@ interface VentaClientProps {
     utmSource?: string;
     utmMedium?: string;
     utmCampaign?: string;
+    // Código de lote (default_code, ej. "E01MZS033P") que llega en la URL como ?lote=... — lo genera el
+    // agente comercial de Chatwoot para mandar "aquí lo tienes en el mapa" en vez de (o además de) el PDF
+    // técnico. Si no calza con ningún lote publicado, la página se comporta como si no viniera nada.
+    loteInicial?: string;
 }
 
 export default function VentaClient({
@@ -41,6 +45,7 @@ export default function VentaClient({
     utmSource,
     utmMedium,
     utmCampaign,
+    loteInicial,
 }: VentaClientProps) {
     const [selectedLotId, setSelectedLotId] = useState<string | null>(null);
     // Desactivado por defecto a pedido explícito del cliente (2026-09-09):
@@ -55,6 +60,19 @@ export default function VentaClient({
         const merged = mergeLotsData(odooProducts, lotsData, geometriesJson);
         return merged.filter((lot) => ID_ODOO_REAL.test(lot.id));
     }, [odooProducts]);
+
+    // Preselección desde la URL (?lote=E01MZS033P): solo una vez, al montar. Un `ref` (no un `useState`)
+    // porque no debe repetirse en re-renders posteriores — si el visitante cierra el panel o selecciona otro
+    // lote a mano, la URL no debe "traerlo de vuelta" al lote inicial. Silencioso si el código no matchea con
+    // ningún lote publicado (typo, lote fuera de este batch): la página se comporta como si no viniera nada.
+    const yaAplicoLoteInicial = useRef(false);
+    useEffect(() => {
+        if (yaAplicoLoteInicial.current || !loteInicial) return;
+        yaAplicoLoteInicial.current = true;
+        const codigo = loteInicial.trim().toUpperCase();
+        const match = lots.find((lot) => lot.default_code.toUpperCase() === codigo);
+        if (match) setSelectedLotId(match.id);
+    }, [loteInicial, lots]);
 
     // Bug real encontrado en revisión (2026-09-09): si el visitante abre el
     // panel de un lote vendido/reservado/en cotización y DESPUÉS activa

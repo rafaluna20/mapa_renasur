@@ -33,7 +33,7 @@ const CACHE_TTL = 5 * 60 * 1000;
 export default async function VentaPage({
     searchParams,
 }: {
-    searchParams: Promise<{ utm_source?: string; utm_medium?: string; utm_campaign?: string }>;
+    searchParams: Promise<{ utm_source?: string; utm_medium?: string; utm_campaign?: string; lote?: string }>;
 }) {
     const resolvedParams = await searchParams;
 
@@ -86,6 +86,7 @@ export default async function VentaPage({
             utmSource={resolvedParams?.utm_source}
             utmMedium={resolvedParams?.utm_medium}
             utmCampaign={resolvedParams?.utm_campaign}
+            loteInicial={resolvedParams?.lote}
         />
     );
 }
