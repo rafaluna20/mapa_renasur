@@ -3,7 +3,7 @@ import { fetchOdoo, fetchElementosUrbanos, fetchProyectos, OdooProduct, Proyecto
 import { lotsData, Lot } from '@/app/data/lotsData';
 import { mergeLotsData, normalizeCode } from '@/app/utils/dataMerger';
 import { derivarColindanciasYDimensiones } from '@/app/utils/colindanciasUtils';
-import { calculateCentroid, calculateDistance } from '@/app/utils/geometryUtils';
+import { calculateCentroid, calculateDistance, calculateLotMeasurements } from '@/app/utils/geometryUtils';
 import geometriesEnrichedRaw from '@/app/data/geometries-enriched.json';
 import { mergeElementosUrbanos } from '@/app/data/elementosUrbanos';
 
@@ -340,6 +340,13 @@ export async function construirPayloadPlanoMatriz(codigoElemento: string): Promi
   // Objeto "lote" sintético: derivarColindanciasYDimensiones solo necesita
   // points/x_geometry_arcos para el cálculo geométrico — el resto de campos
   // de Lot no aplican a una matriz, quedan en blanco/neutros.
+  //
+  // measurements SÍ hay que calcularlo acá: derivarColindanciasYDimensiones
+  // lee `lote.measurements?.area ?? lote.x_area` para el área del plano, y
+  // como una matriz no tiene un x_area real de Odoo (no es un product.
+  // template), dejar measurements sin definir hacía caer siempre al
+  // x_area=0 de abajo — plan_pro rechazaba el payload por "área debe ser
+  // mayor a 0" (VALIDATION_ERROR), sin mensaje claro en el modal.
   const loteFalso: Lot = {
     id: `matriz-${matriz.codigo}`,
     name: matriz.nombre,
@@ -352,6 +359,7 @@ export async function construirPayloadPlanoMatriz(codigoElemento: string): Promi
     x_lote: '',
     default_code: matriz.codigo,
     x_geometry_arcos: matriz.arcos,
+    measurements: calculateLotMeasurements(matriz.points, matriz.arcos),
   };
 
   // La matriz misma no debe aparecer como "vecina de sí misma" en la
