@@ -212,7 +212,8 @@ export const exportQuoteToPdf = async (
         // DNI — agrega una fila extra a la caja, que por eso crece de 32 a
         // 39mm para seguir cubriendo todo el contenido con el fondo verde.
         const hasSecondClient = !!(clientDetails.secondClientName?.trim() || clientDetails.secondClientVat?.trim());
-        const clientBoxHeight = hasSecondClient ? 39 : 32;
+        // +7mm por la fila "Segundo comprador" y +7mm por la de "Parentesco".
+        const clientBoxHeight = hasSecondClient ? 46 : 32;
 
         const clientBoxY = clientInfoY + 3;
         doc.setFillColor(...COLORS.primary.veryLight);
@@ -226,8 +227,9 @@ export const exportQuoteToPdf = async (
             ['Dirección:', { content: val(clientDetails.address), colSpan: 3 } as any],
         ];
         if (hasSecondClient) {
-            const relacionLabel = clientDetails.secondClientRelacion?.trim() || 'Cónyuge/Conviviente';
-            clientBody.push([`${relacionLabel}:`, val(clientDetails.secondClientName), 'DNI/RUC:', val(clientDetails.secondClientVat)]);
+            const relacion = clientDetails.secondClientRelacion?.trim() || 'Cónyuge / Conviviente';
+            clientBody.push(['Comprador 2:', val(clientDetails.secondClientName), 'DNI/RUC:', val(clientDetails.secondClientVat)]);
+            clientBody.push(['Parentesco:', { content: relacion, colSpan: 3 } as any]);
         }
 
         autoTable(doc, {
