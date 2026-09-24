@@ -70,12 +70,17 @@ function bbox(p: Punto[]): [number, number, number, number] {
     return [minX, minY, maxX, maxY];
 }
 
-/** Centro de masa del polígono (fórmula del área con signo); cae al centro de la caja si el área es 0. */
+/**
+ * Centro de masa del polígono (fórmula del área con signo). Se calcula RELATIVO al primer vértice: con UTM crudo
+ * (≈ 8.6e6 m de norte) los productos x·y pierden precisión y el centro se corre varios metros.
+ * Cae al centro de la caja si el área es 0.
+ */
 export function centroide(p: Punto[]): Punto {
+    const [ox, oy] = p[0];
     let a = 0, cx = 0, cy = 0;
     for (let i = 0; i < p.length; i++) {
-        const [x0, y0] = p[i];
-        const [x1, y1] = p[(i + 1) % p.length];
+        const x0 = p[i][0] - ox, y0 = p[i][1] - oy;
+        const x1 = p[(i + 1) % p.length][0] - ox, y1 = p[(i + 1) % p.length][1] - oy;
         const f = x0 * y1 - x1 * y0;
         a += f;
         cx += (x0 + x1) * f;
@@ -85,7 +90,7 @@ export function centroide(p: Punto[]): Punto {
         const [minX, minY, maxX, maxY] = bbox(p);
         return [(minX + maxX) / 2, (minY + maxY) / 2];
     }
-    return [cx / (3 * a), cy / (3 * a)];
+    return [ox + cx / (3 * a), oy + cy / (3 * a)];
 }
 
 export function construirEscena(entrada: EntradaEscena): Escena | null {

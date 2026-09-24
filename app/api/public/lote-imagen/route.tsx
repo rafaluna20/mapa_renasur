@@ -53,8 +53,10 @@ export async function GET(req: NextRequest) {
     const vecinos = d.lotes
         .filter((l) => l.default_code !== codigo && conGeom(l))
         .map((l) => ({ puntos: l.x_geometry_utm as Punto[], etiqueta: partesDeCodigo(String(l.default_code))?.lote ?? '' }));
-    const elementos = d.elementos
-        .filter((e) => e.mostrarEnMapa !== false && Array.isArray(e.points) && e.points.length >= 3)
+    // La clasificación (parque) usa TODAS las calles y parques aunque una capa esté oculta en el mapa: 'mostrarEnMapa' solo decide qué se dibuja.
+    const conPuntos = d.elementos.filter((e) => Array.isArray(e.points) && e.points.length >= 3);
+    const elementos = conPuntos
+        .filter((e) => e.mostrarEnMapa !== false)
         .map((e) => ({ puntos: e.points as Punto[], tipo: e.tipo, nombre: e.nombre, colorBorde: e.colorBorde, colorRelleno: e.colorRelleno }))
         .sort((a, b) => estilo(a.tipo).orden - estilo(b.tipo).orden);
 
@@ -62,8 +64,8 @@ export async function GET(req: NextRequest) {
     if (!escena) return NextResponse.json({ error: 'Geometría inválida' }, { status: 404 });
 
     const ctx = crearContextoFrenteParque(
-        elementos.filter((e) => e.tipo === 'calle').map((e) => e.puntos),
-        elementos.filter((e) => e.tipo === 'aporte_recreacion').map((e) => e.puntos)
+        conPuntos.filter((e) => e.tipo === 'calle').map((e) => e.points as Punto[]),
+        conPuntos.filter((e) => e.tipo === 'aporte_recreacion').map((e) => e.points as Punto[])
     );
     const parque = clasificarFrenteParque(puntosLote, ctx).tipo;
     const hayParque = escena.elementos.some((e) => e.tipo === 'aporte_recreacion');

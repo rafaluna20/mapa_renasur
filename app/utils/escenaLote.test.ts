@@ -54,6 +54,15 @@ describe('centroide', () => {
     });
 });
 
+describe('centroide con coordenadas UTM reales', () => {
+    it('no pierde precisión con norte ≈ 8.6e6 (el número del lote debe caer dentro de su lote)', () => {
+        const p: Punto[] = [[286400.12, 8600000.34], [286412.12, 8600003.34], [286410.12, 8600011.34], [286398.12, 8600008.34]];
+        const [cx, cy] = centroide(p);
+        expect(cx).toBeCloseTo(286405.12, 3);
+        expect(cy).toBeCloseTo(8600005.84, 3);
+    });
+});
+
 describe('partesDeCodigo', () => {
     it('lote normal, lote partido y código inválido', () => {
         expect(partesDeCodigo('E01MZV001P')).toEqual({ manzana: 'V', lote: '1' });
