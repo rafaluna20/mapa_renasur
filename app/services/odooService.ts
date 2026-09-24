@@ -1,5 +1,6 @@
 import { apiFetch } from '@/app/lib/apiFetch';
 import { ElementoUrbano } from '@/app/data/elementosUrbanos';
+import { clasificarFrenteParque, crearContextoFrenteParque, type ContextoFrenteParque, type TipoFrenteParque } from '@/app/utils/frenteParque';
 import { ArcoMetadata } from '@/app/utils/arcoUtils';
 import { callOdooJsonRpc } from '@/app/services/odooRpc';
 
@@ -331,6 +332,11 @@ export interface LoteChatFiltros {
     // Código de lote completo o parcial (ej. "E01MZD092P"), para cuando
     // el usuario pega el código directamente. Búsqueda por substring.
     codigo?: string;
+    // "Frente al parque" (ver app/utils/frenteParque.ts para la definición
+    // exacta): 'colindante' = comparte lindero con el parque; 'al_otro_lado'
+    // = da a una calle y al cruzarla hay un parque a ≤25 m; 'cualquiera' =
+    // cualquiera de los dos. "Parque" = solo la capa aporte_recreacion.
+    frenteParque?: 'colindante' | 'al_otro_lado' | 'cualquiera';
 }
 
 export interface LoteChatResultado {
@@ -344,6 +350,10 @@ export interface LoteChatResultado {
     precio: number | null;
     ubicacion: string | null;
     estado: string;
+    // Solo presente cuando la búsqueda pidió filtrar por parque (frenteParque):
+    // 'colindante' | 'al_otro_lado', y la distancia aproximada al parque.
+    frenteParque?: TipoFrenteParque | null;
+    distanciaParqueM?: number | null;
 }
 
 interface OdooLoteChatRaw {
@@ -356,6 +366,60 @@ interface OdooLoteChatRaw {
     x_statu: string | false;
     list_price: number;
     x_ubicacion: string | false;
+    x_geometry_utm?: [number, number][] | false;
+}
+
+// Calles y parques (aporte_recreacion) cambian rara vez: se cachean en
+// memoria del servidor unos minutos en vez de pedirlos a Odoo en cada
+// consulta del chat. Por instancia serverless — un cold start simplemente
+// los vuelve a pedir.
+const CACHE_FRENTE_PARQUE_MS = 10 * 60 * 1000;
+let cacheFrenteParque: { ctx: ContextoFrenteParque; hayParques: boolean; expira: number } | null = null;
+
+async function obtenerContextoFrenteParque(): Promise<{ ctx: ContextoFrenteParque; hayParques: boolean }> {
+    if (cacheFrenteParque && cacheFrenteParque.expira > Date.now()) return cacheFrenteParque;
+    // Solo estas dos capas (unas decenas de registros), NO fetchElementosUrbanos():
+    // ese trae también los ~1000 jardines/veredas con geometría y tardaba ~10 s
+    // en frío — riesgo de pasar el límite de tiempo de la función en Vercel.
+    // capa_id.codigo (dominio con punto) es válido en el dominio de search_read.
+    // NO se exige es_area: en Odoo la capa "calle" tiene es_area=false (se
+    // dibuja como trazo), pero cada calle SÍ es un anillo cerrado de ≥3 puntos
+    // (ver mapa_renasur_calle_geometry_closed_ring). Filtrar por es_area
+    // descartaba todas las calles y "al otro lado" salía siempre vacío.
+    const registros = (await fetchOdoo(
+        'elemento.urbano',
+        'search_read',
+        [[['active', '=', true], ['capa_id.codigo', 'in', ['calle', 'aporte_recreacion']], ['x_geometry_utm', '!=', false]]],
+        { fields: ['id', 'capa_id', 'x_geometry_utm'], limit: 500 }
+    )) as { id: number; capa_id: [number, string] | false; x_geometry_utm: [number, number][] | false }[];
+    const conCapa = await (async () => {
+        // capa_id llega como [id, nombre visible]; se resuelve el código por id.
+        const ids = [...new Set(registros.map((r) => (r.capa_id ? r.capa_id[0] : 0)).filter(Boolean))];
+        if (ids.length === 0) return new Map<number, string>();
+        const capas = (await fetchOdoo('elemento.urbano.capa', 'search_read', [[['id', 'in', ids]]], { fields: ['id', 'codigo'] })) as { id: number; codigo: string }[];
+        return new Map(capas.map((c) => [c.id, c.codigo]));
+    })();
+    const puntosDe = (codigo: string) =>
+        registros
+            .filter((r) => r.capa_id && conCapa.get(r.capa_id[0]) === codigo && Array.isArray(r.x_geometry_utm) && r.x_geometry_utm.length >= 3)
+            .map((r) => r.x_geometry_utm as [number, number][]);
+    const calles = puntosDe('calle');
+    const parques = puntosDe('aporte_recreacion');
+    const ctx = crearContextoFrenteParque(calles, parques);
+    // Sin parques cargados NO se cachea: si el equipo los importa a Odoo, la
+    // siguiente consulta debe verlos de inmediato, no 10 minutos después.
+    const entrada = { ctx, hayParques: parques.length > 0, expira: Date.now() + CACHE_FRENTE_PARQUE_MS };
+    if (entrada.hayParques) cacheFrenteParque = entrada;
+    return entrada;
+}
+
+// Se lanza cuando se pide filtrar por parque pero Odoo no tiene parques
+// cargados: el chat debe decir "no disponible todavía", no "0 resultados".
+export class SinDatosDeParquesError extends Error {
+    constructor() {
+        super('No hay parques (aporte_recreacion) cargados en Odoo');
+        this.name = 'SinDatosDeParquesError';
+    }
 }
 
 /**
@@ -372,10 +436,11 @@ interface OdooLoteChatRaw {
  * propio, ya vendido o reservado — ocultarlo sería peor que mostrarlo
  * con su estado real.
  *
- * IMPORTANTE (ver auditoría de datos previa a este código): la proximidad
- * a parques/calles NO está soportada — el módulo elemento.urbano no tiene
- * datos reales cargados en producción todavía (0 parques activos). No se
- * agrega un filtro de proximidad aquí a propósito.
+ * Proximidad a parques (2026-09-24): SOLO el filtro frenteParque, calculado
+ * con la geometría real (calles + capa aporte_recreacion de elemento.urbano,
+ * ver utils/frenteParque.ts). Si no hay parques cargados en Odoo, lanza
+ * SinDatosDeParquesError en vez de devolver "0 resultados" engañoso. Otras
+ * proximidades (colegios, avenidas, etc.) siguen sin soportarse.
  */
 export async function buscarLotesParaChat(filtros: LoteChatFiltros): Promise<LoteChatResultado[]> {
     const domain: unknown[] = [
@@ -412,24 +477,34 @@ export async function buscarLotesParaChat(filtros: LoteChatFiltros): Promise<Lot
         domain.push(['default_code', 'ilike', filtros.codigo.trim()]);
     }
 
+    const pideParque = !!filtros.frenteParque;
+    // Con el filtro de parque hay que traer la geometría de cada candidato y
+    // clasificar TODOS antes de recortar a 20 (si no, el recorte por precio
+    // podría dejar fuera justo los que sí están frente al parque).
+    const contextoParque = pideParque ? await obtenerContextoFrenteParque() : null;
+    if (pideParque && !contextoParque!.hayParques) throw new SinDatosDeParquesError();
+
     const registros: OdooLoteChatRaw[] = await fetchOdoo(
         'product.product',
         'search_read',
         [domain],
         {
-            fields: ['id', 'default_code', 'x_area', 'x_mz', 'x_etapa', 'x_lote', 'x_statu', 'list_price', 'x_ubicacion'],
+            fields: [
+                'id', 'default_code', 'x_area', 'x_mz', 'x_etapa', 'x_lote', 'x_statu', 'list_price', 'x_ubicacion',
+                ...(pideParque ? ['x_geometry_utm'] : []),
+            ],
             // Código de lote real = 10 caracteres exactos (ej. E01MZD148P) —
             // mismo criterio usado en los endpoints de stats para excluir
             // "otros productos" (materiales, servicios, etc.).
-            limit: 200,
+            limit: pideParque ? 1500 : 200,
             order: 'list_price asc',
         }
     );
 
-    return registros
-        .filter((r) => r.default_code && typeof r.default_code === 'string' && r.default_code.trim().length === 10)
-        .slice(0, 20)
-        .map((r) => ({
+    const lotes = registros.filter((r) => r.default_code && typeof r.default_code === 'string' && r.default_code.trim().length === 10);
+
+    if (!pideParque) {
+        return lotes.slice(0, 20).map((r) => ({
             codigo: r.default_code as string,
             areaM2: r.x_area || 0,
             manzana: r.x_mz || 'S/M',
@@ -438,6 +513,39 @@ export async function buscarLotesParaChat(filtros: LoteChatFiltros): Promise<Lot
             ubicacion: r.x_ubicacion || null,
             estado: r.x_statu || 'desconocido',
         }));
+    }
+
+    const conParque = lotes
+        .map((r) => {
+            const geom = Array.isArray(r.x_geometry_utm) ? (r.x_geometry_utm as [number, number][]) : null;
+            const clas = geom ? clasificarFrenteParque(geom, contextoParque!.ctx) : { tipo: null, distanciaM: null };
+            return { r, clas };
+        })
+        .filter(({ clas }) => {
+            if (!clas.tipo) return false;
+            return filtros.frenteParque === 'cualquiera' || clas.tipo === filtros.frenteParque;
+        })
+        // Con precio publicado primero (un lote sin precio no es cerrable por
+        // chat), luego colindantes antes que "al otro lado", luego más barato.
+        .sort((a, b) => {
+            const pa = a.r.list_price > 0 ? 0 : 1;
+            const pb = b.r.list_price > 0 ? 0 : 1;
+            if (pa !== pb) return pa - pb;
+            if (a.clas.tipo !== b.clas.tipo) return a.clas.tipo === 'colindante' ? -1 : 1;
+            return a.r.list_price - b.r.list_price;
+        });
+
+    return conParque.slice(0, 20).map(({ r, clas }) => ({
+        codigo: r.default_code as string,
+        areaM2: r.x_area || 0,
+        manzana: r.x_mz || 'S/M',
+        etapa: r.x_etapa || 'S/E',
+        precio: r.list_price > 0 ? r.list_price : null,
+        ubicacion: r.x_ubicacion || null,
+        estado: r.x_statu || 'desconocido',
+        frenteParque: clas.tipo,
+        distanciaParqueM: clas.distanciaM != null ? Math.round(clas.distanciaM) : null,
+    }));
 }
 
 // --- Client-Side Auth Service ---
