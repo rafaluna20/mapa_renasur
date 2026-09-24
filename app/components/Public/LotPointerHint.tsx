@@ -41,6 +41,11 @@ interface LotPointerHintProps {
     lots: Lot[];
     active: boolean;
     selectedLot: Lot | null;
+    // Píxel real del lote seleccionado dentro del canvas (lo mide LeafletMap
+    // cuando termina de centrar). null = aún animando: el pin espera, en vez
+    // de aparecer en el centro y saltar después. En móvil el lote NO queda en
+    // el centro (se corre arriba del panel), por eso no se asume top/left 50%.
+    anchor: { x: number; y: number } | null;
     onPick: (lot: Lot) => void;
 }
 
@@ -76,7 +81,7 @@ function PinIcon() {
     );
 }
 
-export default function LotPointerHint({ lots, active, selectedLot, onPick }: LotPointerHintProps) {
+export default function LotPointerHint({ lots, active, selectedLot, anchor, onPick }: LotPointerHintProps) {
     const [posIndex, setPosIndex] = useState(0);
     const [visible, setVisible] = useState(false);
     const [lot, setLot] = useState<Lot | null>(null);
@@ -155,8 +160,13 @@ export default function LotPointerHint({ lots, active, selectedLot, onPick }: Lo
     }, [active]);
 
     if (selectedLot) {
+        if (!anchor) return null;
         return (
-            <div className="venta-map-hint venta-map-hint--frozen" aria-hidden="true">
+            <div
+                className="venta-map-hint venta-map-hint--frozen"
+                style={{ top: anchor.y, left: anchor.x }}
+                aria-hidden="true"
+            >
                 <span className="venta-map-hint-label">Lote aquí</span>
                 <PinIcon />
             </div>

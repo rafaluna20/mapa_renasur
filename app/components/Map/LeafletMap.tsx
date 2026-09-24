@@ -80,6 +80,14 @@ interface LeafletMapProps {
      * usuario se aleja, porque esa posición es una aproximación que solo
      * es válida en la vista recién centrada. */
     onViewChange?: () => void;
+    /** Posición REAL (px, relativa al canvas del mapa) donde quedó el lote
+     * seleccionado una vez asentada la animación de centrado — en móvil el
+     * lote NO queda en el centro del canvas (se corre hacia arriba para que
+     * no lo tape el panel inferior), así que el pin de /venta no puede
+     * asumir top/left 50%. Se llama con null al cambiar/limpiar la selección
+     * y con el punto real al terminar de centrar. undefined = el mapa de
+     * staff no lo pasa y nada cambia para él. */
+    onLotAnchor?: (punto: { x: number; y: number } | null) => void;
 }
 
 // Ícono de cámara para los puntos de interés fotográfico (capa "foto") —
@@ -143,8 +151,15 @@ function crearIconoEtiquetaLinea(nombre: string, anguloDeg: number): L.DivIcon {
     });
 }
 
-function MapController({ lots, selectedLotId, onZoomChange, proyectos, proyectoSeleccionadoId, initialZoomOverride, onViewChange }: { lots: Lot[], selectedLotId: string | null, onZoomChange: (z: number) => void, proyectos: Proyecto[], proyectoSeleccionadoId: number | null, initialZoomOverride?: number, onViewChange?: () => void }) {
+function MapController({ lots, selectedLotId, onZoomChange, proyectos, proyectoSeleccionadoId, initialZoomOverride, onViewChange, onLotAnchor }: { lots: Lot[], selectedLotId: string | null, onZoomChange: (z: number) => void, proyectos: Proyecto[], proyectoSeleccionadoId: number | null, initialZoomOverride?: number, onViewChange?: () => void, onLotAnchor?: (punto: { x: number; y: number } | null) => void }) {
     const map = useMap();
+    // Callback en ref: el efecto de centrado depende de `lots` y otras cosas
+    // que cambian seguido, no debe re-dispararse solo porque el padre pasó una
+    // función nueva.
+    const onLotAnchorRef = useRef(onLotAnchor);
+    useEffect(() => {
+        onLotAnchorRef.current = onLotAnchor;
+    }, [onLotAnchor]);
     const initialZoomDone = useRef(false);
     // Este efecto depende de `lots` (más abajo) porque la rama SIN selección
     // lo necesita para el fitBounds inicial — pero eso significa que
@@ -242,6 +257,67 @@ function MapController({ lots, selectedLotId, onZoomChange, proyectos, proyectoS
                             });
                         }
                         lastFlownLotIdRef.current = selectedLotId;
+
+                        // Reporte real (Telegram en celular): el lote quedaba
+                        // mal centrado. El padding de arriba se mide UNA vez
+                        // al arrancar, pero en ese instante el panel aún se
+                        // está montando y la página hace scroll suave
+                        // (scroll-behavior: smooth en globals.css) — la
+                        // posición del canvas todavía se está moviendo, así
+                        // que la medida queda vieja. Cuando la animación
+                        // termina todo está quieto: se mide de nuevo el área
+                        // realmente visible (canvas ∩ pantalla, sin el panel)
+                        // y se corrige la diferencia con panBy. Luego se
+                        // avisa el píxel real del lote (onLotAnchor) para
+                        // que el pin apunte ahí y no al centro del canvas.
+                        const centro = bounds.getCenter();
+                        let hecho = false;
+                        const timers: ReturnType<typeof setTimeout>[] = [];
+                        const asentar = () => {
+                            if (hecho) return;
+                            hecho = true;
+                            timers.forEach(clearTimeout);
+                            map.off('moveend', alTerminar);
+                            // Si mientras tanto se eligió otro lote (o se cerró el panel),
+                            // esta medida ya no corresponde: no tocar el mapa ni el pin.
+                            if (lastFlownLotIdRef.current !== selectedLotId) return;
+                            try {
+                                map.invalidateSize({ animate: false });
+                                const contenedor = map.getContainer();
+                                const rc = contenedor.getBoundingClientRect();
+                                const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+                                const altoPantalla = vv?.height ?? window.innerHeight;
+                                let visibleTop = Math.max(rc.top, 0);
+                                let visibleBottom = Math.min(rc.bottom, altoPantalla);
+                                const panelEl = document.querySelector('.venta-lot-panel');
+                                if (panelEl && window.innerWidth < 640) {
+                                    visibleBottom = Math.min(visibleBottom, panelEl.getBoundingClientRect().top);
+                                }
+                                if (visibleBottom - visibleTop < 80) {
+                                    visibleTop = rc.top;
+                                    visibleBottom = rc.bottom;
+                                }
+                                const objetivo = L.point(rc.width / 2, (visibleTop + visibleBottom) / 2 - rc.top);
+                                const actual = map.latLngToContainerPoint(centro);
+                                const dx = actual.x - objetivo.x;
+                                const dy = actual.y - objetivo.y;
+                                if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+                                    map.panBy([dx, dy], { animate: false });
+                                }
+                                const final = map.latLngToContainerPoint(centro);
+                                onLotAnchorRef.current?.({ x: final.x, y: final.y });
+                            } catch (e) {
+                                console.error("Recentrado de lote error", e);
+                            }
+                        };
+                        const alTerminar = () => {
+                            // Pequeña espera: que termine el scroll suave de la página.
+                            timers.push(setTimeout(asentar, 350));
+                        };
+                        onLotAnchorRef.current?.(null);
+                        map.once('moveend', alTerminar);
+                        // Respaldo: si Leaflet no emite moveend (ya estaba en esa vista).
+                        timers.push(setTimeout(asentar, 2600));
                     }
                 } catch (e) {
                     console.error("Zoom to lot error", e);
@@ -249,6 +325,7 @@ function MapController({ lots, selectedLotId, onZoomChange, proyectos, proyectoS
             }
         } else {
             lastFlownLotIdRef.current = null;
+            onLotAnchorRef.current?.(null);
         }
         if (!selectedLotId && lots.length > 0 && !initialZoomDone.current) {
             try {
@@ -485,7 +562,7 @@ function MeasurementController({ selectedLotId, lots }: { selectedLotId: string 
     return <SideMeasurementTooltips lot={selectedLot} map={map} />;
 }
 
-export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proyectos = [], proyectoSeleccionadoId = null, selectedLotId, onLotSelect, mapType, userLocation, preferCanvas = true, showMeasurements = true, onPhotoPointClick, onMatrizClick, initialZoomOverride, onViewChange }: LeafletMapProps) {
+export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proyectos = [], proyectoSeleccionadoId = null, selectedLotId, onLotSelect, mapType, userLocation, preferCanvas = true, showMeasurements = true, onPhotoPointClick, onMatrizClick, initialZoomOverride, onViewChange, onLotAnchor }: LeafletMapProps) {
     const center: [number, number] = [-12.0464, -77.0428];
 
     // Zona UTM real por proyecto (17S/18S/19S) — id de proyecto.inmobiliario
@@ -957,7 +1034,7 @@ export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proy
                 );
             })}
 
-            <MapController lots={lots} selectedLotId={selectedLotId} onZoomChange={setZoom} proyectos={proyectos} proyectoSeleccionadoId={proyectoSeleccionadoId} initialZoomOverride={initialZoomOverride} onViewChange={onViewChange} />
+            <MapController lots={lots} selectedLotId={selectedLotId} onZoomChange={setZoom} proyectos={proyectos} proyectoSeleccionadoId={proyectoSeleccionadoId} initialZoomOverride={initialZoomOverride} onViewChange={onViewChange} onLotAnchor={onLotAnchor} />
             <MapBoundsController onBoundsChange={setMapBounds} />
             {onViewChange && <ViewChangeNotifier onViewChange={onViewChange} />}
             {showMeasurements && <MeasurementController selectedLotId={selectedLotId} lots={lots} />}

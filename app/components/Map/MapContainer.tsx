@@ -32,6 +32,7 @@ interface MapContainerProps {
     onMatrizClick?: (elemento: ElementoUrbano) => void;
     initialZoomOverride?: number;
     onViewChange?: () => void;
+    onLotAnchor?: (punto: { x: number; y: number } | null) => void;
 }
 
 export default function MapContainerWrapper(props: MapContainerProps) {

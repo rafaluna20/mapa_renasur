@@ -75,9 +75,15 @@ export default function PublicMapSection({
     // abajo), nunca desde el render.
     const [prevSelectedLotId, setPrevSelectedLotId] = useState(selectedLotId);
     const [seMovioElMapa, setSeMovioElMapa] = useState(false);
+    // `anclaPin` = píxel real donde el mapa dejó el lote (ver onLotAnchor en
+    // LeafletMap.tsx). En móvil el lote se corre hacia arriba para no quedar
+    // tapado por el panel, así que NO está en el centro del canvas: el pin
+    // debe apuntar a este punto, no a top/left 50%. null = todavía animando.
+    const [anclaPin, setAnclaPin] = useState<{ x: number; y: number } | null>(null);
     if (selectedLotId !== prevSelectedLotId) {
         setPrevSelectedLotId(selectedLotId);
         setSeMovioElMapa(false);
+        setAnclaPin(null);
     }
     const loteParaElPin = seMovioElMapa ? null : loteSeleccionadoParaHint;
 
@@ -164,11 +170,13 @@ export default function PublicMapSection({
                         showMeasurements={false}
                         initialZoomOverride={16.8}
                         onViewChange={() => setSeMovioElMapa(true)}
+                        onLotAnchor={setAnclaPin}
                     />
                     <LotPointerHint
                         lots={lotesDisponibles}
                         active={!selectedLotId}
                         selectedLot={loteParaElPin}
+                        anchor={anclaPin}
                         onPick={onLotSelect}
                     />
                 </div>
