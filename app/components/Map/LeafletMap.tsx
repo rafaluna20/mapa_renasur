@@ -128,13 +128,13 @@ function crearIconoEtiquetaLinea(nombre: string, anguloDeg: number): L.DivIcon {
         html: `<div style="
             transform: translate(-50%, -50%) rotate(${anguloDeg}deg);
             white-space: nowrap;
-            font-size: 9px;
+            font-size: 6.3px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: -0.01em;
             color: #1e293b;
             background: rgba(255,255,255,0.85);
-            padding: 1px 4px;
+            padding: 0.7px 2.8px;
             border-radius: 3px;
             pointer-events: none;
         ">${escapeHtml(nombre)}</div>`,
