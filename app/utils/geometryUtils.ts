@@ -259,20 +259,20 @@ export function derivarLineaCentralDeRutaCerrada(
 
 /**
  * Cantidad de copias de etiqueta según el largo real de la calle — tabla
- * pedida explícitamente por el usuario, sin tope: <40m -> 1, <80m -> 2,
- * <120m -> 3, y de ahí en más una etiqueta adicional por cada 200m extra
+ * pedida explícitamente por el usuario, sin tope: <60m -> 1, <100m -> 2,
+ * <150m -> 3, y de ahí en más una etiqueta adicional por cada 150m extra
  * (piso, no redondeo: recién se suma la etiqueta al completar el tramo de
- * 200m, no a mitad de camino). `limiteSeguridad` no es parte del pedido —
+ * 150m, no a mitad de camino). `limiteSeguridad` no es parte del pedido —
  * es solo un resguardo defensivo por si algún día una línea llega con una
  * longitud absurda por un error de datos (ej. unidades mal cargadas);
  * ninguna calle real de este proyecto se acerca a ese número.
  */
 function contarEtiquetasSegunLargo(totalM: number, limiteSeguridad: number): number {
     let cantidad: number;
-    if (totalM < 40) cantidad = 1;
-    else if (totalM < 80) cantidad = 2;
-    else if (totalM < 120) cantidad = 3;
-    else cantidad = 3 + Math.floor((totalM - 120) / 200);
+    if (totalM < 60) cantidad = 1;
+    else if (totalM < 100) cantidad = 2;
+    else if (totalM < 150) cantidad = 3;
+    else cantidad = 3 + Math.floor((totalM - 150) / 150);
     return Math.min(cantidad, limiteSeguridad);
 }
 
