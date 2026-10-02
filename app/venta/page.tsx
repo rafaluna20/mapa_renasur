@@ -3,6 +3,7 @@ import { getPublicLots, getPublicProyectos, getPublicElementosUrbanos } from '@/
 import { OdooProduct, Proyecto } from '@/app/services/odooService';
 import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 import VentaClient from '@/app/venta/VentaClient';
+import { construirMetadataVenta } from '@/app/venta/metadataVenta';
 
 // Página pública (sin login) de anuncios pagados: landing + mapa de lotes de
 // solo lectura + formulario que manda un lead al CRM. NO usa la credencial
@@ -13,10 +14,10 @@ import VentaClient from '@/app/venta/VentaClient';
 // a este diseño.
 export const dynamic = 'force-dynamic';
 
-export const metadata: Metadata = {
-    title: 'Terra Lima — Lotes en venta en Pucusana',
-    description: 'Lotes disponibles en Terra Lima, Panamericana Sur Km 55, Pucusana. Financiamiento directo, sin bancos.',
-};
+export async function generateMetadata({ searchParams }: { searchParams: Promise<{ lote?: string }> }): Promise<Metadata> {
+    const { lote } = await searchParams;
+    return construirMetadataVenta(lote, process.env.NEXT_PUBLIC_SITE_URL || undefined);
+}
 
 interface CacheContainer {
     lots: OdooProduct[];

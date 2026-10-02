@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect, useCallback, ReactNode 
 import { useRouter, usePathname } from 'next/navigation';
 import { odooService, type OdooUser } from '@/app/services/odooService';
 import { STAFF_SESSION_EXPIRED_EVENT } from '@/app/lib/apiFetch';
+import { esRutaPublica } from '@/app/utils/rutasPublicas';
 export type { OdooUser };
 
 const SESSION_FLASH_MESSAGE_KEY = 'session_flash_message';
@@ -31,6 +32,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [loading, setLoading] = useState(true);
     const router = useRouter();
     const pathname = usePathname();
+    // En /venta y /portal (clientes anónimos) la sesión de staff no pinta nada: ni se piden estadísticas con un
+    // usuario guardado de otra vez (daba 401 → logout → /login), ni se reacciona a una sesión vencida.
+    const rutaPublica = esRutaPublica(pathname);
 
     const refreshStats = useCallback(async (currentUser: OdooUser) => {
         try {
@@ -54,7 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 try {
                     const parsedUser: OdooUser = JSON.parse(storedUser);
                     setUser(parsedUser);
-                    await refreshStats(parsedUser);
+                    if (!rutaPublica) await refreshStats(parsedUser);
                 } catch {
                     localStorage.removeItem('odoo_user');
                 }
@@ -62,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setLoading(false);
         };
         init();
-    }, [refreshStats]);
+    }, [refreshStats, rutaPublica]);
 
     // Cierre de sesión automático cuando cualquier llamada a /api/odoo/*
     // devuelve 401 (cookie terra_staff_session vencida, dura 8h). Guarda un
@@ -70,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // usuario entienda qué pasó y vuelva justo a donde estaba al reloguearse.
     useEffect(() => {
         const handleSessionExpired = () => {
+            if (rutaPublica) return;
             sessionStorage.setItem(SESSION_FLASH_MESSAGE_KEY, 'Tu sesión expiró por inactividad. Ingresa nuevamente para continuar.');
             if (pathname && pathname !== '/login') {
                 sessionStorage.setItem(POST_LOGIN_REDIRECT_KEY, pathname);
@@ -79,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         window.addEventListener(STAFF_SESSION_EXPIRED_EVENT, handleSessionExpired);
         return () => window.removeEventListener(STAFF_SESSION_EXPIRED_EVENT, handleSessionExpired);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pathname]);
+    }, [pathname, rutaPublica]);
 
     const login = async (loginStr: string, pass: string) => {
         try {
