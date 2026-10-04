@@ -19,9 +19,16 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 // en una landing pública de ventas. Sin este export, /venta heredaría esa
 // restricción sin que nadie la haya decidido a propósito para este caso de
 // uso — acá se sobreescribe solo para las rutas bajo /venta.
+//
+// OJO (comprobado en producción el 2026-10-04): Next FUSIONA el `viewport` de un layout hijo con el del padre en
+// vez de reemplazarlo, así que con solo width/initialScale aquí /venta seguía sirviendo
+// "maximum-scale=1, user-scalable=no" heredado de la raíz. Hay que declarar maximumScale y userScalable
+// explícitamente para que el zoom con los dedos funcione.
 export const viewport: Viewport = {
     width: 'device-width',
     initialScale: 1,
+    maximumScale: 5,
+    userScalable: true,
 };
 
 export default function VentaLayout({ children }: { children: React.ReactNode }) {
