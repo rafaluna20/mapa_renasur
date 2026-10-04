@@ -1,6 +1,7 @@
 import type { Viewport } from 'next';
 import { Plus_Jakarta_Sans } from 'next/font/google';
 import './venta.css';
+import MetaPixelScript from './MetaPixelScript';
 
 // Tipografía propia de /venta (dirección "moderna" aprobada por el cliente
 // a partir de una referencia visual — template de portfolio "Helen":
@@ -24,5 +25,11 @@ export const viewport: Viewport = {
 };
 
 export default function VentaLayout({ children }: { children: React.ReactNode }) {
-    return <div className={plusJakartaSans.variable}>{children}</div>;
+    return (
+        <div className={plusJakartaSans.variable}>
+            {/* Pixel de Meta: solo se carga si NEXT_PUBLIC_META_PIXEL_ID está definido (ver metaPixel.ts). */}
+            <MetaPixelScript />
+            {children}
+        </div>
+    );
 }

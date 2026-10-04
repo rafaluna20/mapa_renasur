@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { cookiesMeta, nuevoEventId, trackMeta } from '@/app/venta/metaPixel';
 
 interface LeadFormProps {
     lotId: number;
     lotCode: string;
+    lotPrice?: number;
     utmSource?: string;
     utmMedium?: string;
     utmCampaign?: string;
@@ -12,7 +14,7 @@ interface LeadFormProps {
 
 type EstadoEnvio = 'idle' | 'enviando' | 'ok' | 'error';
 
-export default function LeadForm({ lotId, lotCode, utmSource, utmMedium, utmCampaign }: LeadFormProps) {
+export default function LeadForm({ lotId, lotCode, lotPrice, utmSource, utmMedium, utmCampaign }: LeadFormProps) {
     const [nombre, setNombre] = useState('');
     const [telefono, setTelefono] = useState('');
     const [email, setEmail] = useState('');
@@ -24,6 +26,10 @@ export default function LeadForm({ lotId, lotCode, utmSource, utmMedium, utmCamp
         e.preventDefault();
         setEstado('enviando');
         setError(null);
+
+        // Mismo eventId en el Pixel (navegador) y en la API de conversiones (servidor): Meta lo cuenta una vez.
+        const eventId = nuevoEventId();
+        const { fbp, fbc } = cookiesMeta();
 
         try {
             const res = await fetch('/api/public/lead', {
@@ -40,6 +46,9 @@ export default function LeadForm({ lotId, lotCode, utmSource, utmMedium, utmCamp
                     referrer: typeof document !== 'undefined' ? document.referrer : undefined,
                     pageUrl: typeof window !== 'undefined' ? window.location.href : undefined,
                     website,
+                    eventId,
+                    fbp,
+                    fbc,
                 }),
             });
             const data = await res.json();
@@ -49,6 +58,11 @@ export default function LeadForm({ lotId, lotCode, utmSource, utmMedium, utmCamp
                 return;
             }
             setEstado('ok');
+            trackMeta(
+                'Lead',
+                { content_ids: [lotCode], content_type: 'product', currency: 'PEN', ...(lotPrice && lotPrice > 0 ? { value: lotPrice } : {}) },
+                eventId,
+            );
         } catch {
             setError('No se pudo enviar tu solicitud. Revisa tu conexión e intenta de nuevo.');
             setEstado('error');
@@ -117,6 +131,9 @@ export default function LeadForm({ lotId, lotCode, utmSource, utmMedium, utmCamp
             <button type="submit" disabled={estado === 'enviando'} className="venta-submit">
                 {estado === 'enviando' ? 'Enviando…' : 'QUIERO QUE ME LLAMEN'}
             </button>
+            <p className="venta-lead-privacy">
+                Al enviar, aceptas que Renasur use tus datos solo para contactarte sobre este lote.
+            </p>
         </form>
     );
 }

@@ -35,6 +35,17 @@ describe('construirMetadataVenta', () => {
         }
     });
 
+    it('la vista previa dice lo mismo que los anuncios y NUNCA promete título saneado', () => {
+        for (const m of [construirMetadataVenta(undefined), construirMetadataVenta('E01MZS060P')]) {
+            const d = og(m).description;
+            expect(d).toContain('S/ 18,000');
+            expect(d).toContain('84 cuotas');
+            expect(d).toMatch(/habilitación urbana aprobada/i);
+            expect(d).not.toMatch(/en proceso/i);
+            expect(JSON.stringify(m)).not.toMatch(/saneado/i);
+        }
+    });
+
     it('la base se puede cambiar (con o sin barra final) y la imagen sigue absoluta', () => {
         expect(og(construirMetadataVenta('E01MZS060P', 'https://otro.com/')).images[0].url).toBe('https://otro.com/api/public/lote-imagen?codigo=E01MZS060P');
     });

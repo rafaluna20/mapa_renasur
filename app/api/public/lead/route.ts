@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { crearLeadPublico, lotExisteYActivo } from '@/app/services/odooPublicService';
+import { construirEventoLead, enviarEventoMeta } from '@/app/lib/metaCapi';
 
 // Endpoint público (sin login) para la landing de anuncios /venta.
 // Sin requireStaffSession A PROPÓSITO: un visitante anónimo que llegó desde
@@ -33,6 +34,14 @@ function checkRateLimit(ip: string): boolean {
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Datos de medición que manda el navegador (Pixel de Meta). Nunca se confía en ellos más que para medir:
+// se validan con un patrón estricto y, si no calzan, simplemente se ignoran.
+function idMedicion(valor: unknown, patron: RegExp): string | undefined {
+    return typeof valor === 'string' && patron.test(valor) ? valor : undefined;
+}
+const PATRON_EVENT_ID = /^[A-Za-z0-9_-]{8,64}$/;
+const PATRON_COOKIE_META = /^[A-Za-z0-9._-]{5,200}$/;
+
 export async function POST(request: NextRequest) {
     try {
         const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
@@ -51,6 +60,9 @@ export async function POST(request: NextRequest) {
             utmCampaign,
             referrer,
             pageUrl,
+            eventId,
+            fbp,
+            fbc,
             website, // campo trampa (honeypot): un visitante real nunca lo llena
         } = body || {};
 
@@ -100,6 +112,24 @@ export async function POST(request: NextRequest) {
             referrer: typeof referrer === 'string' ? referrer.slice(0, 500) : undefined,
             pageUrl: typeof pageUrl === 'string' ? pageUrl.slice(0, 500) : undefined,
         });
+
+        // API de conversiones de Meta: mejor esfuerzo. Nunca lanza ni cambia la respuesta: el lead ya está
+        // guardado en Odoo, y si Meta falla (o no está configurada) el visitante no se entera.
+        await enviarEventoMeta(
+            construirEventoLead({
+                eventId: idMedicion(eventId, PATRON_EVENT_ID),
+                pageUrl: typeof pageUrl === 'string' ? pageUrl.slice(0, 500) : undefined,
+                telefono: telefonoDigitos,
+                email: typeof email === 'string' && email !== '' ? email : undefined,
+                nombre: nombreLimpio,
+                fbp: idMedicion(fbp, PATRON_COOKIE_META),
+                fbc: idMedicion(fbc, PATRON_COOKIE_META),
+                ip,
+                userAgent: request.headers.get('user-agent') || undefined,
+                codigoLote: lote.default_code || String(lote.id),
+                valor: lote.list_price,
+            }),
+        );
 
         // Nunca se devuelve el id del lead creado al navegador.
         return NextResponse.json({ success: true });

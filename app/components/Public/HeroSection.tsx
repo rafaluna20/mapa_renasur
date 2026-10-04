@@ -1,25 +1,25 @@
 'use client';
 
-// Dirección "moderna" (navy/negro + naranja) — pedida por el cliente a
-// partir de una referencia visual (template de portfolio "Helen"): badge en
-// píldora con punto de estado, titular grande con una palabra en acento,
-// CTA doble (primario + WhatsApp), chips de estadísticas. Reemplaza la
-// dirección anterior ("Mercado", afiche chicha).
+import { OFERTA, FRASE_HABILITACION, AVISO_LEGAL_TITULO, detalleLegal, formatSoles, refCampana, urlWhatsApp } from '@/app/venta/ofertaComercial';
+import { trackMeta } from '@/app/venta/metaPixel';
+
+// Dirección "clara" (lavanda/blanco + rosa + navy + morado) — pedida por el cliente: badge en píldora con
+// punto de estado, titular grande con una palabra en acento, CTA doble (primario + WhatsApp), chips de
+// estadísticas.
+//
+// Alineada con los anuncios de Facebook (2026-10-03): todo lo que prometen los anuncios (cuota inicial,
+// 84 cuotas, servicios, distancia a la playa) se ve aquí con los mismos números (app/venta/ofertaComercial.ts),
+// y la situación legal se dice de frente: habilitación urbana APROBADA. Antes había aquí un
+// "100% Título saneado" escrito a mano; no se debe volver a poner sin documentos que lo respalden.
 interface HeroSectionProps {
-    totalLotes: number;
+    lotesDisponibles: number;
     lotesVendidos: number;
     precioDesde: number | null;
+    utmSource?: string;
+    utmCampaign?: string;
 }
 
-// Total real de lotes del proyecto según el plano maestro — dato de negocio
-// dado por el cliente (2026-09-09), NO verificable contra Odoo: hoy Odoo
-// solo tiene 536 lotes activos cargados para Terra Lima (faltan por
-// digitalizar/crear los demás, ver skill auditoria-areas-renasur). A
-// diferencia de los otros 3 números de esta fila (todos calculados en vivo),
-// este queda fijo hasta que alguien lo actualice acá a mano.
-const TOTAL_LOTES_PROYECTO = 1345;
-
-export default function HeroSection({ totalLotes, lotesVendidos, precioDesde }: HeroSectionProps) {
+export default function HeroSection({ lotesDisponibles, lotesVendidos, precioDesde, utmSource, utmCampaign }: HeroSectionProps) {
     const scrollToMap = () => {
         document.getElementById('mapa-lotes')?.scrollIntoView({ behavior: 'smooth' });
     };
@@ -41,13 +41,13 @@ export default function HeroSection({ totalLotes, lotesVendidos, precioDesde }: 
                 {precioDesde !== null && (
                     <div className="venta-price-line">
                         <small>desde</small>
-                        <big>S/ {precioDesde.toLocaleString()}</big>
+                        <big>{formatSoles(precioDesde)}</big>
                     </div>
                 )}
 
                 <p className="venta-sub">
-                    Financiamiento directo a 84 cuotas, sin bancos ni intermediarios. Elige tu lote en
-                    el mapa real del proyecto.
+                    Cuota inicial de {formatSoles(OFERTA.cuotaInicial)} y financiamiento directo a {OFERTA.nroCuotas} cuotas, sin
+                    bancos ni intermediarios. Elige tu lote en el mapa real del proyecto.
                 </p>
 
                 <div className="venta-cta-row">
@@ -55,33 +55,44 @@ export default function HeroSection({ totalLotes, lotesVendidos, precioDesde }: 
                         Ver lotes disponibles →
                     </button>
                     <a
-                        href="https://wa.me/51977684050"
+                        href={urlWhatsApp({ ref: refCampana(utmCampaign, utmSource) })}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="venta-cta-whatsapp"
+                        onClick={() => trackMeta('Contact', { content_name: 'whatsapp_hero' })}
                     >
                         Escríbenos por WhatsApp
                     </a>
                 </div>
 
+                <ul className="venta-chips" aria-label="Qué incluye">
+                    <li className="venta-chip--destacado">{FRASE_HABILITACION}</li>
+                    <li>Se entregan con {OFERTA.servicios}</li>
+                    <li>A {OFERTA.distanciaPlayaKm} km de la playa</li>
+                </ul>
+
                 <div className="venta-stats">
                     <div className="venta-stat">
-                        <strong>{TOTAL_LOTES_PROYECTO.toLocaleString()}</strong>
-                        <span>Total de lotes</span>
-                    </div>
-                    <div className="venta-stat">
-                        <strong>{totalLotes}+</strong>
-                        <span>Lotes mapeados</span>
+                        <strong>{lotesDisponibles}</strong>
+                        <span>Lotes disponibles</span>
                     </div>
                     <div className="venta-stat">
                         <strong>{lotesVendidos}</strong>
                         <span>Lotes vendidos</span>
                     </div>
                     <div className="venta-stat">
-                        <strong>100%</strong>
-                        <span>Título saneado</span>
+                        <strong>{OFERTA.nroCuotas}</strong>
+                        <span>Cuotas mensuales</span>
+                    </div>
+                    <div className="venta-stat">
+                        <strong>{OFERTA.distanciaPlayaKm} km</strong>
+                        <span>De la playa</span>
                     </div>
                 </div>
+
+                <p className="venta-legal">
+                    <strong>{AVISO_LEGAL_TITULO}</strong> {detalleLegal()}
+                </p>
             </div>
         </section>
     );

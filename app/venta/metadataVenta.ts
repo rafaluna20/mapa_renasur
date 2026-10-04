@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { partesDeCodigo } from '@/app/utils/escenaLote';
+import { OFERTA, AVISO_LEGAL_TITULO, formatSoles } from '@/app/venta/ofertaComercial';
 
 /**
  * Título, descripción e imagen con los que se ve el enlace de /venta cuando se pega en Telegram, WhatsApp, etc.
@@ -13,7 +14,10 @@ import { partesDeCodigo } from '@/app/utils/escenaLote';
 export const SITE_URL_POR_DEFECTO = 'https://mapa-renasur.vercel.app';
 
 const TITULO_GENERAL = 'Terra Lima — Lotes en venta en Pucusana';
-const DESCRIPCION_GENERAL = 'Lotes disponibles en Terra Lima, Panamericana Sur Km 55, Pucusana. Financiamiento directo, sin bancos.';
+// Mismos datos que los anuncios (ver ofertaComercial.ts). Incluye a propósito que la habilitación urbana está en
+// proceso: la vista previa del enlace no debe prometer más que la página.
+const COMPLEMENTO = `Cuota inicial de ${formatSoles(OFERTA.cuotaInicial)} y financiamiento directo en ${OFERTA.nroCuotas} cuotas, sin bancos. ${AVISO_LEGAL_TITULO}`;
+const DESCRIPCION_GENERAL = `Lotes disponibles en Terra Lima, Panamericana Sur Km 55, Pucusana. ${COMPLEMENTO}`;
 
 export function construirMetadataVenta(lote?: string | null, base: string = SITE_URL_POR_DEFECTO): Metadata {
     const origen = base.replace(/\/+$/, '');
@@ -22,7 +26,7 @@ export function construirMetadataVenta(lote?: string | null, base: string = SITE
 
     const titulo = partes ? `Mz ${partes.manzana} · Lote ${partes.lote} — Terra Lima, Pucusana` : TITULO_GENERAL;
     const descripcion = partes
-        ? `Mira dónde queda el lote ${partes.lote} de la manzana ${partes.manzana} en Terra Lima, Panamericana Sur Km 55, Pucusana. Financiamiento directo, sin bancos.`
+        ? `Mira dónde queda el lote ${partes.lote} de la manzana ${partes.manzana} en Terra Lima, Panamericana Sur Km 55, Pucusana. ${COMPLEMENTO}`
         : DESCRIPCION_GENERAL;
     const imagen = partes
         ? { url: `${origen}/api/public/lote-imagen?codigo=${encodeURIComponent(codigo)}`, width: 1000, height: 1000, alt: `Ubicación del lote ${partes.lote}, manzana ${partes.manzana}` }

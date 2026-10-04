@@ -10,6 +10,8 @@ import HeroSection from '@/app/components/Public/HeroSection';
 import PublicMapSection from '@/app/components/Public/PublicMapSection';
 import PublicLotPanel from '@/app/components/Public/PublicLotPanel';
 import FloatingWhatsApp from '@/app/components/Public/FloatingWhatsApp';
+import { trackMeta } from '@/app/venta/metaPixel';
+import { OFERTA } from '@/app/venta/ofertaComercial';
 
 const geometriesJson = geometriesEnrichedRaw as unknown as Record<string, EnrichedGeometry>;
 
@@ -99,6 +101,31 @@ export default function VentaClient({
         [lots, selectedLotId]
     );
 
+    // Lotes que hoy se pueden comprar (estado libre/disponible), calculado en vivo desde Odoo. Reemplaza al
+    // "Total de lotes 1,345" fijo a mano + "539+ mapeados", que le decía al visitante que solo ~40% del
+    // proyecto estaba en el mapa (dato de gestión interna, no de decisión de compra).
+    const lotesDisponibles = useMemo(
+        () => lots.filter((lot) => {
+            const estado = lot.x_statu?.toLowerCase();
+            return estado === 'libre' || estado === 'disponible';
+        }).length,
+        [lots]
+    );
+
+    // Medición (Pixel de Meta): ViewContent cada vez que el visitante abre un lote distinto. No hace nada si
+    // el Pixel no está configurado (ver metaPixel.ts).
+    useEffect(() => {
+        if (!selectedLotId) return;
+        const lot = lots.find((l) => l.id === selectedLotId);
+        if (!lot) return;
+        trackMeta('ViewContent', {
+            content_ids: [lot.default_code],
+            content_type: 'product',
+            currency: 'PEN',
+            ...(lot.list_price > 0 ? { value: lot.list_price } : {}),
+        });
+    }, [selectedLotId, lots]);
+
     // Datos reales para el hero/strip del afiche "Mercado" — nunca un
     // número inventado: "202 lotes" (dato del boceto aprobado) se
     // reemplaza acá por el conteo real de lots ya traídos de Odoo, y el
@@ -141,7 +168,7 @@ export default function VentaClient({
                         No pudimos cargar el mapa de lotes en este momento.
                     </p>
                     <p style={{ marginTop: '0.6rem', color: '#d9c9ec' }}>
-                        Escríbenos por WhatsApp al <a href="tel:+51977684050">+51 977 684 050</a> y te
+                        Escríbenos por WhatsApp al <a href="tel:+51977684050">{OFERTA.whatsappVisible}</a> y te
                         ayudamos directo.
                     </p>
                 </div>
@@ -151,7 +178,13 @@ export default function VentaClient({
 
     return (
         <main className="venta-page">
-            <HeroSection totalLotes={lots.length} lotesVendidos={lotesVendidos} precioDesde={precioDesde} />
+            <HeroSection
+                lotesDisponibles={lotesDisponibles}
+                lotesVendidos={lotesVendidos}
+                precioDesde={precioDesde}
+                utmSource={utmSource}
+                utmCampaign={utmCampaign}
+            />
 
             <PublicMapSection
                 lots={lotsVisibles}
@@ -173,7 +206,7 @@ export default function VentaClient({
                 />
             )}
 
-            <FloatingWhatsApp active={!selectedLot} />
+            <FloatingWhatsApp active={!selectedLot} utmSource={utmSource} utmCampaign={utmCampaign} />
         </main>
     );
 }
