@@ -2,6 +2,9 @@
 
 import { DollarSign, AlertTriangle, CheckCircle, Receipt, FileText, Calendar } from 'lucide-react';
 import { formatMoney as formatMoneyWithCurrency, normalizeCurrency, type CurrencyCode } from '@/app/utils/money';
+import {
+    buildStatementModel, installmentLabel, installmentStatus, lateFeeLabel, lateFeeNote, STATUS_LABEL,
+} from '@/app/utils/statementModel';
 
 export interface StatementInvoice {
     id: number;
@@ -15,6 +18,13 @@ export interface StatementInvoice {
     /** Moneda de la factura ([id, 'USD'] de Odoo o el código). Vacío = soles. */
     currency_id?: [number, string] | string | false;
     payment_state: string;
+    /** Mora (simple_recurring_contract >= 3.18): se muestra en su propio bloque, no como cuota. */
+    is_late_fee?: boolean;
+    late_fee_origin_id?: [number, string] | false;
+    late_fee_days_late?: number;
+    late_fee_percentage_applied?: number;
+    late_fee_waived?: boolean;
+    state?: string;
     // Fecha real de pago (usada por el PDF de Estado de Cuenta, no en pantalla).
     invoice_payments_widget?: { content?: { date?: string; is_exchange?: boolean }[] } | false;
 }
@@ -45,46 +55,15 @@ interface LotFinancialStatementProps {
 // ~100 líneas. Si diverge con el tiempo, no es grave — es solo formato.
 // (El formateador ahora lleva la moneda: US$ para contratos en dólares, S/ para soles.)
 
-function parseCuotaLabel(inv: { name: string; ref?: string; payment_reference?: string }): { label: string; isInitial: boolean } {
-    const ref = inv.ref || inv.payment_reference || inv.name || '';
-    if (/[-_]INIT(\b|$|-)/i.test(ref)) {
-        return { label: 'Cuota Inicial', isInitial: true };
-    }
-    const cuotaMatch = ref.match(/[-_]C(\d+)(?:\b|$|-)/i);
-    if (cuotaMatch) {
-        return { label: `Cuota N° ${parseInt(cuotaMatch[1], 10)}`, isInitial: false };
-    }
-    return { label: inv.name || 'Factura', isInitial: false };
-}
-
 export default function LotFinancialStatement({ lotLabel, mz, etapa, numeroLote, listPrice, currency, invoices, loading }: LotFinancialStatementProps) {
     // Todos los montos de este estado de cuenta se muestran en la moneda del lote.
     const lotCurrency: CurrencyCode = currency ?? normalizeCurrency(invoices[0]?.currency_id);
     const priceKnown = lotCurrency === 'PEN' || listPrice > 0;
     const formatMoney = (amount: number) => formatMoneyWithCurrency(amount, lotCurrency);
-    const realTotalPaid = invoices
-        .filter((i) => i.payment_state === 'paid')
-        .reduce((sum, inv) => sum + (inv.amount_total || 0), 0);
-    // Tolerancia de redondeo: dividir el precio en N cuotas iguales rara vez
-    // da un resultado exacto (ej. 28000/12 = 2333.33... cada cuota se
-    // registra en 2333.33, y la suma queda unos centavos por debajo del
-    // nominal) — sin esto, un lote 100% pagado (todas sus facturas
-    // payment_state='paid', amount_residual=0) mostraba un saldo pendiente
-    // de unos centavos en vez de S/ 0.00.
-    const TOLERANCIA_REDONDEO_CUOTAS = 1; // soles
-    const pendingBalanceRaw = Math.max(0, listPrice - realTotalPaid);
-    const pendingBalance = pendingBalanceRaw <= TOLERANCIA_REDONDEO_CUOTAS ? 0 : pendingBalanceRaw;
-    const financialProgress = listPrice > 0 ? Math.min(100, Math.round((realTotalPaid / listPrice) * 100)) : 0;
-
-    const overdueInvoices = invoices.filter(
-        (inv) => inv.payment_state !== 'paid' && inv.invoice_date_due && new Date(inv.invoice_date_due) < new Date()
-    );
-    const isOverdue = overdueInvoices.length > 0;
-    const totalOverdueAmount = overdueInvoices.reduce((sum, inv) => sum + (inv.amount_residual || 0), 0);
-
-    const sortedInvoices = [...invoices].sort(
-        (a, b) => new Date(a.invoice_date).getTime() - new Date(b.invoice_date).getTime()
-    );
+    // Modelo único (utils/statementModel.ts): cuotas (capital) y cargos por mora por separado. El capital pagado,
+    // el avance y el saldo deudor se calculan SOLO sobre las cuotas; la mora condonada no se muestra.
+    const model = buildStatementModel(invoices, listPrice);
+    const now = new Date();
 
     const metadataChips = [
         etapa && `Etapa ${etapa}`,
@@ -124,34 +103,45 @@ export default function LotFinancialStatement({ lotLabel, mz, etapa, numeroLote,
                     </div>
                     <div className="text-right">
                         <p className="text-[10px] text-slate-500 font-semibold">Saldo Deudor Pendiente</p>
-                        <p className="text-sm font-bold text-red-600">{priceKnown ? formatMoney(pendingBalance) : '—'}</p>
+                        <p className="text-sm font-bold text-red-600">{priceKnown ? formatMoney(model.pendingBalance) : '—'}</p>
                     </div>
                 </div>
 
                 <div className="flex justify-between items-end mb-1.5">
                     <div className="flex items-center gap-1.5">
                         <DollarSign size={14} className="text-emerald-500" />
-                        <span className="text-xs font-bold text-emerald-700">Total Pagado: {formatMoney(realTotalPaid)}</span>
+                        <span className="text-xs font-bold text-emerald-700">Total Pagado: {formatMoney(model.capitalPaid)}</span>
                     </div>
-                    <div className="text-xs font-bold text-emerald-600">{financialProgress}%</div>
+                    <div className="text-xs font-bold text-emerald-600">{model.financialProgress}%</div>
                 </div>
                 <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
                     <div
                         className="bg-emerald-500 h-full rounded-full transition-all duration-500"
-                        style={{ width: `${financialProgress}%` }}
+                        style={{ width: `${model.financialProgress}%` }}
                     />
                 </div>
             </div>
 
             {/* Estado de Morosidad */}
-            {isOverdue ? (
+            {model.hasDebt ? (
                 <div className="bg-red-50 border border-red-200 p-3 rounded-lg flex items-start gap-3">
                     <AlertTriangle size={18} className="text-red-500 shrink-0 mt-0.5" />
                     <div>
                         <p className="text-xs font-bold text-red-700 uppercase">
-                            Atraso Detectado ({overdueInvoices.length} {overdueInvoices.length === 1 ? 'cuota' : 'cuotas'})
+                            {model.hasOverdueInstallments
+                                ? `Atraso Detectado (${model.overdueInstallments.length} ${model.overdueInstallments.length === 1 ? 'cuota' : 'cuotas'})`
+                                : 'Mora pendiente de pago'}
                         </p>
-                        <p className="text-sm font-bold text-red-800 mt-0.5">Deuda Exigible: {formatMoney(totalOverdueAmount)}</p>
+                        <p className="text-sm font-bold text-red-800 mt-0.5">
+                            {model.hasOverdueInstallments
+                                ? `Deuda Exigible: ${formatMoney(model.overdueInstallmentsAmount)}`
+                                : `Mora: ${formatMoney(model.lateFeesPendingAmount)}`}
+                        </p>
+                        {model.hasOverdueInstallments && model.lateFeesPending.length > 0 && (
+                            <p className="text-[11px] font-semibold text-red-700 mt-0.5">
+                                Cuotas {formatMoney(model.overdueInstallmentsAmount)} + Mora {formatMoney(model.lateFeesPendingAmount)} = Total a regularizar {formatMoney(model.totalToRegularize)}
+                            </p>
+                        )}
                         <p className="text-[10px] text-red-600 mt-1">
                             Regulariza cuanto antes para evitar recargos. Podés subir tu comprobante abajo.
                         </p>
@@ -175,17 +165,18 @@ export default function LotFinancialStatement({ lotLabel, mz, etapa, numeroLote,
                     <div className="p-6 text-center text-slate-400 text-xs bg-white rounded-xl border border-slate-100">
                         Cargando estado de cuenta...
                     </div>
-                ) : sortedInvoices.length === 0 ? (
+                ) : model.installments.length === 0 ? (
                     <div className="p-6 text-center bg-white rounded-xl border border-slate-100 shadow-sm text-slate-400 text-xs italic flex flex-col items-center">
                         <Receipt size={24} className="mb-2 opacity-50" />
                         Aún no hay cuotas facturadas.
                     </div>
                 ) : (
                     <div className="relative border-l-2 border-slate-200 ml-3 pl-4 space-y-4">
-                        {sortedInvoices.map((inv) => {
-                            const isPaid = inv.payment_state === 'paid';
-                            const isOverdueItem = !isPaid && inv.invoice_date_due && new Date(inv.invoice_date_due) < new Date();
-                            const { label: cuotaLabel } = parseCuotaLabel(inv);
+                        {model.installments.map((inv) => {
+                            const status = installmentStatus(inv, now);
+                            const isPaid = status === 'paid';
+                            const isOverdueItem = status === 'overdue';
+                            const cuotaLabel = installmentLabel(inv);
 
                             return (
                                 <div key={inv.id} className="relative">
@@ -209,7 +200,7 @@ export default function LotFinancialStatement({ lotLabel, mz, etapa, numeroLote,
                                                     </span>
                                                 ) : isOverdueItem ? (
                                                     <span className="bg-red-100 text-red-700 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase animate-pulse">
-                                                        Mora
+                                                        {STATUS_LABEL.overdue}
                                                     </span>
                                                 ) : (
                                                     <span className="bg-yellow-100 text-yellow-700 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">
@@ -244,6 +235,41 @@ export default function LotFinancialStatement({ lotLabel, mz, etapa, numeroLote,
                     </div>
                 )}
             </div>
+
+            {/* Cargos por mora: bloque propio, nunca mezclado con las cuotas (las condonadas no se muestran) */}
+            {!loading && model.hasLateFees && (
+                <div className="space-y-3">
+                    <p className="text-xs font-bold text-amber-600 uppercase tracking-wider ml-1 mt-2">Cargos por Mora</p>
+                    <div className="bg-white rounded-xl border border-amber-200 shadow-sm divide-y divide-amber-100">
+                        {model.lateFees.map((fee) => {
+                            const feePaid = fee.payment_state === 'paid';
+                            return (
+                                <div key={fee.id} className="p-3 flex justify-between items-start gap-3">
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-bold text-amber-700 text-xs">{lateFeeLabel(fee)}</span>
+                                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${feePaid ? 'bg-emerald-100 text-emerald-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                                {feePaid ? STATUS_LABEL.paid : STATUS_LABEL.pending}
+                                            </span>
+                                        </div>
+                                        <p className="text-[10px] text-slate-500 mt-1">
+                                            {typeof fee.late_fee_days_late === 'number' ? `${fee.late_fee_days_late} días de atraso` : ''}
+                                            {fee.late_fee_percentage_applied ? ` · ${fee.late_fee_percentage_applied}% aplicado` : ''}
+                                        </p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="font-bold text-slate-800 text-sm">{formatMoney(fee.amount_total)}</p>
+                                        {!feePaid && (
+                                            <p className="text-[11px] text-red-600 font-bold">Saldo: {formatMoney(fee.amount_residual)}</p>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                    <p className="text-[10px] text-slate-500 px-1">{lateFeeNote(model.lateFees)}</p>
+                </div>
+            )}
         </div>
     );
 }

@@ -20,6 +20,12 @@ interface OdooInvoice {
     amount_residual: number;
     // Moneda de la factura ([id, 'USD'] | false): los contratos en dólares facturan en USD.
     currency_id?: [number, string] | false;
+    // Mora (simple_recurring_contract >= 3.18): separa los cargos por mora de las cuotas.
+    is_late_fee?: boolean;
+    late_fee_origin_id?: [number, string] | false;
+    late_fee_days_late?: number;
+    late_fee_percentage_applied?: number;
+    late_fee_waived?: boolean;
     // Único lugar donde vive la fecha real de pago (no existe como campo
     // plano en account.move) — la usa el PDF de Estado de Cuenta para la
     // columna "Fecha de Pago" / "Días de atraso-adelanto".
@@ -85,7 +91,7 @@ export async function GET() {
                 ['move_type', '=', 'out_invoice'],
                 ['state', '=', 'posted'],
             ]], {
-                fields: ['id', 'name', 'ref', 'payment_reference', 'invoice_date', 'invoice_date_due', 'payment_state', 'amount_total', 'amount_residual', 'currency_id', 'invoice_payments_widget'],
+                fields: ['id', 'name', 'ref', 'payment_reference', 'invoice_date', 'invoice_date_due', 'payment_state', 'amount_total', 'amount_residual', 'currency_id', 'is_late_fee', 'late_fee_origin_id', 'late_fee_days_late', 'late_fee_percentage_applied', 'late_fee_waived', 'invoice_payments_widget'],
                 limit: 500,
                 order: 'invoice_date asc',
             }) as Promise<OdooInvoice[]>,

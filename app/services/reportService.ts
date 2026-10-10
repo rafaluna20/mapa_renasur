@@ -8,6 +8,9 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatMoney, normalizeCurrency, currencyName, currencySymbol, type CurrencyCode } from '../utils/money';
+import {
+    buildStatementModel, installmentLabel, lateFeeNote, installmentStatus, lateFeeLabel, STATUS_LABEL,
+} from '../utils/statementModel';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 export interface ReportData {
@@ -1722,6 +1725,13 @@ export interface ClientStatementInvoice {
     /** Moneda de la factura ([id, 'USD'] de Odoo, o el código). Vacío = soles. */
     currency_id?: [number, string] | string | false;
     payment_state: string;
+    /** Mora (simple_recurring_contract >= 3.18): se imprime en su propia sección, no como cuota. */
+    is_late_fee?: boolean;
+    late_fee_origin_id?: [number, string] | false;
+    late_fee_days_late?: number;
+    late_fee_percentage_applied?: number;
+    late_fee_waived?: boolean;
+    state?: string;
     invoice_payments_widget?: InvoicePaymentsWidget | false;
 }
 
@@ -1815,30 +1825,8 @@ function drawInfoBox(
     return y + boxH + 6;
 }
 
-// Mismo parser de referencia que ya usa LotFinancialStatement.tsx (portal)
-// y LotDetailModal.tsx (staff) — duplicado a propósito, no extraído a un
-// módulo compartido, siguiendo la misma convención ya documentada en esos
-// 2 archivos (es solo formato, y cada uno tiene contexto propio alrededor).
-function parseCuotaLabelPdf(inv: { name: string; ref?: string; payment_reference?: string }): string {
-    const ref = inv.ref || inv.payment_reference || inv.name || '';
-    if (/[-_]INIT(\b|$|-)/i.test(ref)) return 'Cuota Inicial';
-    const m = ref.match(/[-_]C(\d+)(?:\b|$|-)/i);
-    if (m) return `Cuota N° ${parseInt(m[1], 10)}`;
-    return inv.name || 'Factura';
-}
-
-// Clave numérica para ordenar el historial por cuota (Inicial, N° 1, N° 2,
-// ...) en vez de por fecha de factura — la fecha de emisión de una cuota no
-// siempre coincide con su orden real (ej. cuotas facturadas por adelantado
-// o con retraso administrativo). Las referencias sin cuota reconocida
-// (facturas sueltas, "Otros pagos") quedan al final, ordenadas por fecha.
-function getCuotaOrderKeyPdf(inv: { name: string; ref?: string; payment_reference?: string }): number {
-    const ref = inv.ref || inv.payment_reference || inv.name || '';
-    if (/[-_]INIT(\b|$|-)/i.test(ref)) return 0;
-    const m = ref.match(/[-_]C(\d+)(?:\b|$|-)/i);
-    if (m) return parseInt(m[1], 10);
-    return Number.MAX_SAFE_INTEGER;
-}
+// La clasificación de cuotas/moras, el orden y los totales viven en utils/statementModel.ts (única fuente,
+// compartida con la ficha del lote, el portal y el recordatorio de WhatsApp).
 
 // Formato DD/MM/AA pedido para el PDF — el resto del sistema (pantalla)
 // sigue mostrando la fecha cruda de Odoo (YYYY-MM-DD), este formateador es
@@ -1992,23 +1980,9 @@ export async function generateClientStatementReport(data: ClientStatementReportD
         const cur: CurrencyCode = lot.currency ?? normalizeCurrency(lot.invoices[0]?.currency_id);
         const priceKnown = cur === 'PEN' || lot.listPrice > 0;
 
-        const realTotalPaid = lot.invoices
-            .filter((i) => i.payment_state === 'paid')
-            .reduce((sum, inv) => sum + (inv.amount_total || 0), 0);
-        // Tolerancia de redondeo: dividir el precio en N cuotas iguales rara
-        // vez da un resultado exacto — sin esto, un lote 100% pagado podía
-        // mostrar unos centavos de "saldo pendiente" en vez de S/ 0.00
-        // (mismo ajuste aplicado en LotDetailModal.tsx/LotFinancialStatement.tsx).
-        const TOLERANCIA_REDONDEO_CUOTAS = 1; // soles
-        const pendingBalanceRaw = Math.max(0, lot.listPrice - realTotalPaid);
-        const pendingBalance = pendingBalanceRaw <= TOLERANCIA_REDONDEO_CUOTAS ? 0 : pendingBalanceRaw;
-        const financialProgress = lot.listPrice > 0 ? Math.min(100, Math.round((realTotalPaid / lot.listPrice) * 100)) : 0;
-
-        const overdueInvoices = lot.invoices.filter(
-            (inv) => inv.payment_state !== 'paid' && inv.invoice_date_due && new Date(inv.invoice_date_due) < now
-        );
-        const isOverdue = overdueInvoices.length > 0;
-        const totalOverdueAmount = overdueInvoices.reduce((sum, inv) => sum + (inv.amount_residual || 0), 0);
+        // Modelo único del estado de cuenta: cuotas (capital) y cargos por mora por separado.
+        // El capital pagado, el % de avance y el saldo deudor se calculan SOLO sobre las cuotas.
+        const model = buildStatementModel(lot.invoices, lot.listPrice, now);
 
         // ── Resumen Financiero
         drawSectionHeader(doc, 'RESUMEN FINANCIERO', margin, y, BRAND.green);
@@ -2022,32 +1996,46 @@ export async function generateClientStatementReport(data: ClientStatementReportD
         setFont(doc, 12, BRAND.darkBg, 'bold');
         doc.text(priceKnown ? currency(lot.listPrice, cur) : '—', margin + 5, y + 13.5);
         setFont(doc, 12, BRAND.red, 'bold');
-        doc.text(priceKnown ? currency(pendingBalance, cur) : '—', W - margin - 5, y + 13.5, { align: 'right' });
+        doc.text(priceKnown ? currency(model.pendingBalance, cur) : '—', W - margin - 5, y + 13.5, { align: 'right' });
 
         setFont(doc, 7.5, BRAND.greenLight, 'bold');
-        doc.text(`Total Pagado: ${currency(realTotalPaid, cur)}`, margin + 5, y + 20.5);
-        doc.text(`${financialProgress}%`, W - margin - 5, y + 20.5, { align: 'right' });
+        doc.text(`Total Pagado: ${currency(model.capitalPaid, cur)}`, margin + 5, y + 20.5);
+        doc.text(`${model.financialProgress}%`, W - margin - 5, y + 20.5, { align: 'right' });
         drawRect(doc, margin + 5, y + 22.5, contentW - 10, 1.8, BRAND.borderLight, 0.9);
         // roundedRect con ancho 0 (0% pagado, ej. cuota inicial aún sin
         // registrar) puede dar un radio mayor que el propio ancho — se omite
         // el relleno en ese caso en vez de arriesgar un rect degenerado.
-        if (financialProgress > 0) {
-            drawRect(doc, margin + 5, y + 22.5, (contentW - 10) * (financialProgress / 100), 1.8, BRAND.greenLight, 0.9);
+        if (model.financialProgress > 0) {
+            drawRect(doc, margin + 5, y + 22.5, (contentW - 10) * (model.financialProgress / 100), 1.8, BRAND.greenLight, 0.9);
         }
         y += 32;
 
         // ── Estado de morosidad — mismo tono que LotFinancialStatement.tsx
         // (portal del cliente), nunca el lenguaje interno de cobranza.
-        const bannerH = 16;
-        if (isOverdue) {
+        const feesPending = model.lateFeesPending.length > 0;
+        const bannerH = model.hasDebt && feesPending ? 22 : 16;
+        if (model.hasDebt) {
+            const nVencidas = model.overdueInstallments.length;
             drawRect(doc, margin, y, contentW, bannerH, [254, 242, 242] as [number, number, number], 2);
             setFont(doc, 8, BRAND.red, 'bold');
             doc.text(
-                `ATRASO DETECTADO (${overdueInvoices.length} ${overdueInvoices.length === 1 ? 'CUOTA' : 'CUOTAS'}) · DEUDA EXIGIBLE: ${currency(totalOverdueAmount, cur)}`,
+                nVencidas > 0
+                    ? `ATRASO DETECTADO (${nVencidas} ${nVencidas === 1 ? 'CUOTA' : 'CUOTAS'}) · DEUDA EXIGIBLE: ${currency(model.overdueInstallmentsAmount, cur)}`
+                    : `MORA PENDIENTE DE PAGO: ${currency(model.lateFeesPendingAmount, cur)}`,
                 margin + 5, y + 6
             );
+            let lineY = y + 11.5;
+            if (feesPending && nVencidas > 0) {
+                // Las cuotas y la mora se informan por separado y luego sumadas: nunca contadas como cuotas.
+                setFont(doc, 7, BRAND.darkBg, 'bold');
+                doc.text(
+                    `Cuotas vencidas ${currency(model.overdueInstallmentsAmount, cur)} + Mora ${currency(model.lateFeesPendingAmount, cur)} = TOTAL A REGULARIZAR ${currency(model.totalToRegularize, cur)}`,
+                    margin + 5, lineY
+                );
+                lineY += 5.5;
+            }
             setFont(doc, 6.5, BRAND.textMuted);
-            doc.text('Regulariza cuanto antes para evitar recargos. Podés subir tu comprobante desde el portal.', margin + 5, y + 11.5);
+            doc.text('Regulariza cuanto antes para evitar recargos. Podés subir tu comprobante desde el portal.', margin + 5, lineY);
         } else {
             drawRect(doc, margin, y, contentW, bannerH, [236, 253, 245] as [number, number, number], 2);
             setFont(doc, 8, BRAND.greenLight, 'bold');
@@ -2062,20 +2050,10 @@ export async function generateClientStatementReport(data: ClientStatementReportD
         drawLine(doc, margin, y + 2.5, W - margin, y + 2.5, BRAND.borderLight, 0.15);
         y += 5;
 
-        const sortedInvoices = [...lot.invoices].sort((a, b) => {
-            const ordenA = getCuotaOrderKeyPdf(a);
-            const ordenB = getCuotaOrderKeyPdf(b);
-            if (ordenA !== ordenB) return ordenA - ordenB;
-            // Empate (ambas sin cuota reconocida, o mismo número — no
-            // debería pasar): desempata por fecha de emisión.
-            return new Date(a.invoice_date).getTime() - new Date(b.invoice_date).getTime();
-        });
+        // Solo las CUOTAS, ordenadas por número (la mora va en su propia sección más abajo).
+        const sortedInvoices = model.installments;
 
-        const filaEstado = (inv: ClientStatementInvoice) => {
-            if (inv.payment_state === 'paid') return 'Pagado';
-            const vencida = inv.invoice_date_due && new Date(inv.invoice_date_due) < now;
-            return vencida ? 'Mora' : 'Pendiente';
-        };
+        const filaEstado = (inv: ClientStatementInvoice) => STATUS_LABEL[installmentStatus(inv, now)];
 
         // Fecha de pago real + días de atraso/adelanto — precalculados en el
         // mismo orden que `sortedInvoices` para que `didParseCell` pueda
@@ -2083,7 +2061,7 @@ export async function generateClientStatementReport(data: ClientStatementReportD
         const diasInfo = sortedInvoices.map((inv) => calcularDiasPdf(getFechaPagoRawPdf(inv), inv.invoice_date_due));
 
         const rows = sortedInvoices.map((inv, i) => [
-            parseCuotaLabelPdf(inv),
+            installmentLabel(inv),
             formatDDMMYY(inv.invoice_date_due || inv.invoice_date),
             (() => { const f = getFechaPagoRawPdf(inv); return f ? formatDDMMYY(f) : '—'; })(),
             diasInfo[i].texto,
@@ -2134,6 +2112,61 @@ export async function generateClientStatementReport(data: ClientStatementReportD
             margin: { left: margin, right: margin },
         });
         y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 10;
+
+        // ── Cargos por mora: sección propia, nunca mezclados con las cuotas. Las moras condonadas no se
+        // muestran (el modelo ya las excluye).
+        if (model.hasLateFees) {
+            if (y > H - 80) {
+                doc.addPage();
+                drawRect(doc, 0, 0, W, H, BRAND.pageBg);
+                y = 16;
+            }
+            drawSectionHeader(doc, 'CARGOS POR MORA', margin, y, BRAND.amber);
+            drawLine(doc, margin, y + 2.5, W - margin, y + 2.5, BRAND.borderLight, 0.15);
+            y += 5;
+
+            const feeRows = model.lateFees.map((fee) => {
+                const fechaPago = getFechaPagoRawPdf(fee);
+                return [
+                    lateFeeLabel(fee),
+                    typeof fee.late_fee_days_late === 'number' ? `${fee.late_fee_days_late} días` : '—',
+                    fee.late_fee_percentage_applied ? `${fee.late_fee_percentage_applied}%` : '—',
+                    formatDDMMYY(fee.invoice_date_due || fee.invoice_date),
+                    fechaPago ? formatDDMMYY(fechaPago) : '—',
+                    fee.payment_state === 'paid' ? STATUS_LABEL.paid : STATUS_LABEL.pending,
+                    currency(fee.amount_total, cur),
+                    fee.payment_state === 'paid' ? '—' : currency(fee.amount_residual, cur),
+                ];
+            });
+            const totalFees = model.lateFees.reduce((acc, fee) => acc + (fee.amount_total || 0), 0);
+
+            autoTable(doc, {
+                startY: y,
+                head: [['MORA DE', 'ATRASO', '% APLICADO', 'VENCIMIENTO', 'FECHA DE PAGO', 'ESTADO', 'MONTO', 'SALDO']],
+                body: feeRows,
+                foot: [['', '', '', '', '', 'TOTAL MORA', currency(totalFees, cur), currency(model.lateFeesPendingAmount, cur)]],
+                theme: 'plain',
+                styles: { font: 'helvetica', fontSize: 7.5, cellPadding: { top: 3, bottom: 3, left: 4, right: 4 }, textColor: BRAND.textLight, lineColor: BRAND.borderLight },
+                headStyles: { fillColor: BRAND.panelBg, textColor: BRAND.darkBg, fontStyle: 'bold', fontSize: 6.5 },
+                footStyles: { fillColor: BRAND.panelBg, textColor: BRAND.darkBg, fontStyle: 'bold', fontSize: 7.5 },
+                alternateRowStyles: { fillColor: [250, 252, 254] as [number, number, number] },
+                columnStyles: {
+                    0: { fontStyle: 'bold', textColor: BRAND.amber },
+                    1: { halign: 'center' },
+                    2: { halign: 'center' },
+                    5: { halign: 'center' },
+                    6: { halign: 'right' },
+                    7: { fontStyle: 'bold', textColor: BRAND.red, halign: 'right' },
+                },
+                margin: { left: margin, right: margin },
+            });
+            y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 4;
+
+            const nota = lateFeeNote(model.lateFees);
+            setFont(doc, 6.5, BRAND.textMuted);
+            doc.text(doc.splitTextToSize(nota, contentW) as string[], margin, y + 2);
+            y += 10;
+        }
     });
 
     // ── Pie: disclaimer informativo (sin bloque de firmas — no aplica a un

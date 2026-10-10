@@ -6,6 +6,9 @@ import RefundModal from './RefundModal';
 import DescargasStatsModal from './DescargasStatsModal';
 import { odooService, OdooUser } from '@/app/services/odooService';
 import { formatMoney as formatMoneyWithCurrency, normalizeCurrency } from '@/app/utils/money';
+import {
+    buildStatementModel, installmentLabel, installmentStatus, lateFeeLabel, lateFeeNote, STATUS_LABEL,
+} from '@/app/utils/statementModel';
 import { SHADOW_FLOATING, BORDER_FLOATING } from '@/app/lib/designTokens';
 
 interface StatusConfigItem {
@@ -40,7 +43,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
     const [showRefundModal, setShowRefundModal] = useState(false);
     const [reservationOwner, setReservationOwner] = useState<{ id: number; name: string; partnerId?: number; clientName?: string; clientPhone?: string | null; clientEmail?: string | null; clientDni?: string | null; totalInstallments?: number; orderId?: number; separationAmount?: number | null } | null>(null);
     const [activeTab, setActiveTab] = useState<'info' | 'pagos'>('info');
-    const [invoices, setInvoices] = useState<{ id: number; name: string; ref?: string; payment_reference?: string; invoice_date: string; invoice_date_due: string; amount_total: number; amount_residual: number; currency_id?: [number, string] | string | false; payment_state: string; invoice_payments_widget?: { content?: { date?: string; is_exchange?: boolean }[] } | false }[]>([]);
+    const [invoices, setInvoices] = useState<{ id: number; name: string; ref?: string; payment_reference?: string; invoice_date: string; invoice_date_due: string; amount_total: number; amount_residual: number; currency_id?: [number, string] | string | false; payment_state: string; is_late_fee?: boolean; late_fee_origin_id?: [number, string] | false; late_fee_days_late?: number; late_fee_percentage_applied?: number; late_fee_waived?: boolean; state?: string; invoice_payments_widget?: { content?: { date?: string; is_exchange?: boolean }[] } | false }[]>([]);
     const [loadingInvoices, setLoadingInvoices] = useState(false);
     const [downloadingStatement, setDownloadingStatement] = useState(false);
     // Moneda y precio pactado del contrato vigente (solo se consulta si las facturas están en moneda
@@ -309,36 +312,11 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
     const isLocked = lot.name.endsWith('5');
     const assignedClient = lot.x_cliente || "Sin asignar";
 
-    const paidInvoices = invoices.filter(i => i.payment_state === 'paid').length;
-
-    // Calculate total amount invoiced (sum of all paid invoices)
-    const totalInvoiced = invoices
-        .filter(i => i.payment_state === 'paid')
-        .reduce((sum, inv) => sum + (inv.amount_total || 0), 0);
-
     // Moneda del lote = la de sus facturas (lo que realmente se le cobra al cliente). Todo monto de
     // facturas se muestra en ESA moneda: antes todo llevaba "S/" fijo y US$1,500 se veía como S/ 1,500.
     const lotCurrency = normalizeCurrency(invoices[0]?.currency_id);
     const isForeignCurrency = lotCurrency !== 'PEN';
     const formatMoney = (amount: number, currency = lotCurrency) => formatMoneyWithCurrency(amount, currency);
-
-    // ─── Parser de referencia de factura (CONTRATOMANUAL-E01MZD148P-C013 / INIT) ────
-    const parseCuotaLabel = (inv: { name: string; ref?: string; payment_reference?: string }): { label: string; isInitial: boolean; cuotaNum: number | null } => {
-        // Buscar en ref primero, luego en payment_reference, luego en name
-        const ref = inv.ref || inv.payment_reference || inv.name || '';
-        // Detectar cuota inicial: -INIT
-        if (/[-_]INIT(\b|$|-)/i.test(ref)) {
-            return { label: 'Cuota Inicial', isInitial: true, cuotaNum: 0 };
-        }
-        // Detectar cuota numerada: -C013, -C13, -C001, etc.
-        const cuotaMatch = ref.match(/[-_]C(\d+)(?:\b|$|-)/i);
-        if (cuotaMatch) {
-            const num = parseInt(cuotaMatch[1], 10);
-            return { label: `Cuota N° ${num}`, isInitial: false, cuotaNum: num };
-        }
-        // Sin referencia reconocida — usar el nombre de la factura
-        return { label: inv.name || 'Factura', isInitial: false, cuotaNum: null };
-    };
 
     // ─── KPIs Financieros y Morosidad (Estado de Cuenta) ─────────────────────────
     // Contrato en moneda extranjera: el valor total es el PRECIO PACTADO del contrato (en su moneda).
@@ -350,23 +328,10 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
     const listPrice = isForeignCurrency
         ? (priceKnown ? (lotContract?.finalPrice || 0) : 0)
         : (lot.list_price || 0);
-    const realTotalPaid = totalInvoiced;
-    // Tolerancia de redondeo: dividir el precio en N cuotas iguales rara vez
-    // da un resultado exacto (ej. E01MZS034P: 28000/12 = 2333.33... cada
-    // cuota se registra en 2333.33, y 12x2333.33 = 27999.96, 4 centavos
-    // menos que el nominal) — sin esto, un lote 100% pagado (las 13
-    // facturas payment_state='paid', amount_residual=0, verificado real)
-    // mostraba "Saldo Deudor Pendiente: S/ 0.04" en vez de S/ 0.00.
-    const TOLERANCIA_REDONDEO_CUOTAS = 1; // soles
-    const pendingBalanceRaw = Math.max(0, listPrice - realTotalPaid);
-    const pendingBalance = pendingBalanceRaw <= TOLERANCIA_REDONDEO_CUOTAS ? 0 : pendingBalanceRaw;
-    const financialProgress = listPrice > 0 ? Math.min(100, Math.round((realTotalPaid / listPrice) * 100)) : 0;
-
-    const overdueInvoices = invoices.filter(inv => inv.payment_state !== 'paid' && inv.invoice_date_due && new Date(inv.invoice_date_due) < new Date());
-    const isOverdue = overdueInvoices.length > 0;
-    const totalOverdueAmount = overdueInvoices.reduce((sum, inv) => sum + (inv.amount_residual || 0), 0);
-
-    const sortedInvoices = [...invoices].sort((a, b) => new Date(a.invoice_date).getTime() - new Date(b.invoice_date).getTime());
+    // Modelo único (utils/statementModel.ts), el mismo del portal del cliente y del PDF: cuotas (capital) y cargos
+    // por mora por separado; el capital pagado/avance/saldo son SOLO del capital; la mora condonada no se muestra.
+    const model = buildStatementModel(invoices, listPrice);
+    const now = new Date();
 
     // ─── Recordatorio de mora por WhatsApp ────────────────────────────────────
     // Normaliza a formato internacional para wa.me: quita todo lo que no sea
@@ -384,18 +349,19 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
         const telefono = normalizarTelefonoPeru(reservationOwner.clientPhone);
         if (!telefono) return null;
 
-        const lineasCuotas = overdueInvoices
-            .sort((a, b) => new Date(a.invoice_date_due).getTime() - new Date(b.invoice_date_due).getTime())
-            .map((inv) => {
-                const { label } = parseCuotaLabel(inv);
-                const fecha = new Date(inv.invoice_date_due).toLocaleDateString('es-PE');
-                return `• ${label} — ${formatMoney(inv.amount_residual)} (venció ${fecha})`;
-            })
-            .join('\n');
+        const lineasCuotas = [
+            ...model.overdueInstallments
+                .sort((x, y) => new Date(x.invoice_date_due as string).getTime() - new Date(y.invoice_date_due as string).getTime())
+                .map((inv) => {
+                    const fecha = new Date(inv.invoice_date_due as string).toLocaleDateString('es-PE');
+                    return `• ${installmentLabel(inv)} — ${formatMoney(inv.amount_residual)} (venció ${fecha})`;
+                }),
+            ...model.lateFeesPending.map((fee) => `• ${lateFeeLabel(fee)} — ${formatMoney(fee.amount_residual)} (recargo por mora)`),
+        ].join('\n');
 
         const nombreCliente = reservationOwner.clientName || 'estimado cliente';
         const codigoLote = lot?.default_code || '';
-        const mensaje = `Hola ${nombreCliente}, le escribimos de Terra Lima para recordarle el estado de sus pagos del lote ${codigoLote}:\n\n${lineasCuotas}\n\nTotal pendiente: ${formatMoney(totalOverdueAmount)}\n\nQuedamos atentos para coordinar el pago.`;
+        const mensaje = `Hola ${nombreCliente}, le escribimos de Terra Lima para recordarle el estado de sus pagos del lote ${codigoLote}:\n\n${lineasCuotas}\n\nTotal a regularizar: ${formatMoney(model.totalToRegularize)}\n\nQuedamos atentos para coordinar el pago.`;
 
         return `https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`;
     }
@@ -690,29 +656,42 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                                 </div>
                                 <div className="text-right">
                                     <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">Saldo Deudor Pendiente</p>
-                                    <p className="text-sm font-bold text-red-600 dark:text-red-400">{priceKnown ? formatMoney(pendingBalance) : '—'}</p>
+                                    <p className="text-sm font-bold text-red-600 dark:text-red-400">{priceKnown ? formatMoney(model.pendingBalance) : '—'}</p>
                                 </div>
                             </div>
 
                             <div className="flex justify-between items-end mb-1.5">
                                 <div className="flex items-center gap-1.5">
                                     <DollarSign size={14} className="text-emerald-500" />
-                                    <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">Total Pagado: {formatMoney(realTotalPaid)}</span>
+                                    <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">Total Pagado: {formatMoney(model.capitalPaid)}</span>
                                 </div>
-                                <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{financialProgress}%</div>
+                                <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{model.financialProgress}%</div>
                             </div>
                             <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
-                                <div className="bg-emerald-500 h-full rounded-full transition-all duration-500" style={{ width: `${financialProgress}%` }}></div>
+                                <div className="bg-emerald-500 h-full rounded-full transition-all duration-500" style={{ width: `${model.financialProgress}%` }}></div>
                             </div>
                         </div>
 
                         {/* Estado de Morosidad */}
-                        {isOverdue ? (
+                        {model.hasDebt ? (
                             <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 p-3 rounded-lg flex items-start gap-3">
                                 <AlertTriangle size={18} className="text-red-500 shrink-0 mt-0.5" />
                                 <div>
-                                    <p className="text-xs font-bold text-red-700 dark:text-red-400 uppercase">Atraso Detectado ({overdueInvoices.length} facturas)</p>
-                                    <p className="text-sm font-bold text-red-800 dark:text-red-300 mt-0.5">Deuda Exigible: {formatMoney(totalOverdueAmount)}</p>
+                                    <p className="text-xs font-bold text-red-700 dark:text-red-400 uppercase">
+                                        {model.hasOverdueInstallments
+                                            ? `Atraso Detectado (${model.overdueInstallments.length} ${model.overdueInstallments.length === 1 ? 'cuota' : 'cuotas'})`
+                                            : 'Mora pendiente de pago'}
+                                    </p>
+                                    <p className="text-sm font-bold text-red-800 dark:text-red-300 mt-0.5">
+                                        {model.hasOverdueInstallments
+                                            ? `Deuda Exigible: ${formatMoney(model.overdueInstallmentsAmount)}`
+                                            : `Mora: ${formatMoney(model.lateFeesPendingAmount)}`}
+                                    </p>
+                                    {model.hasOverdueInstallments && model.lateFeesPending.length > 0 && (
+                                        <p className="text-[11px] font-semibold text-red-700 dark:text-red-300 mt-0.5">
+                                            Cuotas {formatMoney(model.overdueInstallmentsAmount)} + Mora {formatMoney(model.lateFeesPendingAmount)} = Total a regularizar {formatMoney(model.totalToRegularize)}
+                                        </p>
+                                    )}
                                     <p className="text-[10px] text-red-600 dark:text-red-400 mt-1">El cliente presenta pagos vencidos. Priorizar cobranza.</p>
                                 </div>
                             </div>
@@ -732,19 +711,18 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
 
                             {loadingInvoices ? (
                                 <div className="p-6 text-center text-slate-400 text-xs bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700">Cargando estado de cuenta...</div>
-                            ) : sortedInvoices.length === 0 ? (
+                            ) : model.installments.length === 0 ? (
                                 <div className="p-6 text-center bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm text-slate-400 text-xs italic flex flex-col items-center">
                                     <Receipt size={24} className="mb-2 opacity-50" />
                                     Aún no hay cuotas facturadas.
                                 </div>
                             ) : (
                                 <div className="relative border-l-2 border-slate-200 dark:border-slate-700 ml-3 pl-4 space-y-4">
-                                    {sortedInvoices.map((inv) => {
-                                        const isPaid = inv.payment_state === 'paid';
-                                        const isOverdueItem = !isPaid && inv.invoice_date_due && new Date(inv.invoice_date_due) < new Date();
-
-                                        // Parsear referencia de la factura para etiquetar la cuota correctamente
-                                        const { label: cuotaLabel, isInitial } = parseCuotaLabel(inv);
+                                    {model.installments.map((inv) => {
+                                        const status = installmentStatus(inv, now);
+                                        const isPaid = status === 'paid';
+                                        const isOverdueItem = status === 'overdue';
+                                        const cuotaLabel = installmentLabel(inv);
 
                                         return (
                                             <div key={inv.id} className="relative">
@@ -758,7 +736,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                                                             {isPaid ?
                                                                 <span className="bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">Pagado</span> :
                                                                 isOverdueItem ?
-                                                                    <span className="bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-300 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase animate-pulse">Mora</span> :
+                                                                    <span className="bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-300 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase animate-pulse">{STATUS_LABEL.overdue}</span> :
                                                                     <span className="bg-yellow-100 dark:bg-yellow-950/50 text-yellow-700 dark:text-yellow-300 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">Pendiente</span>
                                                             }
                                                         </div>
@@ -790,21 +768,56 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                             )}
                         </div>
 
+                        {/* Cargos por mora: bloque propio, nunca mezclado con las cuotas (las condonadas no se muestran) */}
+                        {!loadingInvoices && model.hasLateFees && (
+                            <div className="space-y-3">
+                                <p className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider ml-1 mt-2">Cargos por Mora</p>
+                                <div className="bg-white dark:bg-slate-800 rounded-xl border border-amber-200 dark:border-amber-900/50 shadow-sm divide-y divide-amber-100 dark:divide-amber-900/30">
+                                    {model.lateFees.map((fee) => {
+                                        const feePaid = fee.payment_state === 'paid';
+                                        return (
+                                            <div key={fee.id} className="p-3 flex justify-between items-start gap-3">
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-bold text-amber-700 dark:text-amber-400 text-xs">{lateFeeLabel(fee)}</span>
+                                                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${feePaid ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300' : 'bg-yellow-100 dark:bg-yellow-950/50 text-yellow-700 dark:text-yellow-300'}`}>
+                                                            {feePaid ? STATUS_LABEL.paid : STATUS_LABEL.pending}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                                                        {typeof fee.late_fee_days_late === 'number' ? `${fee.late_fee_days_late} días de atraso` : ''}
+                                                        {fee.late_fee_percentage_applied ? ` · ${fee.late_fee_percentage_applied}% aplicado` : ''}
+                                                    </p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="font-bold text-slate-800 dark:text-slate-100 text-sm">{formatMoney(fee.amount_total)}</p>
+                                                    {!feePaid && (
+                                                        <p className="text-[11px] text-red-600 dark:text-red-400 font-bold">Saldo: {formatMoney(fee.amount_residual)}</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400 px-1">{lateFeeNote(model.lateFees)}</p>
+                            </div>
+                        )}
+
                         {/* Action Buttons Contextuales — Descargar Estado de Cuenta
                             siempre visible; junto a Recordar (WhatsApp) cuando hay
                             mora (ambas acciones son relevantes a la vez), sola
                             cuando el cliente está al día. */}
-                        <div className={isOverdue ? 'flex gap-2' : ''}>
+                        <div className={model.hasDebt ? 'flex gap-2' : ''}>
                             <button
                                 onClick={handleDownloadStatement}
                                 disabled={downloadingStatement}
-                                className={`${isOverdue ? 'flex-1' : 'w-full'} py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-transform active:scale-95`}
+                                className={`${model.hasDebt ? 'flex-1' : 'w-full'} py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-lg font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-transform active:scale-95`}
                             >
                                 {downloadingStatement ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
                                 Descargar Estado de Cuenta
                             </button>
 
-                            {isOverdue && (
+                            {model.hasDebt && (
                                 recordatorioMoraLink ? (
                                     <a
                                         href={recordatorioMoraLink}
@@ -906,7 +919,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                 // 3. Fallback to 1000
                 const separationAmount = reservationOwner.separationAmount && reservationOwner.separationAmount > 0
                     ? reservationOwner.separationAmount
-                    : (totalInvoiced > 0 ? totalInvoiced : 1000);
+                    : ((model.capitalPaid + model.lateFeePaid) > 0 ? (model.capitalPaid + model.lateFeePaid) : 1000);
 
                 return (
                     <RefundModal

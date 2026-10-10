@@ -83,6 +83,12 @@ export async function POST(request: Request) {
             'amount_total',
             'amount_residual',
             'currency_id',         // Moneda de la factura ([id, 'USD']): contratos en dólares
+            // Mora (simple_recurring_contract >= 3.18): permite separar los cargos por mora de las cuotas
+            'is_late_fee',
+            'late_fee_origin_id',
+            'late_fee_days_late',
+            'late_fee_percentage_applied',
+            'late_fee_waived',
             'invoice_payments_widget' // Fecha real de pago (para el PDF de Estado de Cuenta)
         ];
 

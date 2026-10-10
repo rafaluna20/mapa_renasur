@@ -423,7 +423,12 @@ function InvoiceCard({ invoice, onPaymentComplete }: {
                                     {invoice.lot_info && (
                                         <p className="text-xs text-slate-500">
                                             Etapa {invoice.lot_info.etapa} · {invoice.lot_info.manzana} · Lote {invoice.lot_info.lote}
-                                            · Cuota {parseInt(invoice.lot_info.quota)}
+                                            · {invoice.is_late_fee ? 'Mora de la cuota' : 'Cuota'} {parseInt(invoice.lot_info.quota)}
+                                        </p>
+                                    )}
+                                    {invoice.is_late_fee && (
+                                        <p className="text-[11px] font-semibold text-amber-700 mt-0.5">
+                                            Recargo por mora (se aplica una sola vez por cuota)
                                         </p>
                                     )}
                                 </div>

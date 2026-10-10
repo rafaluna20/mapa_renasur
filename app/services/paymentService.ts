@@ -12,6 +12,8 @@ export interface PendingInvoice {
     amount_residual: number;
     /** Moneda de la factura ([id, 'USD'] de Odoo): los contratos en dólares facturan en USD. */
     currency_id?: [number, string] | false;
+    /** Mora (simple_recurring_contract >= 3.18): una mora se muestra como "Mora de la cuota N", no como otra cuota. */
+    is_late_fee?: boolean;
     invoice_date_due: string;
     payment_state: 'not_paid' | 'in_payment' | 'partial' | 'paid';
     state: string;
@@ -66,6 +68,7 @@ export const paymentService = {
             'amount_total',
             'amount_residual',
             'currency_id',
+            'is_late_fee',
             'invoice_date_due',
             'payment_state',
             'state',
