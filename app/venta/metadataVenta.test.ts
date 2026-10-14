@@ -38,12 +38,29 @@ describe('construirMetadataVenta', () => {
     it('la vista previa dice lo mismo que los anuncios y NUNCA promete título saneado', () => {
         for (const m of [construirMetadataVenta(undefined), construirMetadataVenta('E01MZS060P')]) {
             const d = og(m).description;
-            expect(d).toContain('S/ 18,000');
+            expect(d).toContain('S/ 18,500');
             expect(d).toContain('84 cuotas');
             expect(d).toMatch(/habilitación urbana aprobada/i);
             expect(d).not.toMatch(/en proceso/i);
             expect(JSON.stringify(m)).not.toMatch(/saneado/i);
         }
+    });
+
+    it('enlace del bot (sinImagen) con lote válido: título del lote pero SIN imagen en la vista previa', () => {
+        const m = construirMetadataVenta('E01MZS006P', undefined, { sinImagen: true });
+        expect(og(m).title).toBe('Mz S · Lote 6 — Terra Lima, Pucusana');
+        expect((og(m) as { images?: unknown }).images).toBeUndefined();
+        expect((m.twitter as { images?: unknown }).images).toBeUndefined();
+        expect(JSON.stringify(m)).not.toMatch(/lote-imagen|venta-hero-portada/);
+    });
+
+    it('sinImagen sin lote válido no quita la foto del ingreso (solo aplica a un lote)', () => {
+        expect(og(construirMetadataVenta(undefined, undefined, { sinImagen: true })).images[0].url).toContain('venta-hero-portada.jpg');
+        expect(og(construirMetadataVenta('BASURA', undefined, { sinImagen: true })).images[0].url).toContain('venta-hero-portada.jpg');
+    });
+
+    it('sin la opción, el lote sigue llevando su imagen (vendedores, anuncios, reenvíos)', () => {
+        expect(og(construirMetadataVenta('E01MZS006P')).images[0].url).toContain('lote-imagen?codigo=E01MZS006P');
     });
 
     it('la base se puede cambiar (con o sin barra final) y la imagen sigue absoluta', () => {

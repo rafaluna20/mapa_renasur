@@ -15,20 +15,20 @@ describe('formatSoles', () => {
     it('separa miles con coma y redondea', () => {
         expect(formatSoles(97920)).toBe('S/ 97,920');
         expect(formatSoles(951.43)).toBe('S/ 951');
-        expect(formatSoles(18000)).toBe('S/ 18,000');
+        expect(formatSoles(18500)).toBe('S/ 18,500');
     });
 });
 
 describe('cuotaReferencial', () => {
-    it('(precio - inicial) / 84: el lote más barato (S/ 97,920) da ~S/ 951', () => {
+    it('(precio - inicial) / 84: el lote más barato (S/ 97,920) da ~S/ 945', () => {
         const c = cuotaReferencial(97920);
         expect(c).not.toBeNull();
-        expect(c!).toBeCloseTo((97920 - 18000) / 84, 6);
-        expect(formatSoles(c!)).toBe('S/ 951');
+        expect(c!).toBeCloseTo((97920 - 18500) / 84, 6);
+        expect(formatSoles(c!)).toBe('S/ 945');
     });
 
     it('sin nada que financiar o con datos inválidos devuelve null', () => {
-        expect(cuotaReferencial(18000)).toBeNull();
+        expect(cuotaReferencial(18500)).toBeNull();
         expect(cuotaReferencial(10000)).toBeNull();
         expect(cuotaReferencial(0)).toBeNull();
         expect(cuotaReferencial(NaN)).toBeNull();
@@ -81,7 +81,7 @@ describe('mensajeWhatsApp / urlWhatsApp', () => {
 
 describe('coherencia con los anuncios', () => {
     it('los datos fijados por la gerencia (2026-10-03)', () => {
-        expect(OFERTA.cuotaInicial).toBe(18000);
+        expect(OFERTA.cuotaInicial).toBe(18500);
         expect(OFERTA.nroCuotas).toBe(84);
         expect(OFERTA.whatsappNumero).toBe('51977684050');
         expect(OFERTA.distanciaPlayaKm).toBe(4.5);

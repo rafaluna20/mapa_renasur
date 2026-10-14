@@ -3,7 +3,7 @@
  * WhatsApp y la vista previa del enlace digan siempre lo mismo que los anuncios de Facebook.
  *
  * Valores dados por la gerencia (2026-10-03). Si cambian, se cambian SOLO aquí:
- *   - cuota inicial S/ 18,000
+ *   - cuota inicial S/ 18,500 (la gerencia la subió desde S/ 18,000 el 2026-10-14)
  *   - 84 cuotas, financiamiento directo (en Odoo, los 254 contratos vigentes tienen 0% de interés anual,
  *     por eso la cuota referencial es (precio - inicial) / 84; confirmar con gerencia que aplica a ventas nuevas)
  *   - habilitación urbana APROBADA con resolución municipal (la gerencia lo confirmó el 2026-10-03; antes había
@@ -13,7 +13,7 @@
  *   - 4.5 km hasta la playa
  */
 export const OFERTA = {
-    cuotaInicial: 18000,
+    cuotaInicial: 18500,
     nroCuotas: 84,
     whatsappNumero: '51977684050',
     whatsappVisible: '+51 977 684 050',

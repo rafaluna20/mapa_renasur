@@ -14,9 +14,11 @@ import { construirMetadataVenta } from '@/app/venta/metadataVenta';
 // a este diseño.
 export const dynamic = 'force-dynamic';
 
-export async function generateMetadata({ searchParams }: { searchParams: Promise<{ lote?: string }> }): Promise<Metadata> {
-    const { lote } = await searchParams;
-    return construirMetadataVenta(lote, process.env.NEXT_PUBLIC_SITE_URL || undefined);
+export async function generateMetadata({ searchParams }: { searchParams: Promise<{ lote?: string; utm_source?: string }> }): Promise<Metadata> {
+    const { lote, utm_source } = await searchParams;
+    // El bot de ventas ya manda la imagen del lote como adjunto: su enlace no lleva imagen en la vista previa (se veía dos veces).
+    const sinImagen = utm_source === 'asistente-virtual';
+    return construirMetadataVenta(lote, process.env.NEXT_PUBLIC_SITE_URL || undefined, { sinImagen });
 }
 
 interface CacheContainer {

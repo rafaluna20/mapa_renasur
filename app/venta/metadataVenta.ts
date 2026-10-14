@@ -19,10 +19,20 @@ const TITULO_GENERAL = 'Terra Lima — Lotes en venta en Pucusana';
 const COMPLEMENTO = `Cuota inicial de ${formatSoles(OFERTA.cuotaInicial)} y financiamiento directo en ${OFERTA.nroCuotas} cuotas, sin bancos. ${AVISO_LEGAL_TITULO}`;
 const DESCRIPCION_GENERAL = `Lotes disponibles en Terra Lima, Panamericana Sur Km 55, Pucusana. ${COMPLEMENTO}`;
 
-export function construirMetadataVenta(lote?: string | null, base: string = SITE_URL_POR_DEFECTO): Metadata {
+/**
+ * `sinImagen`: para los enlaces que manda el bot de ventas (utm_source=asistente-virtual). El bot ya envía la imagen
+ * del lote como adjunto, y Telegram arma además su propia vista previa con la og:image: el cliente veía el mapa
+ * DOS veces. Sin og:image la vista previa queda solo con título y descripción. Solo aplica con un lote válido.
+ */
+export function construirMetadataVenta(
+    lote?: string | null,
+    base: string = SITE_URL_POR_DEFECTO,
+    opciones: { sinImagen?: boolean } = {},
+): Metadata {
     const origen = base.replace(/\/+$/, '');
     const codigo = String(lote ?? '').trim().toUpperCase();
     const partes = codigo ? partesDeCodigo(codigo) : null;
+    const sinImagen = !!opciones.sinImagen && !!partes;
 
     const titulo = partes ? `Mz ${partes.manzana} · Lote ${partes.lote} — Terra Lima, Pucusana` : TITULO_GENERAL;
     const descripcion = partes
@@ -43,13 +53,13 @@ export function construirMetadataVenta(lote?: string | null, base: string = SITE
             title: titulo,
             description: descripcion,
             url: partes ? `${origen}/venta?lote=${encodeURIComponent(codigo)}` : `${origen}/venta`,
-            images: [imagen],
+            ...(sinImagen ? {} : { images: [imagen] }),
         },
         twitter: {
             card: partes ? 'summary' : 'summary_large_image',
             title: titulo,
             description: descripcion,
-            images: [imagen.url],
+            ...(sinImagen ? {} : { images: [imagen.url] }),
         },
     };
 }
