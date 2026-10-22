@@ -12,6 +12,7 @@ import { useEffect, useState, useMemo, useRef, Fragment } from 'react';
 import L from 'leaflet';
 import { calculateMidpoint, calculateCentroid, calcularPuntosEtiquetaEnRuta, derivarLineaCentralDeRutaCerrada } from '@/app/utils/geometryUtils';
 import { expandirVerticesConArcos } from '@/app/utils/arcoUtils';
+import { bordeSeparacion } from '@/app/utils/separacionUtils';
 
 // Define UTM zone 18L projection (WGS84) — Perú abarca 17S/18S/19S; el resto
 // de zonas se arma al vuelo con getUtmProjString(), no hace falta
@@ -964,6 +965,9 @@ export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proy
                 if (!positions || positions.length === 0) return null;
 
                 const isSelected = selectedLotId === lot.id;
+                // Semáforo de la separación: borde ámbar (por vencer) o rojo (vencida).
+                // Solo aplica a lotes reservados con plazo; el relleno sigue siendo el del estado.
+                const bordeSep = bordeSeparacion(lot);
                 const areaClass = lot.x_area < 200 ? 'label-area-small' : (lot.x_area < 1200 ? 'label-area-medium' : 'label-area-large');
 
                 // Viewport Culling: Solo renderizar etiquetas de lotes que están visibles en la pantalla actual
@@ -977,10 +981,10 @@ export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proy
                         positions={positions}
                         smoothFactor={isMobile ? 1.5 : 1.0} // Simplificación de geometría adaptativa en móvil (Douglas-Peucker)
                         pathOptions={{
-                            color: isSelected ? '#2563EB' : ((mapType === 'satellite' || mapType === 'dark') ? 'white' : '#64748b'),
+                            color: isSelected ? '#2563EB' : (bordeSep ? bordeSep.color : ((mapType === 'satellite' || mapType === 'dark') ? 'white' : '#64748b')),
                             fillColor: getColor(lot.x_statu),
                             fillOpacity: 0.6,
-                            weight: isSelected ? 3 : 1,
+                            weight: isSelected ? 3 : (bordeSep ? bordeSep.weight : 1),
                             className: isSelected ? 'lot-selected leaflet-interactive' : 'leaflet-interactive'
                         }}
                         // Optimización: en móvil desactivamos los listeners de hover completamente
@@ -1004,9 +1008,9 @@ export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proy
                                 // Resetear al estilo original
                                 const isSelected = selectedLotId === lot.id;
                                 layer.setStyle({
-                                    weight: isSelected ? 3 : 1,
+                                    weight: isSelected ? 3 : (bordeSep ? bordeSep.weight : 1),
                                     fillOpacity: 0.6,
-                                    color: isSelected ? '#2563EB' : ((mapType === 'satellite' || mapType === 'dark') ? 'white' : '#64748b')
+                                    color: isSelected ? '#2563EB' : (bordeSep ? bordeSep.color : ((mapType === 'satellite' || mapType === 'dark') ? 'white' : '#64748b'))
                                 });
                             }
                         }}

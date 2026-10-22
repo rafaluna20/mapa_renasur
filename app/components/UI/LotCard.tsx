@@ -1,5 +1,6 @@
 import { Lot } from '@/app/data/lotsData';
-import { LucideIcon, CheckCircle, AlertCircle, XCircle, FileText, Flame } from 'lucide-react';
+import { LucideIcon, CheckCircle, AlertCircle, XCircle, FileText, Flame, Clock, Lock } from 'lucide-react';
+import { etiquetaSeparacion, type SeparacionEstado } from '@/app/utils/separacionUtils';
 
 interface StatusConfigItem {
     color: string;
@@ -30,6 +31,14 @@ const STATUS_CONFIG: Record<string, StatusConfigItem> = {
     vendido: { color: "#F87171", label: "Vendido", bg: "bg-red-100 dark:bg-red-950/50", text: "text-red-800 dark:text-red-300", icon: XCircle },
 };
 
+// Chip del plazo de separación (semáforo). Solo se dibuja para lotes reservados con plazo.
+const CHIP_SEPARACION: Record<SeparacionEstado, string> = {
+    vigente: 'bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300',
+    contratada: 'bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300',
+    por_vencer: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
+    vencida: 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300',
+};
+
 export default function LotCard({ lot, onClick, isSelected, quoteCount }: LotCardProps) {
     const config = STATUS_CONFIG[lot.x_statu?.toLowerCase()] || STATUS_CONFIG.libre;
     const Icon = config.icon;
@@ -50,6 +59,19 @@ export default function LotCard({ lot, onClick, isSelected, quoteCount }: LotCar
                 <span>{Number(lot.x_area).toFixed(2)} m²</span>
                 <span className="font-semibold text-slate-700 dark:text-slate-300">S/ {lot.list_price.toLocaleString()}</span>
             </div>
+            {lot.separacion && (
+                <div className={`mt-2 flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full w-fit ${CHIP_SEPARACION[lot.separacion.estado]}`}>
+                    <Clock size={12} />
+                    {etiquetaSeparacion(lot.separacion)}
+                    {lot.separacion.diasSeparado > 0 && <span className="font-normal opacity-80">· separado hace {lot.separacion.diasSeparado} d</span>}
+                </div>
+            )}
+            {lot.reservaAdmin && !lot.separacion && (
+                <div className="mt-2 flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full w-fit bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                    <Lock size={12} />
+                    Reserva administrativa
+                </div>
+            )}
             {quoteCount && quoteCount > 1 && (
                 <div className="mt-2 flex items-center gap-1 text-xs font-bold text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/40 px-2 py-1 rounded-full w-fit">
                     <Flame size={12} />

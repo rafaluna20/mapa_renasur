@@ -1,4 +1,5 @@
 import { ArcoMetadata } from '@/app/utils/arcoUtils';
+import type { SeparacionInfo } from '@/app/utils/separacionUtils';
 
 export interface LotMeasurements {
     sides: number[];              // Length of each side in meters
@@ -28,6 +29,8 @@ export interface Lot {
     zonaUtm?: number; // Resuelto en el cliente (LeafletMap) a partir de x_proyectoId + la lista de proyectos, NO viene de Odoo directamente
     x_ubicacion?: string; // Calle/referencia del frente del lote (Odoo x_ubicacion), ej. "CALLE 13"
     x_geometry_arcos?: ArcoMetadata[]; // Metadata de lados curvos (Odoo x_geometry_arcos), ver product_lot_geometry
+    separacion?: SeparacionInfo; // Plazo de la separación (solo staff, solo lotes reservados). Lo agrega HomeClient, nunca viene de mergeLotsData (que también usa /venta).
+    reservaAdmin?: boolean; // Reserva administrativa (ventas anteriores al sistema): nunca vence. Solo staff.
 }
 
 

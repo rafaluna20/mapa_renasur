@@ -1,12 +1,15 @@
 import { Search, Layers, Map as MapIcon, DollarSign, Maximize2, ChevronDown, ChevronUp, Building2 } from 'lucide-react';
 import { useState } from 'react';
 import { Proyecto } from '@/app/services/odooService';
+import { FILTROS_SEPARACION } from '@/app/utils/separacionUtils';
 
 interface FilterBarProps {
     searchQuery: string;
     onSearchChange: (val: string) => void;
     statusFilter: string;
     onStatusChange: (val: string) => void;
+    /** Muestra los filtros de plazo de separación (solo si el módulo de Odoo ya los tiene). */
+    mostrarFiltrosSeparacion?: boolean;
     proyectos: Proyecto[];
     proyectoFilter: string;
     onProyectoChange: (val: string) => void;
@@ -30,7 +33,7 @@ interface FilterBarProps {
 
 export default function FilterBar({
     searchQuery, onSearchChange,
-    statusFilter, onStatusChange,
+    statusFilter, onStatusChange, mostrarFiltrosSeparacion = false,
     proyectos, proyectoFilter, onProyectoChange,
     manzanaFilter, onManzanaChange,
     etapaFilter, onEtapaChange,
@@ -120,7 +123,8 @@ export default function FilterBar({
                         { value: 'libre', label: 'Disponible' },
                         { value: 'separado', label: 'Reservado' },
                         { value: 'vendido', label: 'Vendido' },
-                        { value: 'no vender', label: 'No Vender' }
+                        { value: 'no vender', label: 'No Vender' },
+                        ...(mostrarFiltrosSeparacion ? FILTROS_SEPARACION : [])
                     ].map((filter) => (
                         <button
                             key={filter.value}

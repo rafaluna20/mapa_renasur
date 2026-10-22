@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import ReservationModal from './ReservationModal';
 import RefundModal from './RefundModal';
 import DescargasStatsModal from './DescargasStatsModal';
+import { COLOR_SEPARACION, etiquetaAntiguedad, etiquetaSeparacion } from '@/app/utils/separacionUtils';
 import { odooService, OdooUser } from '@/app/services/odooService';
 import { formatMoney as formatMoneyWithCurrency, normalizeCurrency } from '@/app/utils/money';
 import {
@@ -607,6 +608,33 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
 
                         {showStatsModal && (
                             <DescargasStatsModal onClose={() => setShowStatsModal(false)} />
+                        )}
+
+                        {/* Plazo de la separación (módulo Odoo v3.20+; solo lotes reservados) */}
+                        {lot.separacion && (
+                            <div className="rounded-lg border p-2 text-xs space-y-0.5 bg-white dark:bg-slate-800" style={{ borderColor: COLOR_SEPARACION[lot.separacion.estado] }}>
+                                <p className="text-[10px] uppercase font-bold" style={{ color: COLOR_SEPARACION[lot.separacion.estado] }}>
+                                    Separación · {etiquetaSeparacion(lot.separacion)}
+                                </p>
+                                <p className="text-slate-700 dark:text-slate-200">
+                                    {etiquetaAntiguedad(lot.separacion.diasSeparado)} (desde el {lot.separacion.inicio}) · límite {lot.separacion.limite}
+                                </p>
+                                <p className="text-slate-500 dark:text-slate-400">
+                                    {lot.separacion.vendedor ? `Vendedor: ${lot.separacion.vendedor} · ` : ''}
+                                    {lot.separacion.extensiones > 0 ? `${lot.separacion.extensiones} extensión(es) otorgada(s)` : 'Sin extensiones'}
+                                </p>
+                                {lot.separacion.ordenesActivas > 1 && (
+                                    <p className="text-red-600 dark:text-red-400 font-semibold">
+                                        ⚠ Este lote tiene {lot.separacion.ordenesActivas} separaciones activas (doble reserva): avisar a administración.
+                                    </p>
+                                )}
+                            </div>
+                        )}
+                        {lot.reservaAdmin && !lot.separacion && (
+                            <div className="rounded-lg border border-slate-300 dark:border-slate-600 p-2 text-xs bg-slate-50 dark:bg-slate-800">
+                                <p className="text-[10px] uppercase font-bold text-slate-600 dark:text-slate-300">Reserva administrativa</p>
+                                <p className="text-slate-500 dark:text-slate-400">Reservado por administración (venta anterior al sistema). No vence.</p>
+                            </div>
                         )}
 
                         {/* Reservation Owner Info */}

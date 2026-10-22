@@ -1,4 +1,5 @@
 import { Search, FileText } from 'lucide-react';
+import { FILTROS_SEPARACION } from '@/app/utils/separacionUtils';
 
 interface FloatingControlsProps {
     etapaFilter: string;
@@ -7,13 +8,14 @@ interface FloatingControlsProps {
     onManzanaChange: (val: string) => void;
     statusFilter: string;
     onStatusChange: (val: string) => void;
+    mostrarFiltrosSeparacion?: boolean;
     onOpenSidebar: () => void;
 }
 
 export default function FloatingControls({
     etapaFilter, onEtapaChange,
     manzanaFilter, onManzanaChange,
-    statusFilter, onStatusChange,
+    statusFilter, onStatusChange, mostrarFiltrosSeparacion = false,
     onOpenSidebar
 }: FloatingControlsProps) {
     return (
@@ -80,6 +82,9 @@ export default function FloatingControls({
                             <option value="libre">Disponible</option>
                             <option value="separado">Reservado</option>
                             <option value="vendido">Vendido</option>
+                            {mostrarFiltrosSeparacion && FILTROS_SEPARACION.map((f) => (
+                                <option key={f.value} value={f.value}>{f.label}</option>
+                            ))}
                         </select>
                     </div>
 

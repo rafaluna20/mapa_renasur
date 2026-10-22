@@ -13,6 +13,7 @@ import geometriesEnrichedRaw from '@/app/data/geometries-enriched.json';
 import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 import { useSmartSearch } from '@/app/hooks/useSmartSearch';
 import { mergeLotsData } from '@/app/utils/dataMerger';
+import type { MapaSeparaciones } from '@/app/lib/separaciones';
 
 // Type for enriched geometries with measurements
 interface EnrichedGeometry {
@@ -26,6 +27,7 @@ interface EnrichedGeometry {
 }
 
 const geometriesJson = geometriesEnrichedRaw as unknown as Record<string, EnrichedGeometry>;
+const SIN_SEPARACIONES: MapaSeparaciones = { porLote: {}, reservasAdmin: [], disponible: false };
 import { Menu, Filter, Loader2, WifiOff } from 'lucide-react';
 import { useAuth } from '@/app/context/AuthContext';
 import { useTheme } from '@/app/context/ThemeContext';
@@ -50,6 +52,7 @@ interface HomeClientProps {
     hasConnectionError?: boolean; // Flag if Odoo fetch failed
     elementosUrbanos?: ElementoUrbano[]; // Calles/áreas verdes (modelo Odoo separado, ver page.tsx)
     proyectos?: Proyecto[]; // Proyectos inmobiliarios (ubicación + zona UTM), ver page.tsx
+    separaciones?: MapaSeparaciones; // Plazo de separaciones y reservas administrativas (ver app/lib/separaciones.ts)
 }
 
 // ----------------------------------------------------------------------
@@ -60,7 +63,7 @@ interface HomeClientProps {
  * Recibe datos de Odoo, los fusiona con geometría local, y coordina
  * la comunicación entre el Mapa, la Barra Lateral y los Filtros.
  */
-export default function HomeClient({ odooProducts, hasConnectionError = false, elementosUrbanos = [], proyectos = [] }: HomeClientProps) {
+export default function HomeClient({ odooProducts, hasConnectionError = false, elementosUrbanos = [], proyectos = [], separaciones = SIN_SEPARACIONES }: HomeClientProps) {
 
     // Hooks de Contexto y Enrutamiento
     const { user, loading } = useAuth(); // Obtiene el usuario autenticado
@@ -149,8 +152,18 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, e
      * Extraída a la utilidad dataMerger para evitar bloqueos del main thread y mejorar la mantenibilidad.
      */
     const mergedLots = useMemo(() => {
-        return mergeLotsData(odooProducts, lotsData, geometriesJson);
-    }, [odooProducts]);
+        const lotes = mergeLotsData(odooProducts, lotsData, geometriesJson);
+        // El plazo de separación solo aplica a lotes que HOY están reservados: un
+        // lote vendido o liberado no debe arrastrar datos viejos. Se agrega aquí
+        // (no en mergeLotsData) porque esa función también la usa /venta (público).
+        const admin = new Set(separaciones.reservasAdmin);
+        return lotes.map((lote) => {
+            if (lote.x_statu !== 'separado') return lote;
+            const separacion = separaciones.porLote[lote.id];
+            const reservaAdmin = admin.has(Number(lote.id));
+            return separacion || reservaAdmin ? { ...lote, separacion, reservaAdmin } : lote;
+        });
+    }, [odooProducts, separaciones]);
 
     // id de proyecto.inmobiliario seleccionado (resuelto desde el código del
     // filtro) — null cuando el filtro es 'all', o cuando el código elegido
@@ -439,6 +452,7 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, e
                         onSearchChange={setSearchQuery}
                         statusFilter={statusFilter}
                         onStatusChange={setStatusFilter}
+                        mostrarFiltrosSeparacion={separaciones.disponible}
                         proyectos={proyectos}
                         proyectoFilter={proyectoFilter}
                         onProyectoChange={setProyectoFilter}
@@ -572,6 +586,7 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, e
                   Barra inferior para filtros rápidos en pantallas pequeñas
                 */}
                 <FloatingControls
+                    mostrarFiltrosSeparacion={separaciones.disponible}
                     etapaFilter={etapaFilter}
                     onEtapaChange={setEtapaFilter}
                     manzanaFilter={manzanaFilter}

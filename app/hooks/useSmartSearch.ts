@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useDebounce } from './useDebounce';
+import { coincideFiltroSeparacion, esFiltroSeparacion } from '@/app/utils/separacionUtils';
 import { normalizeText, safeString } from '@/app/utils/textNormalization';
 
 /**
@@ -129,7 +130,10 @@ export function useSmartSearch<T extends Record<string, any>>(
 
       // 4. FILTRO POR ESTADO
       if (options.statusFilter && options.statusFilter !== 'all') {
-        if (item.x_statu !== options.statusFilter) return false;
+        // Los filtros 'sep_*' (plazo de separación) no miran x_statu sino el plazo del lote.
+        if (esFiltroSeparacion(options.statusFilter)) {
+          if (!coincideFiltroSeparacion(item, options.statusFilter)) return false;
+        } else if (item.x_statu !== options.statusFilter) return false;
       }
 
       // 5. FILTRO POR MANZANA

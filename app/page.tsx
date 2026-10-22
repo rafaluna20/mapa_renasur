@@ -4,6 +4,7 @@ import { fetchOdoo, fetchElementosUrbanos, fetchProyectos, OdooProduct } from '@
 import { mergeElementosUrbanos } from '@/app/data/elementosUrbanos';
 import { STAFF_COOKIE_NAME, verifyStaffSessionToken } from '@/app/lib/staffAuth';
 import HomeClient from '@/app/components/HomeClient';
+import { obtenerSeparaciones } from '@/app/lib/separaciones';
 
 // Force dynamic rendering because Odoo data changes regularly
 export const dynamic = 'force-dynamic';
@@ -90,6 +91,10 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ r
   // antes de este cambio).
   const proyectos = await fetchProyectos();
 
+  // Plazo de las separaciones (módulo Odoo v3.20+). Consulta aislada: si el
+  // módulo aún no está desplegado devuelve vacío y el mapa queda como antes.
+  const separaciones = await obtenerSeparaciones(forceRefresh);
+
   return (
     <main>
       <HomeClient
@@ -97,6 +102,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ r
         hasConnectionError={hasConnectionError}
         elementosUrbanos={elementosUrbanos}
         proyectos={proyectos}
+        separaciones={separaciones}
       />
     </main>
   );
