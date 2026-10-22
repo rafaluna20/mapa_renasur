@@ -1085,17 +1085,18 @@ export const odooService = {
                 body: JSON.stringify({ defaultCode })
             });
             const result = await response.json();
-            if (!result.success || !result.ownerId) return null;
+            // Sin orden de venta (solo contrato) no hay ownerId, pero sí partnerId: la ficha igual debe pedir las facturas.
+            if (!result.success || (!result.ownerId && !result.partnerId)) return null;
             return {
-                ownerId: result.ownerId,
-                ownerName: result.ownerName,
+                ownerId: result.ownerId || 0,
+                ownerName: result.ownerName || '',
                 partnerId: result.partnerId,
                 clientName: result.clientName,
                 clientPhone: result.clientPhone || null,
                 clientEmail: result.clientEmail || null,
                 clientDni: result.clientDni || null,
                 totalInstallments: result.totalInstallments || 72,
-                orderId: result.orderId,
+                orderId: result.orderId || 0,
                 separationAmount: result.separationAmount
             };
         } catch (error) {

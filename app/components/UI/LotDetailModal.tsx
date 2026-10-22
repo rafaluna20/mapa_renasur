@@ -610,7 +610,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                         )}
 
                         {/* Reservation Owner Info */}
-                        {reservationOwner && currentUser && reservationOwner.id !== currentUser.uid && (
+                        {reservationOwner && reservationOwner.name && currentUser && reservationOwner.id !== currentUser.uid && (
                             <div className="bg-purple-50 rounded-lg border border-purple-100 p-2 text-center">
                                 <p className="text-[10px] text-purple-600 uppercase font-bold">Vendido por</p>
                                 <p className="text-xs font-medium text-purple-800">{reservationOwner.name}</p>
