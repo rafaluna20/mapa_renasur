@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { fetchOdoo, inferIdentificationTypeId } from '@/app/services/odooService';
 import { requireStaffSession } from '@/app/lib/staffAuth';
+import { esDocumentoValido, soloDigitos } from '@/app/lib/documentoCliente';
+import { buscarClientesPorDocumento } from '@/app/lib/clienteExistente';
 
 /**
  * Actualiza los datos de contacto de un cliente ya existente (res.partner) —
@@ -31,19 +33,42 @@ export async function POST(request: Request) {
             );
         }
 
+        // Corregir un documento no puede dejar a dos clientes con el mismo DNI/RUC.
+        const documento = soloDigitos(vat);
+        if (vat) {
+            if (!esDocumentoValido(documento)) {
+                return NextResponse.json(
+                    { success: false, error: 'El DNI debe tener 8 dígitos o el RUC 11 dígitos numéricos.' },
+                    { status: 400 }
+                );
+            }
+            const { exactos } = await buscarClientesPorDocumento(documento, { excluirId: Number(id) });
+            if (exactos.length > 0) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        code: 'documento_duplicado',
+                        error: `Ya existe otro cliente con el documento ${documento}: ${exactos[0].name}. Selecciónalo en lugar de repetirlo.`,
+                        existing: exactos[0],
+                    },
+                    { status: 409 }
+                );
+            }
+        }
+
         const partnerData: Record<string, unknown> = {
             name,
             email: email || false,
             phone: phone || false,
             mobile: phone || false, // Mismo criterio que create_partner: un solo campo de teléfono en la UI
-            vat: vat || false,
+            vat: vat ? documento : false,
             street: address || false,
         };
         // Mismo fix que create_partner: sin esto, contactos creados antes de
         // ese fix (o con el tipo en blanco) siguen fallando al validar un
         // DNI de 8 dígitos contra el formato de RUC.
         if (vat) {
-            const idType = inferIdentificationTypeId(vat);
+            const idType = inferIdentificationTypeId(documento);
             if (idType) partnerData.l10n_latam_identification_type_id = idType;
         }
 

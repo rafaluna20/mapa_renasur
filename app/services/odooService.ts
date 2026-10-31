@@ -549,6 +549,33 @@ export async function buscarLotesParaChat(filtros: LoteChatFiltros): Promise<Lot
 }
 
 // --- Client-Side Auth Service ---
+// Cliente (res.partner) tal como lo necesita el cotizador. Los campos vacíos de Odoo llegan como `false`: aquí se
+// convierten en `undefined` para que la pantalla no tenga que distinguirlos.
+export interface ClienteBuscado {
+    id: number;
+    name: string;
+    email?: string;
+    phone?: string;
+    mobile?: string;
+    vat?: string;
+    street?: string;
+    tieneContrato?: boolean;
+}
+
+export function normalizarCliente(r: Record<string, unknown>): ClienteBuscado {
+    const texto = (v: unknown) => (v ? String(v) : undefined);
+    return {
+        id: Number(r.id),
+        name: String(r.name ?? ''),
+        email: texto(r.email),
+        phone: texto(r.phone),
+        mobile: texto(r.mobile),
+        vat: texto(r.vat),
+        street: texto(r.street),
+        tieneContrato: r.tieneContrato === true ? true : undefined,
+    };
+}
+
 export const odooService = {
     async login(login: string, pass: string): Promise<OdooUser> {
         // We will hit our own API route which will handle the proxying
@@ -755,25 +782,77 @@ export const odooService = {
         }
     },
 
-    // 1b. Create a new client/partner in Odoo
-    async createPartner(data: { name: string; vat: string; phone?: string; email?: string }): Promise<{ id: number; name: string }> {
+    // 1b. Crear un cliente en Odoo — SOLO si ese documento no está ya registrado.
+    // El servidor decide (create_partner/route.ts): 'creado', 'existente' (mismo DNI/RUC: se devuelve la ficha que ya
+    // estaba, no se crea otra) o 'equivalente' (la misma persona con su otro documento, DNI↔RUC 10: hay que confirmar).
+    async createPartnerDetallado(
+        data: { name: string; vat: string; phone?: string; email?: string },
+        opciones: { confirmarEquivalente?: boolean } = {}
+    ): Promise<
+        | { tipo: 'creado'; partner: ClienteBuscado }
+        | { tipo: 'existente'; partner: ClienteBuscado }
+        | { tipo: 'equivalente'; partner: ClienteBuscado; mensaje: string }
+    > {
         try {
             const response = await apiFetch('/api/odoo/create_partner', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data),
+                body: JSON.stringify({ ...data, confirmarEquivalente: opciones.confirmarEquivalente || undefined }),
             });
             const result = await response.json();
-            if (!result.success) throw new Error(result.error);
-            // El route devuelve el campo como 'id' (ver create_partner/route.ts
-            // línea 37: `{ success: true, id: newPartnerId, name }`) — leer
-            // 'result.partnerId' acá devolvía siempre undefined, así que todo
-            // cliente nuevo creado desde la cotización quedaba con id
-            // indefinido (rompía cualquier uso posterior de selectedClient.id).
-            return { id: result.id, name: data.name };
+            if (!result.success) {
+                if (result.code === 'documento_equivalente' && result.existing) {
+                    return { tipo: 'equivalente', partner: normalizarCliente(result.existing), mensaje: result.error };
+                }
+                throw new Error(result.error);
+            }
+            // El route devuelve el campo como 'id' (ver create_partner/route.ts) — leer 'result.partnerId' acá
+            // devolvía siempre undefined y todo cliente nuevo quedaba con id indefinido.
+            if (result.existed && result.partner) {
+                return { tipo: 'existente', partner: normalizarCliente(result.partner) };
+            }
+            return {
+                tipo: 'creado',
+                partner: { id: result.id, name: data.name, vat: data.vat, phone: data.phone, email: data.email },
+            };
         } catch (error) {
             console.error("Error creating partner:", error);
             throw error;
+        }
+    },
+
+    // 1b-compat. Misma operación para quien solo necesita {id, name} (modales de reserva/cotización y confirmación de
+    // la cotización): reutiliza la ficha si el documento ya existe y, si es la misma persona con su otro documento,
+    // corta con un mensaje claro en vez de abrir una segunda ficha.
+    async createPartner(data: { name: string; vat: string; phone?: string; email?: string }): Promise<{ id: number; name: string }> {
+        const resultado = await this.createPartnerDetallado(data);
+        if (resultado.tipo === 'equivalente') {
+            throw new Error(`${resultado.mensaje} Búscalo por su nombre o documento y selecciónalo.`);
+        }
+        return { id: resultado.partner.id, name: resultado.partner.name };
+    },
+
+    // 1b-bis. ¿Ya existe un cliente con este documento? (verificación en vivo del formulario de cliente nuevo)
+    async checkPartnerDocument(
+        vat: string,
+        excludeId?: number
+    ): Promise<{ exact: ClienteBuscado | null; equivalent: ClienteBuscado | null }> {
+        try {
+            const response = await apiFetch('/api/odoo/check_partner_document', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ vat, excludeId }),
+            });
+            const result = await response.json();
+            if (!result.success) throw new Error(result.error);
+            return {
+                exact: result.exact ? normalizarCliente(result.exact) : null,
+                equivalent: result.equivalent ? normalizarCliente(result.equivalent) : null,
+            };
+        } catch (error) {
+            // Es una ayuda: si falla, el servidor igual evita el duplicado al guardar.
+            console.warn('No se pudo verificar el documento:', error);
+            return { exact: null, equivalent: null };
         }
     },
 

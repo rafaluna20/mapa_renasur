@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useState, useMemo, useEffect } from 'react';
+import { use, useState, useMemo, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, Calculator, Calendar, Tag, Table, Loader2, User, Search, Check, Plus, X, Save, Send, CheckCircle, Map, Pencil } from 'lucide-react';
 import { lotsData, Lot } from '@/app/data/lotsData';
@@ -16,6 +16,7 @@ import { LocalQuote } from '@/app/types/localQuote';
 import { useDniRucLookup } from '@/app/hooks/useDniRucLookup';
 import { STAFF_SESSION_EXPIRED_EVENT } from '@/app/lib/apiFetch';
 import { ACCENT_CARDS, ACCENT_CARD_BASE } from '@/app/lib/designTokens';
+import { clasificarCoincidencia, esDocumentoValido, soloDigitos } from '@/app/lib/documentoCliente';
 
 interface QuotePageProps {
     params: Promise<{ lotId: string }>;
@@ -33,6 +34,8 @@ interface ClientSearchResult {
     mobile?: string;
     vat?: string;
     street?: string;
+    /** Ya tiene contrato en Odoo (informativo: ayuda a reconocer al titular correcto). */
+    tieneContrato?: boolean;
 }
 
 // Pago adicional de la cuota inicial (2do, 3er, ... N pago). El primer
@@ -243,6 +246,14 @@ export default function QuotePage({ params }: QuotePageProps) {
     const [showCreateClient, setShowCreateClient] = useState(false);
     const [isCreatingClient, setIsCreatingClient] = useState(false);
     const [newClientData, setNewClientData] = useState({ name: '', vat: '', phone: '', email: '' });
+    // Un mismo documento = un solo cliente. Mientras se escribe el DNI/RUC se consulta si ya existe (`exact`) o si la
+    // misma persona ya tiene ficha con su otro documento, DNI↔RUC 10 (`equivalent`).
+    const [docCheck, setDocCheck] = useState<{ exact: ClientSearchResult | null; equivalent: ClientSearchResult | null } | null>(null);
+    const [isCheckingDoc, setIsCheckingDoc] = useState(false);
+    const [confirmarEquivalente, setConfirmarEquivalente] = useState(false);
+    const [avisoCliente, setAvisoCliente] = useState<string | null>(null);
+    // Candado síncrono contra doble clic (el estado de React se actualiza tarde y dejaba pasar un segundo envío).
+    const creandoClienteRef = useRef(false);
 
     // Edición de un cliente YA seleccionado (ej. el teléfono/correo quedó
     // desactualizado en Odoo) — antes no existía ningún camino para
@@ -351,6 +362,7 @@ export default function QuotePage({ params }: QuotePageProps) {
                     mobile: r.mobile ? String(r.mobile) : undefined,
                     vat: r.vat ? String(r.vat) : undefined,
                     street: r.street ? String(r.street) : undefined,
+                    tieneContrato: r.tieneContrato === true ? true : undefined,
                 })));
             } catch (error) {
                 console.error('Error searching partners:', error);
@@ -363,7 +375,31 @@ export default function QuotePage({ params }: QuotePageProps) {
         return () => clearTimeout(timer);
     }, [searchTerm, selectedClient]);
 
+    // Verificación en vivo del documento del cliente nuevo (RUC/DNI completo → ¿ya existe?).
+    useEffect(() => {
+        const doc = soloDigitos(newClientData.vat);
+        setConfirmarEquivalente(false);
+        if (!showCreateClient || !esDocumentoValido(doc)) {
+            setDocCheck(null);
+            setIsCheckingDoc(false);
+            return;
+        }
+        let vigente = true;
+        setIsCheckingDoc(true);
+        const timer = setTimeout(async () => {
+            const r = await odooService.checkPartnerDocument(doc);
+            if (!vigente) return;
+            setDocCheck(r);
+            setIsCheckingDoc(false);
+        }, 350);
+        return () => {
+            vigente = false;
+            clearTimeout(timer);
+        };
+    }, [newClientData.vat, showCreateClient]);
+
     const selectClient = (client: ClientSearchResult) => {
+        setAvisoCliente(null);
         setSelectedClient(client);
         setSearchTerm(client.name);
         setSearchResults([]);
@@ -407,18 +443,28 @@ export default function QuotePage({ params }: QuotePageProps) {
             return;
         }
 
+        if (creandoClienteRef.current) return;
+        creandoClienteRef.current = true;
         setIsCreatingClient(true);
         try {
-            const newClient = await odooService.createPartner({
-                name: trimmedName,
-                vat,
-                phone,
-                email
-            });
+            const resultado = await odooService.createPartnerDetallado(
+                { name: trimmedName, vat, phone, email },
+                { confirmarEquivalente }
+            );
 
-            selectClient(newClient);
+            if (resultado.tipo === 'equivalente') {
+                // La misma persona ya tiene ficha con su otro documento: se muestra y el vendedor decide.
+                setDocCheck({ exact: null, equivalent: resultado.partner });
+                return;
+            }
+
+            selectClient(resultado.partner);
+            if (resultado.tipo === 'existente') {
+                setAvisoCliente('Este cliente ya estaba registrado: se seleccionó su ficha existente (no se creó otra).');
+            }
             setShowCreateClient(false);
             setNewClientData({ name: '', vat: '', phone: '', email: '' });
+            setDocCheck(null);
         } catch (error) {
             console.error('Error creating client:', error);
             const message = error instanceof Error ? error.message : '';
@@ -430,6 +476,7 @@ export default function QuotePage({ params }: QuotePageProps) {
                 alert(message || 'Error al crear el cliente. Intente nuevamente.');
             }
         } finally {
+            creandoClienteRef.current = false;
             setIsCreatingClient(false);
         }
     };
@@ -991,6 +1038,10 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                     </div>
                                                 )}
 
+                                                {avisoCliente && selectedClient && (
+                                                    <p className="mt-1.5 text-[11px] font-medium text-emerald-700">{avisoCliente}</p>
+                                                )}
+
                                                 {/* Dropdown Results */}
                                                 {searchResults.length > 0 ? (
                                                     <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-slate-300 rounded-xl shadow-2xl z-50 max-h-60 overflow-y-auto ring-1 ring-black/5">
@@ -1016,7 +1067,12 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                                         {client.name.charAt(0).toUpperCase()}
                                                                     </div>
                                                                     <div className="min-w-0">
-                                                                        <p className="font-bold text-slate-700 truncate">{client.name}</p>
+                                                                        <p className="font-bold text-slate-700 truncate">
+                                                                            {client.name}
+                                                                            {client.tieneContrato && (
+                                                                                <span className="ml-2 align-middle rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">Con contrato</span>
+                                                                            )}
+                                                                        </p>
                                                                         {detalles && (
                                                                             <p className="text-[11px] text-slate-400 truncate">{detalles}</p>
                                                                         )}
@@ -1024,16 +1080,22 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                                 </button>
                                                             );
                                                         })}
-                                                        {/* Always show option to create at the bottom of valid results too */}
-                                                        <button
-                                                            onClick={() => setShowCreateClient(true)}
-                                                            className="w-full text-left px-4 py-3 text-sm bg-slate-50 text-blue-700 hover:bg-blue-100 transition-colors flex items-center gap-2 border-t border-slate-200 font-medium"
-                                                        >
-                                                            <div className="w-8 h-8 flex items-center justify-center">
-                                                                <Plus size={16} />
-                                                            </div>
-                                                            Crear Nuevo Cliente
-                                                        </button>
+                                                        {/* Crear: no se ofrece si lo escrito es un documento que ya tiene ficha */}
+                                                        {esDocumentoValido(soloDigitos(searchTerm)) && searchResults.some(c => clasificarCoincidencia(c.vat, searchTerm) === 'exacta') ? (
+                                                            <p className="px-4 py-3 text-xs text-emerald-700 bg-emerald-50 border-t border-slate-200 font-medium">
+                                                                Este documento ya está registrado: selecciona al cliente de arriba.
+                                                            </p>
+                                                        ) : (
+                                                            <button
+                                                                onClick={() => setShowCreateClient(true)}
+                                                                className="w-full text-left px-4 py-3 text-sm bg-slate-50 text-blue-700 hover:bg-blue-100 transition-colors flex items-center gap-2 border-t border-slate-200 font-medium"
+                                                            >
+                                                                <div className="w-8 h-8 flex items-center justify-center">
+                                                                    <Plus size={16} />
+                                                                </div>
+                                                                Crear Nuevo Cliente
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 ) : searchTerm.length > 0 && !isSearching && !selectedClient && (
                                                     <div className="absolute left-0 right-0 top-full mt-2 bg-white border border-slate-300 rounded-xl shadow-2xl z-50 p-4 text-center">
@@ -1095,6 +1157,57 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                         {!isLookingUpDoc && docLookup && (
                                                             <p className="text-[11px] text-emerald-600 mt-0.5">✓ {docLookup.name}</p>
                                                         )}
+                                                        {isCheckingDoc && (
+                                                            <p className="text-[11px] text-slate-400 mt-0.5">Verificando si ya está registrado...</p>
+                                                        )}
+                                                        {!isCheckingDoc && docCheck?.exact && (
+                                                            <div className="mt-1.5 rounded border border-amber-300 bg-amber-50 p-2">
+                                                                <p className="text-[11px] font-bold text-amber-800">Este documento ya está registrado:</p>
+                                                                <p className="text-xs text-amber-900">{docCheck.exact.name}</p>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        selectClient(docCheck.exact!);
+                                                                        setShowCreateClient(false);
+                                                                        setNewClientData({ name: '', vat: '', phone: '', email: '' });
+                                                                        setDocCheck(null);
+                                                                    }}
+                                                                    className="mt-1.5 w-full rounded bg-amber-600 py-1.5 text-xs font-bold text-white hover:bg-amber-700"
+                                                                >
+                                                                    Usar este cliente
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                        {!isCheckingDoc && !docCheck?.exact && docCheck?.equivalent && (
+                                                            <div className="mt-1.5 rounded border border-amber-300 bg-amber-50 p-2">
+                                                                <p className="text-[11px] font-bold text-amber-800">
+                                                                    Esta persona ya tiene otra ficha con su {soloDigitos(newClientData.vat).length === 8 ? 'RUC' : 'DNI'}:
+                                                                </p>
+                                                                <p className="text-xs text-amber-900">{docCheck.equivalent.name} ({docCheck.equivalent.vat})</p>
+                                                                <div className="mt-1.5 flex gap-2">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            selectClient(docCheck.equivalent!);
+                                                                            setShowCreateClient(false);
+                                                                            setNewClientData({ name: '', vat: '', phone: '', email: '' });
+                                                                            setDocCheck(null);
+                                                                        }}
+                                                                        className="flex-1 rounded bg-amber-600 py-1.5 text-xs font-bold text-white hover:bg-amber-700"
+                                                                    >
+                                                                        Usar esa ficha
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setConfirmarEquivalente(true)}
+                                                                        disabled={confirmarEquivalente}
+                                                                        className="flex-1 rounded border border-amber-400 bg-white py-1.5 text-xs font-bold text-amber-800 hover:bg-amber-100 disabled:opacity-60"
+                                                                    >
+                                                                        {confirmarEquivalente ? 'Se creará aparte' : 'Crear aparte'}
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                     <input
                                                         type="text"
@@ -1121,7 +1234,7 @@ export default function QuotePage({ params }: QuotePageProps) {
                                                     </div>
                                                     <button
                                                         onClick={handleCreateClient}
-                                                        disabled={!newClientData.name || !newClientData.vat || isCreatingClient}
+                                                        disabled={!newClientData.name || !newClientData.vat || isCreatingClient || isCheckingDoc || !!docCheck?.exact || (!!docCheck?.equivalent && !confirmarEquivalente)}
                                                         className="w-full py-2 bg-slate-800 text-white rounded text-xs font-bold hover:bg-black transition-colors disabled:opacity-50"
                                                     >
                                                         {isCreatingClient ? 'Guardando...' : 'Guardar Cliente'}

@@ -182,7 +182,7 @@ export default function ReservationModal({ lot, onClose, onSuccess }: Reservatio
             setShowCreateClient(false);
         } catch (error) {
             console.error(error);
-            alert('Error al crear el cliente. Verifique los datos.');
+            alert(error instanceof Error && error.message ? error.message : 'Error al crear el cliente. Verifique los datos.');
         } finally {
             setIsCreatingClient(false);
         }

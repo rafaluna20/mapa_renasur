@@ -84,7 +84,7 @@ setSearchResults(formatted);
             setShowCreateClient(false);
         } catch (error) {
             console.error(error);
-            alert('Error al crear el cliente.');
+            alert(error instanceof Error && error.message ? error.message : 'Error al crear el cliente.');
         } finally {
             setIsCreatingClient(false);
         }
