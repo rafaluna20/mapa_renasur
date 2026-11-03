@@ -64,7 +64,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
     // cualquier staff, no solo administradores. A diferencia de planoState,
     // no hay polling: plan_pro lo genera y responde en la misma request, así
     // que solo hace falta saber si está en curso o si falló.
-    const [resumenState, setResumenState] = useState<{ status: 'idle' | 'generando' | 'error'; error?: string; colindanciasSinConfirmar?: number }>({ status: 'idle' });
+    const [resumenState, setResumenState] = useState<{ status: 'idle' | 'generando' | 'error'; error?: string; colindanciasSinConfirmar?: number; colindanciasInconsistencias?: number; colindanciasDetalle?: string[] }>({ status: 'idle' });
     const [showStatsModal, setShowStatsModal] = useState(false);
 
     // 🎯 ENTERPRISE SOLUTION: Use refs to track current lot and prevent stale updates
@@ -289,6 +289,15 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
             // esos lados antes de entregar el documento — no es un dato
             // verificado, es un placeholder.
             const sinConfirmar = parseInt(res.headers.get('X-Colindancias-Sin-Confirmar') || '0', 10) || 0;
+            const inconsistencias = parseInt(res.headers.get('X-Colindancias-Inconsistencias') || '0', 10) || 0;
+            // Detalle legible de cada lado a revisar (JSON codificado en el header).
+            let detalle: string[] = [];
+            try {
+                const crudo = res.headers.get('X-Colindancias-Detalle');
+                if (crudo) detalle = JSON.parse(decodeURIComponent(crudo));
+            } catch {
+                detalle = [];
+            }
             const blob = await res.blob();
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -298,7 +307,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            setResumenState({ status: 'idle', colindanciasSinConfirmar: sinConfirmar });
+            setResumenState({ status: 'idle', colindanciasSinConfirmar: sinConfirmar, colindanciasInconsistencias: inconsistencias, colindanciasDetalle: detalle });
         } catch (error) {
             setResumenState({ status: 'error', error: error instanceof Error ? error.message : 'Error de red' });
         }
@@ -591,14 +600,23 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                                             <span>{resumenState.error}</span>
                                         </div>
                                     )}
-                                    {resumenState.status === 'idle' && (resumenState.colindanciasSinConfirmar ?? 0) > 0 && (
+                                    {resumenState.status === 'idle' &&
+                                        ((resumenState.colindanciasSinConfirmar ?? 0) > 0 || (resumenState.colindanciasInconsistencias ?? 0) > 0) && (
                                         <div className="flex items-start gap-2 text-amber-600 dark:text-amber-400 text-xs mt-2">
                                             <AlertTriangle size={14} className="shrink-0 mt-0.5" />
-                                            <span>
-                                                {resumenState.colindanciasSinConfirmar} lado{resumenState.colindanciasSinConfirmar === 1 ? '' : 's'} del documento
-                                                {resumenState.colindanciasSinConfirmar === 1 ? ' quedó' : ' quedaron'} como &quot;Calle&quot; genérica (sin
-                                                una calle real digitalizada que coincida) — revisá antes de entregarlo.
-                                            </span>
+                                            <div>
+                                                <p>
+                                                    Revisá antes de entregarlo: hay lados del documento que no se pudieron confirmar
+                                                    (aparecen como &quot;Calle&quot; genérica, sin ser un dato verificado).
+                                                </p>
+                                                {(resumenState.colindanciasDetalle?.length ?? 0) > 0 && (
+                                                    <ul className="list-disc pl-4 mt-1 space-y-0.5">
+                                                        {resumenState.colindanciasDetalle!.map((m, i) => (
+                                                            <li key={i}>{m}</li>
+                                                        ))}
+                                                    </ul>
+                                                )}
+                                            </div>
                                         </div>
                                     )}
                                 </div>

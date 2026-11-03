@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { fetchOdoo, fetchElementosUrbanos, fetchProyectos, OdooProduct, Proyecto } from '@/app/services/odooService';
 import { lotsData, Lot } from '@/app/data/lotsData';
 import { mergeLotsData, normalizeCode } from '@/app/utils/dataMerger';
-import { derivarColindanciasYDimensiones } from '@/app/utils/colindanciasUtils';
+import { derivarColindanciasYDimensiones, type AdvertenciaColindancia } from '@/app/utils/colindanciasUtils';
 import { calculateCentroid, calculateDistance, calculateLotMeasurements } from '@/app/utils/geometryUtils';
 import geometriesEnrichedRaw from '@/app/data/geometries-enriched.json';
 import { mergeElementosUrbanos } from '@/app/data/elementosUrbanos';
@@ -127,7 +127,10 @@ function mapEstadoParaPlanoPro(xStatu: string): 'libre' | 'separado' | 'vendido'
 }
 
 export type PlanoPayloadResult =
-  | { ok: true; payload: Record<string, unknown> }
+  // `advertencias`: cosas que el staff debe revisar antes de entregar el
+  // documento (lados sin clasificar, inconsistencias del motor de
+  // colindancias). No viajan a plan_pro ni bloquean nada.
+  | { ok: true; payload: Record<string, unknown>; advertencias: AdvertenciaColindancia[] }
   | { ok: false; response: NextResponse };
 
 /**
@@ -187,7 +190,7 @@ export async function construirPayloadPlano(defaultCode: string): Promise<PlanoP
   console.log('[planoPayloadBuilder][DIAG] elementosUrbanos desde Odoo:', JSON.stringify(
     elementosUrbanos.map((e) => ({ codigo: e.codigo, tipo: e.tipo, colorBorde: e.colorBorde, colorRelleno: e.colorRelleno, mostrarEtiqueta: e.mostrarEtiqueta }))
   ));
-  const { colindancias, dimensiones } = derivarColindanciasYDimensiones(lote, allLots, elementosUrbanos);
+  const { colindancias, dimensiones, advertencias } = derivarColindanciasYDimensiones(lote, allLots, elementosUrbanos);
 
   // 3. Contexto de entorno: todos los lotes cuyo centroide cae dentro de un
   //    radio fijo del centroide del lote objetivo, para dibujar el entorno
@@ -281,7 +284,7 @@ export async function construirPayloadPlano(defaultCode: string): Promise<PlanoP
       : undefined,
   };
 
-  return { ok: true, payload };
+  return { ok: true, payload, advertencias };
 }
 
 /**
@@ -366,7 +369,7 @@ export async function construirPayloadPlanoMatriz(codigoElemento: string): Promi
   // búsqueda de colindancias por coincidencia de arista.
   const elementosUrbanosSinMatriz = elementosUrbanos.filter((e) => e.codigo !== matriz.codigo);
 
-  const { colindancias, dimensiones } = derivarColindanciasYDimensiones(loteFalso, allLots, elementosUrbanosSinMatriz);
+  const { colindancias, dimensiones, advertencias } = derivarColindanciasYDimensiones(loteFalso, allLots, elementosUrbanosSinMatriz);
 
   const centroidMatriz = calculateCentroid(matriz.points);
   const elementosContexto = allLots
@@ -437,5 +440,5 @@ export async function construirPayloadPlanoMatriz(codigoElemento: string): Promi
       : undefined,
   };
 
-  return { ok: true, payload };
+  return { ok: true, payload, advertencias };
 }
