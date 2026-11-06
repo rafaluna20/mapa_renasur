@@ -1,51 +1,22 @@
 import { NextResponse } from 'next/server';
-import { fetchOdoo } from '@/app/services/odooService';
-import { requireStaffSession } from '@/app/lib/staffAuth';
-import { isModelAllowed } from '@/app/lib/odooAllowlist';
 
 /**
- * POST /api/odoo/call
- * Generic method call endpoint for Odoo models
+ * RETIRADA (P3 multiproyecto, 2026-11-06).
  *
- * Antes esta ruta reenviaba { model, method, args } tal cual a Odoo con la
- * cuenta de servicio, sin ninguna verificación de quién llamaba ni de qué
- * modelo/método se estaba invocando. Ahora exige sesión de staff y restringe
- * el modelo a una allowlist explícita.
+ * Reenviaba { model, method, args } a Odoo con la cuenta de servicio y permitía CUALQUIER método (incluso write/unlink)
+ * sobre modelos como account.move o res.partner.
+ *
+ * Ningún código de la app ni los flujos de n8n del repositorio la usaban. Se retira en vez de acotarla por proyecto:
+ * una ruta genérica que reenvía el modelo y el método tal cual no se puede proteger por proyecto con garantías.
+ * Si algún día hace falta algo equivalente, crear una ruta específica con su guardia (ver app/lib/accesoProyectos.ts)
+ * y registrarla en app/lib/rutasAcceso.ts.
+ *
+ * Reversa: restaurar este archivo desde el commit anterior de git.
  */
-export async function POST(request: Request) {
-    const auth = await requireStaffSession(request);
-    if (auth.response) return auth.response;
+const RESPUESTA = () =>
+  NextResponse.json(
+    { success: false, error: 'Esta ruta fue retirada.' },
+    { status: 410 },
+  );
 
-    try {
-        const { model, method, args, kwargs } = await request.json();
-
-        if (!model || !method) {
-            return NextResponse.json(
-                { error: 'model and method are required' },
-                { status: 400 }
-            );
-        }
-
-        if (!isModelAllowed(model)) {
-            return NextResponse.json(
-                { error: `Model '${model}' not allowed for generic call` },
-                { status: 403 }
-            );
-        }
-
-        const result = await fetchOdoo(
-            model,
-            method,
-            args || [],
-            kwargs || {}
-        );
-
-        return NextResponse.json({ result });
-    } catch (error: unknown) {
-        console.error('[call] Error:', error);
-        return NextResponse.json(
-            { error: error instanceof Error ? error.message : 'Failed to call method' },
-            { status: 500 }
-        );
-    }
-}
+export const POST = RESPUESTA;

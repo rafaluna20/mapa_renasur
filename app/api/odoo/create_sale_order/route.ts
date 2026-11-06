@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { fetchOdoo } from '@/app/services/odooService';
 import { requireStaffSession } from '@/app/lib/staffAuth';
+import { guardiaLote } from '@/app/lib/accesoProyectos';
 
 export async function POST(request: Request) {
     const auth = await requireStaffSession(request);
@@ -8,6 +9,10 @@ export async function POST(request: Request) {
 
     try {
         const { partnerId, defaultCode, price, notes, userId, quoteDetails } = await request.json();
+
+        // P3: el lote debe ser de un proyecto al que el usuario tiene acceso (ver app/lib/accesoProyectos.ts).
+        const guardia = await guardiaLote(auth.session, { codigo: defaultCode }, '/api/odoo/create_sale_order');
+        if (!guardia.ok) return guardia.response;
 
         if (!partnerId || !defaultCode || !price) {
             const missing = [];

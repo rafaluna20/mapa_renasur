@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { fetchOdoo } from '@/app/services/odooService';
 import { requireStaffSession } from '@/app/lib/staffAuth';
+import { guardiaLote } from '@/app/lib/accesoProyectos';
 
 /**
  * Find the latest DRAFT sale order for a specific product (lot), or a specific order by ID
@@ -11,6 +12,10 @@ export async function POST(request: Request) {
 
     try {
         const { defaultCode, userId, orderId } = await request.json();
+
+        // P3: el lote debe ser de un proyecto al que el usuario tiene acceso (ver app/lib/accesoProyectos.ts).
+        const guardia = await guardiaLote(auth.session, { codigo: defaultCode }, '/api/odoo/find_draft_order');
+        if (!guardia.ok) return guardia.response;
 
         if (!defaultCode && !orderId) {
             return NextResponse.json(

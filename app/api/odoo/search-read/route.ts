@@ -1,46 +1,21 @@
 import { NextResponse } from 'next/server';
-import { fetchOdoo } from '@/app/services/odooService';
-import { requireStaffSession } from '@/app/lib/staffAuth';
-import { isModelAllowed } from '@/app/lib/odooAllowlist';
 
 /**
- * POST /api/odoo/search-read
- * Generic search_read endpoint for Odoo models
+ * RETIRADA (P3 multiproyecto, 2026-11-06).
+ *
+ * Buscaba en los modelos permitidos sin limitar por proyecto.
+ *
+ * Ningún código de la app ni los flujos de n8n del repositorio la usaban. Se retira en vez de acotarla por proyecto:
+ * una ruta genérica que reenvía el modelo y el método tal cual no se puede proteger por proyecto con garantías.
+ * Si algún día hace falta algo equivalente, crear una ruta específica con su guardia (ver app/lib/accesoProyectos.ts)
+ * y registrarla en app/lib/rutasAcceso.ts.
+ *
+ * Reversa: restaurar este archivo desde el commit anterior de git.
  */
-export async function POST(request: Request) {
-    const auth = await requireStaffSession(request);
-    if (auth.response) return auth.response;
+const RESPUESTA = () =>
+  NextResponse.json(
+    { success: false, error: 'Esta ruta fue retirada.' },
+    { status: 410 },
+  );
 
-    try {
-        const { model, domain, fields } = await request.json();
-
-        if (!model || !domain) {
-            return NextResponse.json(
-                { error: 'model and domain are required' },
-                { status: 400 }
-            );
-        }
-
-        if (!isModelAllowed(model)) {
-            return NextResponse.json(
-                { error: `Model '${model}' not allowed for generic search-read` },
-                { status: 403 }
-            );
-        }
-
-        const records = await fetchOdoo(
-            model,
-            'search_read',
-            [domain],
-            { fields: fields || [] }
-        );
-
-        return NextResponse.json({ records });
-    } catch (error: unknown) {
-        console.error('[search-read] Error:', error);
-        return NextResponse.json(
-            { error: error instanceof Error ? error.message : 'Failed to search records' },
-            { status: 500 }
-        );
-    }
-}
+export const POST = RESPUESTA;

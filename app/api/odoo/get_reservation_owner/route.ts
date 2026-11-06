@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { fetchOdoo } from '@/app/services/odooService';
 import { requireStaffSession } from '@/app/lib/staffAuth';
+import { guardiaLote } from '@/app/lib/accesoProyectos';
 
 /**
  * Get the salesperson (user_id) who holds the reservation for a lot
@@ -11,6 +12,10 @@ export async function POST(request: Request) {
 
     try {
         const { defaultCode, productId } = await request.json();
+
+        // P3: el lote debe ser de un proyecto al que el usuario tiene acceso (ver app/lib/accesoProyectos.ts).
+        const guardia = await guardiaLote(auth.session, { codigo: defaultCode, productId }, '/api/odoo/get_reservation_owner');
+        if (!guardia.ok) return guardia.response;
 
         if (!defaultCode && !productId) {
             return NextResponse.json({ success: false, error: 'Missing identifier' }, { status: 400 });

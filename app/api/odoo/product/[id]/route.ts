@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchOdoo } from '@/app/services/odooService';
+import { requireStaffSession } from '@/app/lib/staffAuth';
+import { guardiaLote } from '@/app/lib/accesoProyectos';
 
 export async function GET(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    // P3: antes esta ruta no pedía sesión y devolvía precio y estado de cualquier lote. La usa la pantalla de cotización
+    // (personal interno), así que exige sesión de staff y que el lote sea de un proyecto al que tiene acceso.
+    const auth = await requireStaffSession(request);
+    if (auth.response) return auth.response;
+
     const { id } = await params;
 
     // Si el ID es local (formato local-XXXX), intentamos buscar por el ID numérico
@@ -25,6 +32,13 @@ export async function GET(
     }
 
     try {
+        const guardia = await guardiaLote(
+            auth.session,
+            id.startsWith('fb-') ? { codigo: id.replace('fb-', '') } : { templateId: parseInt(idStr) },
+            '/api/odoo/product/[id]',
+        );
+        if (!guardia.ok) return guardia.response;
+
         const products = await fetchOdoo(
             "product.template",
             "search_read",

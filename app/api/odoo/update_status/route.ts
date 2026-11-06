@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchOdoo } from '@/app/services/odooService';
 import { requireStaffSession } from '@/app/lib/staffAuth';
+import { guardiaLote } from '@/app/lib/accesoProyectos';
 
 export async function POST(request: NextRequest) {
     const auth = await requireStaffSession(request);
@@ -9,6 +10,10 @@ export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
         const { productId, newStatus, clientName } = body;
+
+        // P3: el lote debe ser de un proyecto al que el usuario tiene acceso (ver app/lib/accesoProyectos.ts).
+        const guardia = await guardiaLote(auth.session, { templateId: productId }, '/api/odoo/update_status');
+        if (!guardia.ok) return guardia.response;
 
         if (!productId || !newStatus) {
             return NextResponse.json({ success: false, error: "Missing productId or newStatus" }, { status: 400 });

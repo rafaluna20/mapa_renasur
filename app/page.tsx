@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { fetchOdoo, fetchElementosUrbanos, fetchProyectos, OdooProduct } from '@/app/services/odooService';
 import { leerLotesPaginados } from '@/app/lib/lotesPaginados';
+import { aplicarAcceso, idProyecto, obtenerAcceso } from '@/app/lib/accesoProyectos';
 import { mergeElementosUrbanos } from '@/app/data/elementosUrbanos';
 import { STAFF_COOKIE_NAME, verifyStaffSessionToken } from '@/app/lib/staffAuth';
 import HomeClient from '@/app/components/HomeClient';
@@ -87,23 +88,41 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ r
   // pasa por la caché/fusión de lotes de arriba. Si falla, no debe tumbar
   // la carga del mapa — fetchElementosUrbanos ya devuelve [] en ese caso.
   const elementosUrbanosOdoo = await fetchElementosUrbanos();
-  const elementosUrbanos = mergeElementosUrbanos(elementosUrbanosOdoo);
+  const elementosUrbanosTodos = mergeElementosUrbanos(elementosUrbanosOdoo);
 
   // Proyectos (ubicación + zona UTM real por proyecto): mapa_renasur ya no
   // asume que todo cae en zona 18S — ver LeafletMap.tsx. Si el módulo
   // proyecto_inmobiliario todavía no está desplegado, fetchProyectos
   // devuelve [] y LeafletMap usa 18S por defecto (mismo comportamiento de
   // antes de este cambio).
-  const proyectos = await fetchProyectos();
+  const proyectosTodos = await fetchProyectos();
 
   // Plazo de las separaciones (módulo Odoo v3.20+). Consulta aislada: si el
   // módulo aún no está desplegado devuelve vacío y el mapa queda como antes.
-  const separaciones = await obtenerSeparaciones(forceRefresh);
+  const separacionesTodas = await obtenerSeparaciones(forceRefresh);
+
+  // P3: filtro por proyecto EN EL SERVIDOR, antes de enviar nada al navegador. Antes, cualquier vendedor recibía todos
+  // los proyectos (con precios y nombres de compradores) y el selector de proyecto solo ocultaba cosas en pantalla.
+  // Según ACCESO_PROYECTOS_MODO: «observar» (por defecto) deja pasar todo y registra lo que habría ocultado;
+  // «bloquear» aplica el filtro. Ver app/lib/accesoProyectos.ts.
+  const acceso = await obtenerAcceso(session);
+  const contexto = { uid: session.odooUid };
+  const productsVisibles = aplicarAcceso(products, acceso, (p) => idProyecto(p.x_proyecto_id), { ...contexto, recurso: 'lotes' });
+  const elementosUrbanos = aplicarAcceso(elementosUrbanosTodos, acceso, (e) => e.proyectoId, { ...contexto, recurso: 'elementos' });
+  const proyectos = aplicarAcceso(proyectosTodos, acceso, (p) => p.id, { ...contexto, recurso: 'proyectos' });
+  const idsVisibles = new Set(productsVisibles.map((p) => String(p.id)));
+  const separaciones = productsVisibles.length === products.length
+    ? separacionesTodas
+    : {
+        ...separacionesTodas,
+        porLote: Object.fromEntries(Object.entries(separacionesTodas.porLote).filter(([id]) => idsVisibles.has(id))),
+        reservasAdmin: separacionesTodas.reservasAdmin.filter((id) => idsVisibles.has(String(id))),
+      };
 
   return (
     <main>
       <HomeClient
-        odooProducts={products}
+        odooProducts={productsVisibles}
         hasConnectionError={hasConnectionError}
         lotesTruncados={lotesTruncados}
         esAdmin={session.isSystem === true}

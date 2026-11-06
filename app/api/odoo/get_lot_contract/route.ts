@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireStaffSession } from '@/app/lib/staffAuth';
+import { guardiaLote } from '@/app/lib/accesoProyectos';
 import { fetchLotContractInfo } from '@/app/lib/lotContract';
 
 /**
@@ -13,6 +14,10 @@ export async function POST(request: Request) {
 
     try {
         const { productCode } = await request.json();
+
+        // P3: el lote debe ser de un proyecto al que el usuario tiene acceso (ver app/lib/accesoProyectos.ts).
+        const guardia = await guardiaLote(auth.session, { codigo: productCode }, '/api/odoo/get_lot_contract');
+        if (!guardia.ok) return guardia.response;
         if (!productCode || typeof productCode !== 'string') {
             return NextResponse.json({ success: false, error: 'Missing productCode' }, { status: 400 });
         }

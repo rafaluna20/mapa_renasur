@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { fetchOdoo } from '@/app/services/odooService';
 import { requireStaffSession } from '@/app/lib/staffAuth';
+import { guardiaLote } from '@/app/lib/accesoProyectos';
 
 /**
  * Search for a product by default_code and return its product.product ID
@@ -11,6 +12,10 @@ export async function POST(request: Request) {
 
     try {
         const { defaultCode } = await request.json();
+
+        // P3: el lote debe ser de un proyecto al que el usuario tiene acceso (ver app/lib/accesoProyectos.ts).
+        const guardia = await guardiaLote(auth.session, { codigo: defaultCode }, '/api/odoo/search_product_by_code');
+        if (!guardia.ok) return guardia.response;
 
         if (!defaultCode) {
             return NextResponse.json(
