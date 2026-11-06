@@ -57,7 +57,8 @@ export async function getPublicLots(): Promise<OdooProduct[]> {
     // Paginado y sin lotes de proyectos desactivados (la landing pública no debe mostrarlos).
     const { registros, truncado } = await leerLotesPaginados<OdooProduct>(
         fetchOdooPublic,
-        [['active', '=', true], ['default_code', '!=', false]],
+        // «no vender» no se publica (P4: los lotes que solo tenían geometría pasan a ser productos en ese estado).
+        [['active', '=', true], ['default_code', '!=', false], ['x_statu', '!=', 'no vender']],
         PUBLIC_PRODUCT_FIELDS,
         { context: { lang: 'es_PE' } },
     );

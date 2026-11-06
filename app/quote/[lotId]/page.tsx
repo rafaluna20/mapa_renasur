@@ -7,7 +7,7 @@ import { lotsData, Lot } from '@/app/data/lotsData';
 import { financeService, QuoteCalculations } from '@/app/services/financeService';
 import Header from '@/app/components/UI/Header';
 import { exportQuoteToPdf } from '@/app/utils/quotePdfExporter';
-import geometriesJson from '@/app/data/geometries.json';
+import { geometriasEstaticas } from '@/app/lib/geometriaEstatica';
 import { syncAreaInLotName } from '@/app/utils/dataMerger';
 import { useAuth } from '@/app/context/AuthContext';
 import { odooService } from '@/app/services/odooService';
@@ -90,7 +90,7 @@ export default function QuotePage({ params }: QuotePageProps) {
                 if (data.success && data.product) {
                     const p = data.product;
                     const code = (p.default_code || '').toString();
-                    const geometry = (geometriesJson as unknown as Record<string, { coordinates: [number, number][], measurements: { area: number } }>)[code];
+                    const geometry = geometriasEstaticas()[code];
                     const resolvedArea = p.x_area || (geometry?.measurements?.area || 0);
 
                     setDynamicLot({

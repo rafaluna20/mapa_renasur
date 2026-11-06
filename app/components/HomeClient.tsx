@@ -9,25 +9,13 @@ import { OdooProduct, Proyecto } from '@/app/services/odooService';
 import Header from '@/app/components/UI/Header';
 import LotCard from '@/app/components/UI/LotCard';
 import { lotsData, Lot } from '@/app/data/lotsData';
-import geometriesEnrichedRaw from '@/app/data/geometries-enriched.json';
+import { geometriasEstaticas } from '@/app/lib/geometriaEstatica';
 import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 import { useSmartSearch } from '@/app/hooks/useSmartSearch';
 import { mergeLotsData } from '@/app/utils/dataMerger';
 import type { MapaSeparaciones } from '@/app/lib/separaciones';
 import { contarSinProyecto, mensajeSinProyecto } from '@/app/lib/sinProyecto';
 
-// Type for enriched geometries with measurements
-interface EnrichedGeometry {
-    coordinates: [number, number][];
-    measurements: {
-        sides: number[];
-        area: number;
-        perimeter: number;
-        centroid: [number, number];
-    };
-}
-
-const geometriesJson = geometriesEnrichedRaw as unknown as Record<string, EnrichedGeometry>;
 const SIN_SEPARACIONES: MapaSeparaciones = { porLote: {}, reservasAdmin: [], disponible: false };
 import { Menu, Filter, Loader2, WifiOff } from 'lucide-react';
 import { useAuth } from '@/app/context/AuthContext';
@@ -155,7 +143,7 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, l
      * Extraída a la utilidad dataMerger para evitar bloqueos del main thread y mejorar la mantenibilidad.
      */
     const mergedLots = useMemo(() => {
-        const lotes = mergeLotsData(odooProducts, lotsData, geometriesJson);
+        const lotes = mergeLotsData(odooProducts, lotsData, geometriasEstaticas());
         // El plazo de separación solo aplica a lotes que HOY están reservados: un
         // lote vendido o liberado no debe arrastrar datos viejos. Se agrega aquí
         // (no en mergeLotsData) porque esa función también la usa /venta (público).

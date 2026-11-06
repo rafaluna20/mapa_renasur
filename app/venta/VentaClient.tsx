@@ -4,8 +4,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { OdooProduct, Proyecto } from '@/app/services/odooService';
 import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 import { lotsData } from '@/app/data/lotsData';
-import geometriesEnrichedRaw from '@/app/data/geometries-enriched.json';
-import { mergeLotsData, EnrichedGeometry } from '@/app/utils/dataMerger';
+import { geometriasEstaticas } from '@/app/lib/geometriaEstatica';
+import { esPublicable } from '@/app/lib/lotesPublicos';
+import { mergeLotsData } from '@/app/utils/dataMerger';
 import HeroSection from '@/app/components/Public/HeroSection';
 import PublicMapSection from '@/app/components/Public/PublicMapSection';
 import PublicLotPanel from '@/app/components/Public/PublicLotPanel';
@@ -13,7 +14,6 @@ import FloatingWhatsApp from '@/app/components/Public/FloatingWhatsApp';
 import { trackMeta } from '@/app/venta/metaPixel';
 import { OFERTA } from '@/app/venta/ofertaComercial';
 
-const geometriesJson = geometriesEnrichedRaw as unknown as Record<string, EnrichedGeometry>;
 
 // Solo se publican lotes con id numérico real de Odoo. mergeLotsData
 // (app/utils/dataMerger.ts) también devuelve entradas sintéticas para lo que
@@ -23,7 +23,6 @@ const geometriesJson = geometriesEnrichedRaw as unknown as Record<string, Enrich
 // en un anuncio pagado sería mostrar precios/disponibilidad que pueden estar
 // mal — se descartan acá, no en el fetch (el fetch ya excluye lo que puede
 // excluirse del lado de Odoo; esto filtra lo que solo existe del lado local).
-const ID_ODOO_REAL = /^\d+$/;
 
 interface VentaClientProps {
     odooProducts: OdooProduct[];
@@ -59,8 +58,8 @@ export default function VentaClient({
     const [soloDisponibles, setSoloDisponibles] = useState(false);
 
     const lots = useMemo(() => {
-        const merged = mergeLotsData(odooProducts, lotsData, geometriesJson);
-        return merged.filter((lot) => ID_ODOO_REAL.test(lot.id));
+        const merged = mergeLotsData(odooProducts, lotsData, geometriasEstaticas());
+        return merged.filter(esPublicable);
     }, [odooProducts]);
 
     // Preselección desde la URL (?lote=E01MZS033P): solo una vez, al montar. Un `ref` (no un `useState`)

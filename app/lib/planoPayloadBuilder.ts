@@ -4,7 +4,7 @@ import { lotsData, Lot } from '@/app/data/lotsData';
 import { mergeLotsData, normalizeCode } from '@/app/utils/dataMerger';
 import { derivarColindanciasYDimensiones, type AdvertenciaColindancia } from '@/app/utils/colindanciasUtils';
 import { calculateCentroid, calculateDistance, calculateLotMeasurements } from '@/app/utils/geometryUtils';
-import geometriesEnrichedRaw from '@/app/data/geometries-enriched.json';
+import { geometriasEstaticas } from '@/app/lib/geometriaEstatica';
 import { mergeElementosUrbanos } from '@/app/data/elementosUrbanos';
 import { resolverProyecto } from '@/app/lib/ubicacionProyecto';
 import { leerLotesPaginados } from '@/app/lib/lotesPaginados';
@@ -18,11 +18,6 @@ import { leerLotesPaginados } from '@/app/lib/lotesPaginados';
 const RADIO_CONTEXTO_METROS = 250;
 
 const CAMPOS_LOTE_PLANO = ['id', 'name', 'default_code', 'list_price', 'qty_available', 'x_statu', 'x_area', 'x_mz', 'x_etapa', 'x_lote', 'x_cliente', 'x_geometry_utm', 'x_proyecto', 'x_proyecto_id', 'x_ubicacion', 'x_geometry_arcos'];
-
-const geometriesJson = geometriesEnrichedRaw as unknown as Record<string, {
-  coordinates: [number, number][];
-  measurements: { sides: number[]; area: number; perimeter: number; centroid: [number, number] };
-}>;
 
 /**
  * Limpia el valor crudo de x_ubicacion (texto libre cargado por el equipo
@@ -100,7 +95,7 @@ export async function construirPayloadPlano(defaultCode: string): Promise<PlanoP
     { context: { lang: 'es_PE' } },
   );
 
-  const allLots: Lot[] = mergeLotsData(odooProducts, lotsData, geometriesJson);
+  const allLots: Lot[] = mergeLotsData(odooProducts, lotsData, geometriasEstaticas());
 
   const normCode = normalizeCode(defaultCode);
   const lote = allLots.find((l) => normalizeCode(l.default_code) === normCode);
@@ -252,7 +247,7 @@ export async function construirPayloadPlanoMatriz(codigoElemento: string): Promi
     fetchProyectos(),
   ]);
 
-  const allLots: Lot[] = mergeLotsData(odooProducts, lotsData, geometriesJson);
+  const allLots: Lot[] = mergeLotsData(odooProducts, lotsData, geometriasEstaticas());
   const elementosUrbanos = mergeElementosUrbanos(elementosUrbanosOdoo);
 
   const normCode = normalizeCode(codigoElemento);
