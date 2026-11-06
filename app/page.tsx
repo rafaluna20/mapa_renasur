@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { fetchOdoo, fetchElementosUrbanos, fetchProyectos, OdooProduct } from '@/app/services/odooService';
+import { leerLotesPaginados } from '@/app/lib/lotesPaginados';
 import { mergeElementosUrbanos } from '@/app/data/elementosUrbanos';
 import { STAFF_COOKIE_NAME, verifyStaffSessionToken } from '@/app/lib/staffAuth';
 import HomeClient from '@/app/components/HomeClient';
@@ -12,6 +13,7 @@ export const dynamic = 'force-dynamic';
 // Estructura de caché en memoria del servidor para navegación ultra veloz
 interface CacheContainer {
   data: OdooProduct[];
+  truncado: boolean;
   timestamp: number;
 }
 
@@ -34,12 +36,14 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ r
 
   let products: OdooProduct[] = [];
   let hasConnectionError = false;
+  let lotesTruncados = false;
   const now = Date.now();
 
   // Si existe cache, no ha expirado y no se solicita refresco manual forzado
   if (serverSideLotsCache && (now - serverSideLotsCache.timestamp < CACHE_TTL) && !forceRefresh) {
     console.log(`[⚡ LIGHTNING CACHE HIT] Sirviendo ${serverSideLotsCache.data.length} lotes al instante desde memoria del servidor.`);
     products = serverSideLotsCache.data;
+    lotesTruncados = serverSideLotsCache.truncado;
   } else {
     try {
       console.log(forceRefresh 
@@ -47,22 +51,22 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ r
         : `[🌀 CACHE MISS / EXPIRED] Consultando inventario actualizado a Odoo...`
       );
       
-      products = await fetchOdoo(
-        "product.template",
-        "search_read",
-        [[["active", "=", true]]],
-        {
-          fields: ["id", "name", "default_code", "list_price", "qty_available", "x_statu", "x_area", "x_mz", "x_etapa", "x_lote", "x_cliente", "x_geometry_utm", "x_geometry_arcos", "x_proyecto_id"],
-          limit: 1000,
-          context: { lang: "es_PE" }
-        }
+      // Paginado (sin el tope fijo de 1000) y sin los lotes de proyectos DESACTIVADOS.
+      const leidos = await leerLotesPaginados<OdooProduct>(
+        fetchOdoo,
+        [["active", "=", true]],
+        ["id", "name", "default_code", "list_price", "qty_available", "x_statu", "x_area", "x_mz", "x_etapa", "x_lote", "x_cliente", "x_geometry_utm", "x_geometry_arcos", "x_proyecto_id"],
+        { context: { lang: "es_PE" } },
       );
+      products = leidos.registros;
+      lotesTruncados = leidos.truncado;
       
       console.log(`Successfully fetched ${products.length} products from Odoo.`);
 
       // Guardar en la caché en memoria del servidor
       serverSideLotsCache = {
         data: products,
+        truncado: lotesTruncados,
         timestamp: now
       };
     } catch (error) {
@@ -72,6 +76,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ r
       if (serverSideLotsCache) {
         console.warn("Sirviendo caché existente debido a problemas de comunicación con Odoo.");
         products = serverSideLotsCache.data;
+        lotesTruncados = serverSideLotsCache.truncado;
       } else {
         hasConnectionError = true;
       }
@@ -100,6 +105,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ r
       <HomeClient
         odooProducts={products}
         hasConnectionError={hasConnectionError}
+        lotesTruncados={lotesTruncados}
+        esAdmin={session.isSystem === true}
         elementosUrbanos={elementosUrbanos}
         proyectos={proyectos}
         separaciones={separaciones}

@@ -14,6 +14,7 @@ import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 import { useSmartSearch } from '@/app/hooks/useSmartSearch';
 import { mergeLotsData } from '@/app/utils/dataMerger';
 import type { MapaSeparaciones } from '@/app/lib/separaciones';
+import { contarSinProyecto, mensajeSinProyecto } from '@/app/lib/sinProyecto';
 
 // Type for enriched geometries with measurements
 interface EnrichedGeometry {
@@ -50,6 +51,8 @@ import { exportToPdf } from '@/app/utils/pdfExporter'; // Utilidad para exportar
 interface HomeClientProps {
     odooProducts: OdooProduct[]; // Array de productos obtenidos de Odoo
     hasConnectionError?: boolean; // Flag if Odoo fetch failed
+    esAdmin?: boolean; // Solo el administrador ve el aviso de lotes/elementos sin proyecto
+    lotesTruncados?: boolean; // Se llegó al tope de lectura de lotes: la lista está incompleta (ver app/lib/lotesPaginados.ts)
     elementosUrbanos?: ElementoUrbano[]; // Calles/áreas verdes (modelo Odoo separado, ver page.tsx)
     proyectos?: Proyecto[]; // Proyectos inmobiliarios (ubicación + zona UTM), ver page.tsx
     separaciones?: MapaSeparaciones; // Plazo de separaciones y reservas administrativas (ver app/lib/separaciones.ts)
@@ -63,7 +66,7 @@ interface HomeClientProps {
  * Recibe datos de Odoo, los fusiona con geometría local, y coordina
  * la comunicación entre el Mapa, la Barra Lateral y los Filtros.
  */
-export default function HomeClient({ odooProducts, hasConnectionError = false, elementosUrbanos = [], proyectos = [], separaciones = SIN_SEPARACIONES }: HomeClientProps) {
+export default function HomeClient({ odooProducts, hasConnectionError = false, lotesTruncados = false, esAdmin = false, elementosUrbanos = [], proyectos = [], separaciones = SIN_SEPARACIONES }: HomeClientProps) {
 
     // Hooks de Contexto y Enrutamiento
     const { user, loading } = useAuth(); // Obtiene el usuario autenticado
@@ -178,6 +181,11 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, e
     // manzana-etapa-estado, así que todo lo demás (stats, dashboard, mapa,
     // lista) automáticamente respeta el proyecto seleccionado sin tener que
     // tocar esa lógica.
+    const avisoSinProyecto = useMemo(
+        () => (esAdmin ? mensajeSinProyecto(contarSinProyecto(mergedLots, elementosUrbanos)) : null),
+        [esAdmin, mergedLots, elementosUrbanos],
+    );
+
     const lotesDelProyecto = useMemo(() => {
         if (!proyectoSeleccionadoId) return mergedLots;
         return mergedLots.filter((l) => l.x_proyectoId === proyectoSeleccionadoId);
@@ -413,6 +421,18 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, e
 
             {/* Cabecera Superior */}
             <Header onSync={handleSync} />
+
+            {avisoSinProyecto && (
+                <div role="status" className="bg-sky-100 dark:bg-sky-900/40 text-sky-900 dark:text-sky-100 text-sm px-4 py-2 border-b border-sky-300 dark:border-sky-700">
+                    {avisoSinProyecto}
+                </div>
+            )}
+
+            {lotesTruncados && (
+                <div role="alert" className="bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 text-sm px-4 py-2 border-b border-amber-300 dark:border-amber-700">
+                    La lista de lotes está incompleta: se alcanzó el tope de lectura. Avisa al administrador antes de tomar decisiones con estos datos.
+                </div>
+            )}
 
             <div className="flex flex-1 overflow-hidden relative">
 

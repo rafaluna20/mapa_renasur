@@ -162,7 +162,8 @@ export async function fetchElementosUrbanosVia(rpc: OdooRpcFn): Promise<Elemento
         // atrapa silenciosamente devolviendo [] — exactamente el bug
         // que dejó de dibujar TODOS los elementos urbanos (no solo los
         // círculos) desde que se agregó el operador '|' acá.
-        const domain = [['active', '=', true], '|', ['x_geometry_utm', '!=', false], ['x_geometry_circulo', '!=', false]];
+        // Sin los elementos de proyectos DESACTIVADOS; los que aún no tienen proyecto siguen visibles hasta asignarlos.
+        const domain = [['active', '=', true], '|', ['x_geometry_utm', '!=', false], ['x_geometry_circulo', '!=', false], '|', ['proyecto_id', '=', false], ['proyecto_id.active', '=', true]];
         const PAGE_SIZE = 500;
         const registros: OdooElementoUrbano[] = [];
         // Paginado, no un límite fijo: con un solo import grande (ej. una

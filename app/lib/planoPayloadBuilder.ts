@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
-import { fetchOdoo, fetchElementosUrbanos, fetchProyectos, OdooProduct, Proyecto } from '@/app/services/odooService';
+import { fetchOdoo, fetchElementosUrbanos, fetchProyectos, OdooProduct } from '@/app/services/odooService';
 import { lotsData, Lot } from '@/app/data/lotsData';
 import { mergeLotsData, normalizeCode } from '@/app/utils/dataMerger';
 import { derivarColindanciasYDimensiones, type AdvertenciaColindancia } from '@/app/utils/colindanciasUtils';
 import { calculateCentroid, calculateDistance, calculateLotMeasurements } from '@/app/utils/geometryUtils';
 import geometriesEnrichedRaw from '@/app/data/geometries-enriched.json';
 import { mergeElementosUrbanos } from '@/app/data/elementosUrbanos';
+import { resolverProyecto } from '@/app/lib/ubicacionProyecto';
+import { leerLotesPaginados } from '@/app/lib/lotesPaginados';
 
 // Extraído de app/api/planos/generar/route.ts para que
 // app/api/planos/generar-resumen/route.ts pueda armar exactamente el mismo
@@ -15,75 +17,7 @@ import { mergeElementosUrbanos } from '@/app/data/elementosUrbanos';
 
 const RADIO_CONTEXTO_METROS = 250;
 
-interface UbicacionProyecto {
-  departamento: string;
-  provincia: string;
-  distrito: string;
-  urbanizacion: string;
-  zonaUTM?: number; // Solo si el proyecto NO cae en zona 18S (default de plan_pro)
-}
-
-// Único proyecto que existía antes de que proyecto.inmobiliario (Odoo)
-// existiera — fallback SOLO para lotes sin x_proyectoId NI x_proyecto
-// asignado (comportamiento histórico, el 100% de los lotes de antes de esta
-// migración). En cuanto el proyecto "terra-lima" se cargue en Odoo, este
-// fallback deja de usarse: resolverUbicacionProyecto siempre prioriza el
-// dato real de Odoo por sobre este valor fijo.
-const FALLBACK_TERRA_LIMA: UbicacionProyecto = {
-  departamento: 'Lima',
-  provincia: 'Lima',
-  distrito: 'Pucusana',
-  urbanizacion: 'Terra Lima',
-};
-/**
- * Resuelve la ubicación administrativa (y zona UTM) de un lote contra los
- * proyectos reales de Odoo (proyecto.inmobiliario) — reemplaza al
- * diccionario UBICACION_POR_PROYECTO que antes vivía hardcodeado acá:
- * crear un proyecto nuevo ya no requiere tocar este archivo.
- *
- * Orden de resolución:
- * 1. x_proyectoId (Many2one real) contra el id del proyecto — sin ambigüedad.
- * 2. x_proyecto (texto libre, deprecado) contra el código del proyecto —
- *    cubre lotes que todavía no pasaron por la migración de datos.
- * 3. Si el lote no tiene NINGUNO de los dos asignado: Terra Lima por
- *    defecto (mismo comportamiento histórico).
- * 4. Si tiene alguno asignado pero no matchea contra ningún proyecto real
- *    (código no registrado, o proyecto_inmobiliario recién desplegándose):
- *    undefined — mejor sin ubicación que mostrar la de otro proyecto.
- */
-function resolverUbicacionProyecto(lote: Lot, proyectos: Proyecto[]): UbicacionProyecto | undefined {
-  let proyecto = lote.x_proyectoId
-    ? proyectos.find((p) => p.id === lote.x_proyectoId)
-    : undefined;
-
-  if (!proyecto) {
-    const codigo = lote.x_proyecto?.trim();
-    if (codigo) {
-      proyecto = proyectos.find((p) => p.codigo === codigo);
-    }
-  }
-
-  if (proyecto) {
-    return {
-      departamento: proyecto.departamento,
-      provincia: proyecto.provincia,
-      distrito: proyecto.distrito,
-      urbanizacion: proyecto.urbanizacion,
-      zonaUTM: proyecto.zonaUTM ? Number(proyecto.zonaUTM) : undefined,
-    };
-  }
-
-  if (!lote.x_proyectoId && !lote.x_proyecto?.trim()) {
-    return FALLBACK_TERRA_LIMA;
-  }
-
-  console.warn(
-    `[planoPayloadBuilder] Proyecto del lote ${lote.default_code} ` +
-    `(x_proyectoId=${lote.x_proyectoId}, x_proyecto="${lote.x_proyecto}") ` +
-    `no resuelto contra proyecto.inmobiliario — el plano se generará sin ubicación administrativa.`
-  );
-  return undefined;
-}
+const CAMPOS_LOTE_PLANO = ['id', 'name', 'default_code', 'list_price', 'qty_available', 'x_statu', 'x_area', 'x_mz', 'x_etapa', 'x_lote', 'x_cliente', 'x_geometry_utm', 'x_proyecto', 'x_proyecto_id', 'x_ubicacion', 'x_geometry_arcos'];
 
 const geometriesJson = geometriesEnrichedRaw as unknown as Record<string, {
   coordinates: [number, number][];
@@ -126,6 +60,23 @@ function mapEstadoParaPlanoPro(xStatu: string): 'libre' | 'separado' | 'vendido'
   return 'libre';
 }
 
+/** 422: no se genera un plano con la dirección o la zona UTM de otro proyecto (ni sin ellas). */
+function respuestaProyectoNoResuelto(que: string, detalle: string): { ok: false; response: NextResponse } {
+  return {
+    ok: false,
+    response: NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: 'PROYECTO_NO_RESUELTO',
+          message: `${que} ${detalle}. Asígnale un proyecto activo en Odoo antes de generar el plano.`,
+        },
+      },
+      { status: 422 }
+    ),
+  };
+}
+
 export type PlanoPayloadResult =
   // `advertencias`: cosas que el staff debe revisar antes de entregar el
   // documento (lados sin clasificar, inconsistencias del motor de
@@ -142,15 +93,11 @@ export type PlanoPayloadResult =
 export async function construirPayloadPlano(defaultCode: string): Promise<PlanoPayloadResult> {
   // 1. Traer todos los lotes (Odoo + JSON estático) para poder derivar
   //    colindancias — necesitamos la geometría de los vecinos, no solo la del lote objetivo.
-  const odooProducts: OdooProduct[] = await fetchOdoo(
-    'product.template',
-    'search_read',
-    [[['active', '=', true]]],
-    {
-      fields: ['id', 'name', 'default_code', 'list_price', 'qty_available', 'x_statu', 'x_area', 'x_mz', 'x_etapa', 'x_lote', 'x_cliente', 'x_geometry_utm', 'x_proyecto', 'x_proyecto_id', 'x_ubicacion', 'x_geometry_arcos'],
-      limit: 1000,
-      context: { lang: 'es_PE' },
-    }
+  const { registros: odooProducts } = await leerLotesPaginados<OdooProduct>(
+    fetchOdoo,
+    [['active', '=', true]],
+    CAMPOS_LOTE_PLANO,
+    { context: { lang: 'es_PE' } },
   );
 
   const allLots: Lot[] = mergeLotsData(odooProducts, lotsData, geometriesJson);
@@ -243,15 +190,12 @@ export async function construirPayloadPlano(defaultCode: string): Promise<PlanoP
   ));
 
   // 4. Armar el payload para plan_pro
-  const ubicacionProyecto = resolverUbicacionProyecto(lote, proyectos);
+  const resolucion = resolverProyecto(lote, proyectos);
+  if (!resolucion.ok) return respuestaProyectoNoResuelto(`El lote ${lote.default_code}`, resolucion.detalle);
+  const ubicacionProyecto = resolucion.ubicacion;
   const direccion = construirDireccion(lote);
-  // Combina la ubicación administrativa (por proyecto) con la dirección
-  // real del lote (por x_ubicacion) si alguna de las dos existe. Si el
-  // proyecto no está registrado en el mapa Y tampoco hay x_ubicacion,
-  // queda undefined — mismo comportamiento que antes de este cambio.
-  const ubicacion = ubicacionProyecto || direccion
-    ? { ...(ubicacionProyecto ?? {}), ...(direccion ? { direccion } : {}) }
-    : undefined;
+  // Ubicación administrativa del proyecto + dirección real del lote (x_ubicacion), si existe.
+  const ubicacion = { ...ubicacionProyecto, ...(direccion ? { direccion } : {}) };
 
   const payload = {
     vertices: lote.points,
@@ -298,16 +242,12 @@ export async function construirPayloadPlano(defaultCode: string): Promise<PlanoP
  */
 export async function construirPayloadPlanoMatriz(codigoElemento: string): Promise<PlanoPayloadResult> {
   const [odooProducts, elementosUrbanosOdoo, proyectos] = await Promise.all([
-    fetchOdoo(
-      'product.template',
-      'search_read',
-      [[['active', '=', true]]],
-      {
-        fields: ['id', 'name', 'default_code', 'list_price', 'qty_available', 'x_statu', 'x_area', 'x_mz', 'x_etapa', 'x_lote', 'x_cliente', 'x_geometry_utm', 'x_proyecto', 'x_proyecto_id', 'x_ubicacion', 'x_geometry_arcos'],
-        limit: 1000,
-        context: { lang: 'es_PE' },
-      }
-    ) as Promise<OdooProduct[]>,
+    leerLotesPaginados<OdooProduct>(
+      fetchOdoo,
+      [['active', '=', true]],
+      CAMPOS_LOTE_PLANO,
+      { context: { lang: 'es_PE' } },
+    ).then((r) => r.registros),
     fetchElementosUrbanos(),
     fetchProyectos(),
   ]);
@@ -402,16 +342,9 @@ export async function construirPayloadPlanoMatriz(codigoElemento: string): Promi
     circulo: e.circulo,
   }));
 
-  const proyecto = matriz.proyectoId ? proyectos.find((p) => p.id === matriz.proyectoId) : undefined;
-  const ubicacion = proyecto
-    ? {
-        departamento: proyecto.departamento,
-        provincia: proyecto.provincia,
-        distrito: proyecto.distrito,
-        urbanizacion: proyecto.urbanizacion,
-        zonaUTM: proyecto.zonaUTM ? Number(proyecto.zonaUTM) : undefined,
-      }
-    : undefined;
+  const resolucionMatriz = resolverProyecto(matriz, proyectos);
+  if (!resolucionMatriz.ok) return respuestaProyectoNoResuelto(`La matriz ${matriz.codigo}`, resolucionMatriz.detalle);
+  const ubicacion = resolucionMatriz.ubicacion;
 
   const payload = {
     vertices: matriz.points,

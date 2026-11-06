@@ -11,6 +11,7 @@
 // vuelta a la cuenta admin por accidente.
 import { callOdooJsonRpc } from '@/app/services/odooRpc';
 import { OdooProduct, Proyecto, fetchElementosUrbanosVia } from '@/app/services/odooService';
+import { leerLotesPaginados } from '@/app/lib/lotesPaginados';
 import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 
 function getPublicCredentials() {
@@ -53,16 +54,15 @@ const PUBLIC_PRODUCT_FIELDS = [
 ];
 
 export async function getPublicLots(): Promise<OdooProduct[]> {
-    return fetchOdooPublic(
-        'product.template',
-        'search_read',
-        [[['active', '=', true], ['default_code', '!=', false]]],
-        {
-            fields: PUBLIC_PRODUCT_FIELDS,
-            limit: 1000,
-            context: { lang: 'es_PE' },
-        }
+    // Paginado y sin lotes de proyectos desactivados (la landing pública no debe mostrarlos).
+    const { registros, truncado } = await leerLotesPaginados<OdooProduct>(
+        fetchOdooPublic,
+        [['active', '=', true], ['default_code', '!=', false]],
+        PUBLIC_PRODUCT_FIELDS,
+        { context: { lang: 'es_PE' } },
     );
+    if (truncado) console.warn('[getPublicLots] Se alcanzó el tope de lotes: la landing muestra una lista incompleta.');
+    return registros;
 }
 
 interface OdooProyectoInmobiliarioPublic {

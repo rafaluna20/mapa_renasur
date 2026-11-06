@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
         const products = await fetchOdoo(
             "product.product",
             "search_read",
-            [[]], // Empty domain fetches all products
+            [['|', ['x_proyecto_id', '=', false], ['x_proyecto_id.active', '=', true]]], // todos los productos, salvo los de proyectos desactivados
             {
                 fields: ["id", "x_statu", "list_price", "default_code", "x_mz"]
             }
