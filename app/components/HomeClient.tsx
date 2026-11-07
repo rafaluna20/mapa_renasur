@@ -15,6 +15,7 @@ import { useSmartSearch } from '@/app/hooks/useSmartSearch';
 import { mergeLotsData } from '@/app/utils/dataMerger';
 import type { MapaSeparaciones } from '@/app/lib/separaciones';
 import { contarSinProyecto, mensajeSinProyecto } from '@/app/lib/sinProyecto';
+import { MarcaActual } from '@/app/context/MarcaContext';
 
 const SIN_SEPARACIONES: MapaSeparaciones = { porLote: {}, reservasAdmin: [], disponible: false };
 import { Menu, Filter, Loader2, WifiOff } from 'lucide-react';
@@ -405,6 +406,8 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, l
     // Renderizado Principal (JSX)
     // ------------------------------------------------------------------
     return (
+        // La marca (nombre y logo en la cabecera, el cubo del mapa, el asistente…) es la del proyecto elegido en el mapa.
+        <MarcaActual proyectoId={proyectoSeleccionadoId}>
         <div className="flex flex-col h-screen bg-slate-50 dark:bg-slate-900 overflow-hidden font-sans">
 
             {/* Cabecera Superior */}
@@ -619,7 +622,6 @@ export default function HomeClient({ odooProducts, hasConnectionError = false, l
 
             </div>
         </div>
+        </MarcaActual>
     );
 }
-
-

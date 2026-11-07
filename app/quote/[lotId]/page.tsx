@@ -7,6 +7,7 @@ import { lotsData, Lot } from '@/app/data/lotsData';
 import { financeService, QuoteCalculations } from '@/app/services/financeService';
 import Header from '@/app/components/UI/Header';
 import { exportQuoteToPdf } from '@/app/utils/quotePdfExporter';
+import { useMarca } from '@/app/context/MarcaContext';
 import { geometriasEstaticas } from '@/app/lib/geometriaEstatica';
 import { syncAreaInLotName } from '@/app/utils/dataMerger';
 import { useAuth } from '@/app/context/AuthContext';
@@ -103,6 +104,7 @@ export default function QuotePage({ params }: QuotePageProps) {
                         x_etapa: p.x_etapa || '',
                         x_lote: p.x_lote || '',
                         default_code: code,
+                        x_proyectoId: Array.isArray(p.x_proyecto_id) ? p.x_proyecto_id[0] : undefined,
                         points: geometry?.coordinates || [],
                         measurements: geometry?.measurements
                             ? {
@@ -125,6 +127,8 @@ export default function QuotePage({ params }: QuotePageProps) {
     }, [lotId]);
 
     const lot = dynamicLot;
+    // La marca de la cotización es el nombre (y el logo) del proyecto del lote.
+    const marca = useMarca(lot?.x_proyectoId);
 
     // 2. Estados del Formulario
     const [discountPercent, setDiscountPercent] = useState<number | string>(0);
@@ -668,7 +672,8 @@ export default function QuotePage({ params }: QuotePageProps) {
                 clientPdfDetails,
                 false,
                 includeSchedule,
-                initialPaymentBreakdownForPdf
+                initialPaymentBreakdownForPdf,
+                marca
             );
 
             // Notify Success (could use a toast)
@@ -708,7 +713,8 @@ export default function QuotePage({ params }: QuotePageProps) {
                 clientPdfDetails,
                 true, // Request Blob return instead of download
                 true, // Incluir cronograma (comportamiento previo, sin flag propio acá)
-                initialPaymentBreakdownForPdf
+                initialPaymentBreakdownForPdf,
+                marca
             );
 
             if (!pdfBlob) {
@@ -881,7 +887,7 @@ export default function QuotePage({ params }: QuotePageProps) {
                             </button>
                             <div className="h-10 w-[1px] bg-slate-200 hidden md:block mx-1"></div>
                             <div>
-                                <h1 className="text-xl md:text-2xl font-bold text-slate-800">Cotización TERRA-LIMA</h1>
+                                <h1 className="text-xl md:text-2xl font-bold text-slate-800">Cotización {marca.nombre}</h1>
                                 <p className="text-slate-500 font-medium">{lot.name} • {lot.x_mz} {lot.x_lote}</p>
                             </div>
                         </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useSession } from 'next-auth/react';
+import { useMarca } from '@/app/context/MarcaContext';
 import { useEffect, useState, useCallback } from 'react';
 import { redirect } from 'next/navigation';
 import { CreditCard, Building2, Calendar, DollarSign, Loader2, AlertCircle, CheckCircle2, Clock, FileText, Upload, RefreshCw, Download } from 'lucide-react';
@@ -37,6 +38,7 @@ function formatTotalsByCurrency(totals: Partial<Record<CurrencyCode, number>>): 
 }
 
 export default function PaymentsPortal() {
+    const marca = useMarca();
     const { data: session, status } = useSession();
     const [invoices, setInvoices] = useState<PendingInvoice[]>([]);
     const [loading, setLoading] = useState(true);
@@ -80,14 +82,14 @@ export default function PaymentsPortal() {
                     currency: lot.currency,
                     invoices: lot.invoices,
                 })),
-            });
+            }, marca);
         } catch (err) {
             console.error('[PAGOS] Error generando PDF de estado de cuenta:', err);
             alert('No se pudo generar el PDF. Inténtalo de nuevo.');
         } finally {
             setDownloadingStatement(false);
         }
-    }, [downloadingStatement, statementLots, session, clientPhone]);
+    }, [downloadingStatement, statementLots, session, clientPhone, marca]);
 
     useEffect(() => {
         if (status !== 'authenticated') return;

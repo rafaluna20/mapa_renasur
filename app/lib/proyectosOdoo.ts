@@ -18,7 +18,7 @@ export const CAMPOS_BASE = [
 export const CAMPOS_OFERTA = [
   'tipo', 'publicar_web', 'cuota_inicial', 'nro_cuotas', 'whatsapp_numero', 'whatsapp_visible',
   'distancia_referencia_km', 'referencia_nombre', 'direccion_referencia', 'servicios', 'frase_habilitacion',
-  'resolucion_municipal', 'etiqueta_agrupador', 'etiqueta_numero', 'color_primario', 'es_principal',
+  'resolucion_municipal', 'etiqueta_agrupador', 'etiqueta_numero', 'color_primario', 'es_principal', 'logo_url',
 ];
 
 export interface ProyectoCrudo {
@@ -50,6 +50,7 @@ export interface ProyectoCrudo {
   etiqueta_agrupador?: string | false;
   etiqueta_numero?: string | false;
   color_primario?: string | false;
+  logo_url?: string | false;
 }
 
 const texto = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
@@ -78,6 +79,7 @@ export function mapearProyecto(r: ProyectoCrudo): Proyecto {
           etiquetaAgrupador: texto(r.etiqueta_agrupador) ?? 'Manzana',
           etiquetaNumero: texto(r.etiqueta_numero) ?? 'Lote',
           colorPrimario: texto(r.color_primario),
+          logoUrl: texto(r.logo_url),
           oferta: {
             cuotaInicial: numero(r.cuota_inicial),
             nroCuotas: numero(r.nro_cuotas),

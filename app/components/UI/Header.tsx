@@ -1,6 +1,7 @@
 import { RefreshCw, LogOut, User, MapPin, TrendingUp, Award, Sun, Moon } from 'lucide-react';
 import { useAuth } from '@/app/context/AuthContext';
 import { useTheme } from '@/app/context/ThemeContext';
+import { useMarca } from '@/app/context/MarcaContext';
 import { useState } from 'react';
 import UserProfileModal from './UserProfileModal';
 import Image from 'next/image';
@@ -12,6 +13,7 @@ interface HeaderProps {
 export default function Header({ onSync }: HeaderProps) {
     const { user, salesCount, quotesCount, logout } = useAuth();
     const { theme, toggleTheme } = useTheme();
+    const marca = useMarca();
     const [showProfile, setShowProfile] = useState(false);
 
     return (
@@ -29,14 +31,21 @@ export default function Header({ onSync }: HeaderProps) {
                     <div className="relative">
                         <div className="absolute inset-0 bg-[#2E7D5E]/20 blur-xl group-hover:bg-[#2E7D5E]/30 transition-all duration-300 rounded-full"></div>
                         <div className="relative bg-white p-1.5 rounded-xl shadow-lg group-hover:shadow-[#2E7D5E]/30 group-hover:scale-105 transition-all duration-300 border border-slate-700">
-                            <Image
-                                src="/terra-lima-logo.png"
-                                alt="Terra Lima"
-                                width={84}
-                                height={28}
-                                className="object-contain"
-                                priority
-                            />
+                            {marca.logoUrl && marca.logoUrl.startsWith('/') ? (
+                                <Image
+                                    src={marca.logoUrl}
+                                    alt={marca.nombre}
+                                    width={84}
+                                    height={28}
+                                    className="object-contain"
+                                    priority
+                                />
+                            ) : marca.logoUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element -- logo https de otro dominio (next/image pide configurarlo)
+                                <img src={marca.logoUrl} alt={marca.nombre} width={84} height={28} className="object-contain" />
+                            ) : (
+                                <span className="px-1 text-xs font-extrabold tracking-wide text-slate-800">{marca.nombre}</span>
+                            )}
                         </div>
                     </div>
                     

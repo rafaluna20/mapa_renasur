@@ -1,11 +1,12 @@
 /**
  * reportService.ts
- * Generador de Reportes Empresariales PDF — Terra Lima
+ * Generador de Reportes Empresariales PDF — la marca es el nombre del proyecto (ver app/lib/marca.ts)
  * Paleta de Colores Light/Editorial (Print-Friendly) optimizada para ahorro de tinta
  * Usa jsPDF v4 + jspdf-autotable v5
  */
 
 import jsPDF from 'jspdf';
+import { MARCA_LEGADA, type Marca } from '@/app/lib/marca';
 import autoTable from 'jspdf-autotable';
 import { formatMoney, normalizeCurrency, currencyName, currencySymbol, type CurrencyCode } from '../utils/money';
 import {
@@ -40,7 +41,7 @@ export interface ReportData {
     };
 }
 
-// ─── Paleta corporativa Terra Lima (Diseño Light Premium para Ahorro de Tinta) ───
+// ─── Paleta corporativa (Diseño Light Premium para Ahorro de Tinta) ───
 const BRAND = {
     green:      [46,  125, 94]  as [number, number, number], // #2E7D5E (acento verde)
     greenLight: [33,  115, 70]  as [number, number, number], // verde oscuro legible para valores
@@ -235,7 +236,8 @@ function drawTraceabilitySection(
     x: number,
     y: number,
     width: number,
-    reportId: string
+    reportId: string,
+    marca: Marca = MARCA_LEGADA
 ): number {
     drawSectionHeader(doc, 'TRAZABILIDAD Y APROBACIÓN', x, y, BRAND.dark2);
     drawLine(doc, x, y + 2.5, x + width, y + 2.5, BRAND.borderLight, 0.15);
@@ -245,7 +247,7 @@ function drawTraceabilitySection(
     doc.text(`ID de Reporte: ${reportId}`, x, y);
     y += 4;
     const lines = doc.splitTextToSize(
-        'Documento generado automáticamente por el Sistema Financiero Terra Lima. Requiere validación y firma según el flujo de aprobación interno.',
+        `Documento generado automáticamente por el Sistema Financiero ${marca.nombre}. Requiere validación y firma según el flujo de aprobación interno.`,
         width
     ) as string[];
     doc.text(lines, x, y);
@@ -266,7 +268,7 @@ function drawTraceabilitySection(
 }
 
 // ─── Reporte Individual del Vendedor ──────────────────────────────────────────
-export async function generateEnterpriseReport(data: ReportData): Promise<void> {
+export async function generateEnterpriseReport(data: ReportData, marca: Marca = MARCA_LEGADA): Promise<void> {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const W = 210; // ancho A4
     const H = 297; // alto A4
@@ -298,7 +300,8 @@ export async function generateEnterpriseReport(data: ReportData): Promise<void> 
 
     // — Logo corporativo
     try {
-        const logoResponse = await fetch('/terra-lima-logo.png');
+        if (!marca.logoUrl) throw new Error('El proyecto no tiene logo');
+        const logoResponse = await fetch(marca.logoUrl);
         const logoBlob = await logoResponse.blob();
         const logoBase64: string = await new Promise((resolve) => {
             const reader = new FileReader();
@@ -308,7 +311,7 @@ export async function generateEnterpriseReport(data: ReportData): Promise<void> 
         doc.addImage(logoBase64, 'PNG', margin, 8, 44, 14);
     } catch {
         setFont(doc, 14, BRAND.darkBg, 'bold');
-        doc.text('TERRA LIMA', margin, 18);
+        doc.text(marca.nombre.toUpperCase(), margin, 18);
     }
 
     // — Información de empresa (derecha)
@@ -706,7 +709,7 @@ export async function generateEnterpriseReport(data: ReportData): Promise<void> 
     });
     y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
 
-    y = drawTraceabilitySection(doc, margin, y, contentW, reportId);
+    y = drawTraceabilitySection(doc, margin, y, contentW, reportId, marca);
 
     // ── Post-procesamiento: Cabeceras y Pies de Página ───────────────────────
     const totalPages = doc.getNumberOfPages();
@@ -720,7 +723,7 @@ export async function generateEnterpriseReport(data: ReportData): Promise<void> 
         drawLine(doc, margin + (contentW / 3) * 2, H - 15, W - margin, H - 15, BRAND.green, 0.8);
 
         setFont(doc, 6, BRAND.textMuted);
-        doc.text('Terra Lima © ' + year + ' · Documento Confidencial', margin, H - 10);
+        doc.text(marca.nombre + ' © ' + year + ' · Documento Confidencial', margin, H - 10);
         const footerPeriodLabel = data.dateRangeLabel ? `Periodo: ${data.dateRangeLabel}` : `Reporte generado el ${dateLabel}`;
         doc.text(footerPeriodLabel, W / 2, H - 10, { align: 'center' });
         doc.text(`Pág. ${p} / ${totalPages}`, W - margin, H - 10, { align: 'right' });
@@ -733,13 +736,13 @@ export async function generateEnterpriseReport(data: ReportData): Promise<void> 
             drawRect(doc, W / 2, 0, W / 2, 1.5, BRAND.purple);
 
             setFont(doc, 7, BRAND.textMuted);
-            doc.text(`Terra Lima · Reporte Ejecutivo ${year} · ${data.advisor.name}`, margin, 10);
+            doc.text(`${marca.nombre} · Reporte Ejecutivo ${year} · ${data.advisor.name}`, margin, 10);
             doc.text(`Pág. ${p}`, W - margin, 10, { align: 'right' });
         }
     }
 
     // ── Descargar ──────────────────────────────────────────────────────────────
-    const filename = `TerraLima_Reporte_${data.advisor.name.replace(/\s+/g, '_')}_${year}_${now.getMonth() + 1 < 10 ? '0' : ''}${now.getMonth() + 1}.pdf`;
+    const filename = `${marca.slug}_Reporte_${data.advisor.name.replace(/\s+/g, '_')}_${year}_${now.getMonth() + 1 < 10 ? '0' : ''}${now.getMonth() + 1}.pdf`;
     doc.save(filename);
 }
 
@@ -800,7 +803,7 @@ export interface GeneralReportData {
 }
 
 // ─── Reporte General Consolidado (Administrador) ──────────────────────────────
-export async function generateProjectGeneralReport(data: GeneralReportData): Promise<void> {
+export async function generateProjectGeneralReport(data: GeneralReportData, marca: Marca = MARCA_LEGADA): Promise<void> {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const W = 210; // ancho A4
     const H = 297; // alto A4
@@ -832,7 +835,8 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
 
     // — Logo corporativo
     try {
-        const logoResponse = await fetch('/terra-lima-logo.png');
+        if (!marca.logoUrl) throw new Error('El proyecto no tiene logo');
+        const logoResponse = await fetch(marca.logoUrl);
         const logoBlob = await logoResponse.blob();
         const logoBase64: string = await new Promise((resolve) => {
             const reader = new FileReader();
@@ -842,7 +846,7 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
         doc.addImage(logoBase64, 'PNG', margin, 8, 44, 14);
     } catch {
         setFont(doc, 14, BRAND.darkBg, 'bold');
-        doc.text('TERRA LIMA', margin, 18);
+        doc.text(marca.nombre.toUpperCase(), margin, 18);
     }
 
     // — Información de empresa (derecha)
@@ -1249,7 +1253,7 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
         y = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 12;
     }
 
-    y = drawTraceabilitySection(doc, margin, y, contentW, reportId);
+    y = drawTraceabilitySection(doc, margin, y, contentW, reportId, marca);
 
     // ── Pies de Página Globales ───────────────────────────────────────────────
     const totalGeneralPages = doc.getNumberOfPages();
@@ -1261,7 +1265,7 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
         drawLine(doc, margin + (contentW / 3) * 2, H - 15, W - margin, H - 15, BRAND.green, 0.8);
 
         setFont(doc, 6, BRAND.textMuted);
-        doc.text('Terra Lima © ' + year + ' · Documento Corporativo Confidencial', margin, H - 10);
+        doc.text(marca.nombre + ' © ' + year + ' · Documento Corporativo Confidencial', margin, H - 10);
         doc.text(`Reporte generado el ${dateLabel}`, W / 2, H - 10, { align: 'center' });
         doc.text(`Pág. ${p} / ${totalGeneralPages}`, W - margin, H - 10, { align: 'right' });
 
@@ -1272,12 +1276,12 @@ export async function generateProjectGeneralReport(data: GeneralReportData): Pro
             drawRect(doc, W / 2, 0, W / 2, 1.5, BRAND.purple);
 
             setFont(doc, 7, BRAND.textMuted);
-            doc.text(`Terra Lima · Reporte General Consolidado ${year}`, margin, 10);
+            doc.text(`${marca.nombre} · Reporte General Consolidado ${year}`, margin, 10);
             doc.text(`Pág. ${p}`, W - margin, 10, { align: 'right' });
         }
     }
 
-    const genFilename = `TerraLima_ReporteGlobal_${year}_${now.getMonth() + 1 < 10 ? '0' : ''}${now.getMonth() + 1}.pdf`;
+    const genFilename = `${marca.slug}_ReporteGlobal_${year}_${now.getMonth() + 1 < 10 ? '0' : ''}${now.getMonth() + 1}.pdf`;
     doc.save(genFilename);
 }
 
@@ -1317,7 +1321,7 @@ export interface ForeignCurrencyReportData {
     comparison?: PaidInvoicesReportData['comparison'];
 }
 
-export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): Promise<void> {
+export async function generatePaidInvoicesReport(data: PaidInvoicesReportData, marca: Marca = MARCA_LEGADA): Promise<void> {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const W = 210; 
     const H = 297; 
@@ -1337,7 +1341,8 @@ export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): 
     drawRect(doc, 0, 0, W, 2, BRAND.greenLight); // Línea verde acentuada superior
 
     try {
-        const logoResponse = await fetch('/terra-lima-logo.png');
+        if (!marca.logoUrl) throw new Error('El proyecto no tiene logo');
+        const logoResponse = await fetch(marca.logoUrl);
         const logoBlob = await logoResponse.blob();
         const logoBase64: string = await new Promise((resolve) => {
             const reader = new FileReader();
@@ -1347,7 +1352,7 @@ export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): 
         doc.addImage(logoBase64, 'PNG', margin, 8, 44, 14);
     } catch {
         setFont(doc, 14, BRAND.darkBg, 'bold');
-        doc.text('TERRA LIMA', margin, 18);
+        doc.text(marca.nombre.toUpperCase(), margin, 18);
     }
 
     setFont(doc, 7, BRAND.textMuted);
@@ -1662,7 +1667,7 @@ export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): 
         }
     }
 
-    y = drawTraceabilitySection(doc, margin, y, contentW, reportId);
+    y = drawTraceabilitySection(doc, margin, y, contentW, reportId, marca);
 
     // ── Post Procesamiento
     const totalPages = doc.getNumberOfPages();
@@ -1670,7 +1675,7 @@ export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): 
         doc.setPage(p);
         drawLine(doc, margin, H - 15, W - margin, H - 15, BRAND.borderLight, 0.3);
         setFont(doc, 6, BRAND.textMuted);
-        doc.text('Terra Lima © ' + year + ' · Documento Contable Confidencial', margin, H - 10);
+        doc.text(marca.nombre + ' © ' + year + ' · Documento Contable Confidencial', margin, H - 10);
         doc.text(`Pág. ${p} / ${totalPages}`, W - margin, H - 10, { align: 'right' });
 
         if (p > 1) {
@@ -1682,10 +1687,10 @@ export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): 
             const isAgingPage = !isForeignPage && agingStartPage !== null && p >= agingStartPage;
             const bannerColor = isForeignPage ? BRAND.purple : isAgingPage ? BRAND.red : BRAND.greenLight;
             const bannerLabel = isForeignPage
-                ? 'Terra Lima · Recaudación y Saldos en Dólares (US$) — aparte de soles'
+                ? `${marca.nombre} · Recaudación y Saldos en Dólares (US$) — aparte de soles`
                 : isAgingPage
-                    ? 'Terra Lima · Antigüedad de Saldos Vencidos'
-                    : 'Terra Lima · Reporte de Recaudación (Facturas Pagadas)';
+                    ? `${marca.nombre} · Antigüedad de Saldos Vencidos`
+                    : `${marca.nombre} · Reporte de Recaudación (Facturas Pagadas)`;
 
             drawRect(doc, 0, 0, W, 16, BRAND.panelBg);
             drawLine(doc, 0, 16, W, 16, BRAND.borderLight, 0.3);
@@ -1696,7 +1701,7 @@ export async function generatePaidInvoicesReport(data: PaidInvoicesReportData): 
         }
     }
 
-    doc.save(`TerraLima_Recaudacion_Global_${year}${now.getMonth()+1}.pdf`);
+    doc.save(`${marca.slug}_Recaudacion_Global_${year}${now.getMonth()+1}.pdf`);
 }
 
 // ─── Interfaces del Reporte de Estado de Cuenta (Cliente) ──────────────────────
@@ -1893,7 +1898,7 @@ export function calcularDiasPdf(fechaPagoRaw: string | null, fechaVencimientoRaw
  * aprobación interna (a diferencia de generatePaidInvoicesReport, que sí es
  * un documento contable interno).
  */
-export async function generateClientStatementReport(data: ClientStatementReportData): Promise<void> {
+export async function generateClientStatementReport(data: ClientStatementReportData, marca: Marca = MARCA_LEGADA): Promise<void> {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const W = 210;
     const H = 297;
@@ -1929,7 +1934,7 @@ export async function generateClientStatementReport(data: ClientStatementReportD
         setFont(doc, 18, BRAND.darkBg, 'bold');
         doc.text('ESTADO DE CUENTA', margin, 22);
         setFont(doc, 7, BRAND.textMuted);
-        doc.text('Terra Lima · Documento Informativo', margin, 29);
+        doc.text(`${marca.nombre} · Documento Informativo`, margin, 29);
 
         return 50;
     };
@@ -2185,5 +2190,5 @@ export async function generateClientStatementReport(data: ClientStatementReportD
         doc.text(`Pág. ${p} / ${totalPages}`, W - margin, H - 5, { align: 'right' });
     }
 
-    doc.save(`TerraLima_EstadoCuenta_${year}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}.pdf`);
+    doc.save(`${marca.slug}_EstadoCuenta_${year}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}.pdf`);
 }

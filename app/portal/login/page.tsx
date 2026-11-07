@@ -7,8 +7,10 @@ import { signIn } from 'next-auth/react';
 import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AlertCircle, Loader2, Building2 } from 'lucide-react';
+import { useMarca } from '@/app/context/MarcaContext';
 
 function LoginForm() {
+    const marca = useMarca();
     const router = useRouter();
     const searchParams = useSearchParams();
     const [step, setStep] = useState<'dni' | 'code'>('dni');
@@ -79,7 +81,7 @@ function LoginForm() {
                     <div className="inline-flex items-center justify-center w-16 h-16 bg-[#A145F5] rounded-2xl mb-4 shadow-lg">
                         <Building2 size={32} className="text-white" />
                     </div>
-                    <h1 className="text-3xl font-bold text-slate-800">Terra Lima</h1>
+                    <h1 className="text-3xl font-bold text-slate-800">{marca.nombre}</h1>
                     <p className="text-slate-500 mt-2">Portal de Pagos - Clientes</p>
                 </div>
 

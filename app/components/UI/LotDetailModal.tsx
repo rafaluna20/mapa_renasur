@@ -1,4 +1,5 @@
 import { Lot } from '@/app/data/lotsData';
+import { useMarca } from '@/app/context/MarcaContext';
 import { X, User, FileText, Users, Receipt, Calendar, RotateCcw, AlertTriangle, CheckCircle, TrendingUp, DollarSign, Map, Download, Loader2, BarChart3 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import ReservationModal from './ReservationModal';
@@ -40,6 +41,7 @@ const STATUS_CONFIG: Record<string, StatusConfigItem> = {
 };
 
 export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotation, activeQuotes, currentUser }: LotDetailModalProps) {
+    const marca = useMarca(lot?.x_proyectoId);
     const [showReservationModal, setShowReservationModal] = useState(false);
     const [showRefundModal, setShowRefundModal] = useState(false);
     const [reservationOwner, setReservationOwner] = useState<{ id: number; name: string; partnerId?: number; clientName?: string; clientPhone?: string | null; clientEmail?: string | null; clientDni?: string | null; totalInstallments?: number; orderId?: number; separationAmount?: number | null } | null>(null);
@@ -371,7 +373,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
 
         const nombreCliente = reservationOwner.clientName || 'estimado cliente';
         const codigoLote = lot?.default_code || '';
-        const mensaje = `Hola ${nombreCliente}, le escribimos de Terra Lima para recordarle el estado de sus pagos del lote ${codigoLote}:\n\n${lineasCuotas}\n\nTotal a regularizar: ${formatMoney(model.totalToRegularize)}\n\nQuedamos atentos para coordinar el pago.`;
+        const mensaje = `Hola ${nombreCliente}, le escribimos de ${marca.nombre} para recordarle el estado de sus pagos del lote ${codigoLote}:\n\n${lineasCuotas}\n\nTotal a regularizar: ${formatMoney(model.totalToRegularize)}\n\nQuedamos atentos para coordinar el pago.`;
 
         return `https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`;
     }
@@ -401,7 +403,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                     currency: lotCurrency,
                     invoices,
                 }],
-            });
+            }, marca);
         } catch (error) {
             console.error('Error generando PDF de estado de cuenta:', error);
             alert('No se pudo generar el PDF. Inténtalo de nuevo.');

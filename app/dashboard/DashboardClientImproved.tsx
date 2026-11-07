@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useMarca } from '@/app/context/MarcaContext';
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     ComposedChart, Line, Bar, Brush, Legend
@@ -357,6 +358,8 @@ const LotTableSkeleton = ({ title, subtitle }: { title: string, subtitle: string
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export default function DashboardClientImproved() {
+    // Sin dimensión de proyecto todavía: los reportes llevan la marca del proyecto principal.
+    const marca = useMarca();
     const { user: authUser, loading: authLoading, salesCount } = useAuth();
     const router = useRouter();
 
@@ -556,7 +559,7 @@ export default function DashboardClientImproved() {
                     data.stats.dateRangeLabel = `${startLabel} al ${endLabel}`;
                 }
                 const { exportOperacionesReportToCsv } = await import('@/app/services/csvExportService');
-                exportOperacionesReportToCsv(data.stats);
+                exportOperacionesReportToCsv(data.stats, marca);
             } else {
                 throw new Error(data.error || 'Failed to fetch operaciones stats');
             }
@@ -566,7 +569,7 @@ export default function DashboardClientImproved() {
         } finally {
             setGeneratingOperacionesCsv(false);
         }
-    }, [authUser, generatingOperacionesCsv, activeDateRange]);
+    }, [authUser, generatingOperacionesCsv, activeDateRange, marca]);
 
     // Manejadores de eventos
     const handleDownloadReport = useCallback(async () => {
@@ -600,14 +603,14 @@ export default function DashboardClientImproved() {
                 dateRangeLabel,
                 comparison: stats.comparison,
             };
-            await generateEnterpriseReport(reportData);
+            await generateEnterpriseReport(reportData, marca);
         } catch (err) {
             console.error('Error generating PDF report:', err);
             alert('Error al generar el reporte PDF. Inténtelo de nuevo.');
         } finally {
             setGeneratingPdf(false);
         }
-    }, [stats, authUser, generatingPdf, salesCount, activeDateRange]);
+    }, [stats, authUser, generatingPdf, salesCount, activeDateRange, marca]);
 
     const handleExportReportCsv = useCallback(async () => {
         if (!stats || !authUser || generatingReportCsv) return;
@@ -632,14 +635,14 @@ export default function DashboardClientImproved() {
                 comparison: stats.comparison,
             };
             const { exportIndividualReportToCsv } = await import('@/app/services/csvExportService');
-            exportIndividualReportToCsv(reportData);
+            exportIndividualReportToCsv(reportData, marca);
         } catch (err) {
             console.error('Error exporting CSV report:', err);
             alert('Error al exportar el CSV. Inténtelo de nuevo.');
         } finally {
             setGeneratingReportCsv(false);
         }
-    }, [stats, authUser, generatingReportCsv, salesCount, activeDateRange]);
+    }, [stats, authUser, generatingReportCsv, salesCount, activeDateRange, marca]);
 
     const handleDownloadGeneralReport = useCallback(async () => {
         if (!authUser || !authUser.is_system || generatingGeneralPdf) return;
@@ -668,7 +671,7 @@ export default function DashboardClientImproved() {
                     data.stats.dateRangeLabel = `${startLabel} al ${endLabel}`;
                 }
                 const { generateProjectGeneralReport } = await import('@/app/services/reportService');
-                await generateProjectGeneralReport(data.stats);
+                await generateProjectGeneralReport(data.stats, marca);
             } else {
                 throw new Error(data.error || 'Failed to fetch general stats');
             }
@@ -678,7 +681,7 @@ export default function DashboardClientImproved() {
         } finally {
             setGeneratingGeneralPdf(false);
         }
-    }, [authUser, generatingGeneralPdf, activeDateRange]);
+    }, [authUser, generatingGeneralPdf, activeDateRange, marca]);
 
     const handleExportGeneralCsv = useCallback(async () => {
         if (!authUser || !authUser.is_system || generatingGeneralCsv) return;
@@ -702,7 +705,7 @@ export default function DashboardClientImproved() {
                     data.stats.dateRangeLabel = `${startLabel} al ${endLabel}`;
                 }
                 const { exportGeneralReportToCsv } = await import('@/app/services/csvExportService');
-                exportGeneralReportToCsv(data.stats);
+                exportGeneralReportToCsv(data.stats, marca);
             } else {
                 throw new Error(data.error || 'Failed to fetch general stats');
             }
@@ -712,7 +715,7 @@ export default function DashboardClientImproved() {
         } finally {
             setGeneratingGeneralCsv(false);
         }
-    }, [authUser, generatingGeneralCsv, activeDateRange]);
+    }, [authUser, generatingGeneralCsv, activeDateRange, marca]);
 
     const handleDownloadInvoicesReport = useCallback(async () => {
         if (!authUser || !authUser.is_system || generatingInvoicesPdf) return;
@@ -740,7 +743,7 @@ export default function DashboardClientImproved() {
                     data.data.dateRangeLabel = `${startLabel} al ${endLabel}`;
                 }
                 const { generatePaidInvoicesReport } = await import('@/app/services/reportService');
-                await generatePaidInvoicesReport(data.data);
+                await generatePaidInvoicesReport(data.data, marca);
             } else {
                 throw new Error(data.error || 'Failed to fetch invoices');
             }
@@ -750,7 +753,7 @@ export default function DashboardClientImproved() {
         } finally {
             setGeneratingInvoicesPdf(false);
         }
-    }, [authUser, generatingInvoicesPdf, activeDateRange]);
+    }, [authUser, generatingInvoicesPdf, activeDateRange, marca]);
 
     const handleExportInvoicesCsv = useCallback(async () => {
         if (!authUser || !authUser.is_system || generatingInvoicesCsv) return;
@@ -773,7 +776,7 @@ export default function DashboardClientImproved() {
                     data.data.dateRangeLabel = `${startLabel} al ${endLabel}`;
                 }
                 const { exportInvoicesReportToCsv } = await import('@/app/services/csvExportService');
-                exportInvoicesReportToCsv(data.data);
+                exportInvoicesReportToCsv(data.data, marca);
             } else {
                 throw new Error(data.error || 'Failed to fetch invoices');
             }
@@ -783,7 +786,7 @@ export default function DashboardClientImproved() {
         } finally {
             setGeneratingInvoicesCsv(false);
         }
-    }, [authUser, generatingInvoicesCsv, activeDateRange]);
+    }, [authUser, generatingInvoicesCsv, activeDateRange, marca]);
 
     // Cálculos memoizados
     const displayedSalesTrend = useMemo(() => {

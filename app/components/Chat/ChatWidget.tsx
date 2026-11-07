@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { MessageCircle, X, Send, Loader2, MapPin, Sparkles, MessageCircleMore } from 'lucide-react';
 import { SHADOW_FLOATING, BORDER_FLOATING } from '@/app/lib/designTokens';
+import { useMarca } from '@/app/context/MarcaContext';
 
 // Número de ventas para el enlace "Consultar con asesor" en lotes sin
 // precio publicado. Si la variable de entorno no está configurada, el
@@ -31,10 +32,10 @@ interface ChatMessage {
     lotes?: LoteChatResultado[];
 }
 
-const WELCOME_MESSAGE: ChatMessage = {
+const mensajeBienvenida = (proyecto: string): ChatMessage => ({
     role: 'assistant',
-    content: '¡Hola! 👋 Soy el asistente de Terra Lima. Cuéntame qué buscas — por ejemplo "lotes de 90m² en la manzana D" o "lotes hasta S/ 50,000" — y te muestro las opciones disponibles.\n\nAún no tengo información sobre cercanía a parques o calles, así que por ahora consulto por tamaño, precio, manzana, etapa y estado.',
-};
+    content: '¡Hola! 👋 Soy el asistente de ' + proyecto + '. Cuéntame qué buscas — por ejemplo "lotes de 90m² en la manzana D" o "lotes hasta S/ 50,000" — y te muestro las opciones disponibles.\n\nAún no tengo información sobre cercanía a parques o calles, así que por ahora consulto por tamaño, precio, manzana, etapa y estado.',
+});
 
 const currency = (n: number) => `S/ ${n.toLocaleString('es-PE')}`;
 
@@ -43,8 +44,9 @@ interface ChatWidgetProps {
 }
 
 export default function ChatWidget({ onSelectLot }: ChatWidgetProps) {
+    const marca = useMarca();
     const [isOpen, setIsOpen] = useState(false);
-    const [messages, setMessages] = useState<ChatMessage[]>([WELCOME_MESSAGE]);
+    const [messages, setMessages] = useState<ChatMessage[]>(() => [mensajeBienvenida(marca.nombre)]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -115,7 +117,7 @@ export default function ChatWidget({ onSelectLot }: ChatWidgetProps) {
                     <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 text-white px-4 py-3 flex items-center justify-between shrink-0">
                         <div className="flex items-center gap-2">
                             <Sparkles size={18} />
-                            <span className="font-bold text-sm">Asistente Terra Lima</span>
+                            <span className="font-bold text-sm">Asistente {marca.nombre}</span>
                         </div>
                         <button
                             onClick={() => setIsOpen(false)}

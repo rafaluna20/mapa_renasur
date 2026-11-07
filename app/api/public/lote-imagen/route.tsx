@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getPublicLots, getPublicElementosUrbanos } from '@/app/services/odooPublicService';
 import { construirEscena, partesDeCodigo, type Punto } from '@/app/utils/escenaLote';
 import { clasificarFrenteParque, crearContextoFrenteParque } from '@/app/utils/frenteParque';
+import { obtenerMarcas } from '@/app/lib/marcaServidor';
+import { marcaPorId } from '@/app/lib/marca';
+import { idProyecto } from '@/app/lib/accesoProyectos';
 
 // Imagen PNG "lote en su entorno" para el bot de ventas (Telegram vía Chatwoot):
 // el lote resaltado, los lotes vecinos, las calles y el parque de alrededor.
@@ -49,6 +52,8 @@ export async function GET(req: NextRequest) {
     const lote = d.lotes.find((l) => l.default_code === codigo);
     if (!lote || !conGeom(lote)) return NextResponse.json({ error: 'Lote no encontrado' }, { status: 404 });
 
+    // La marca de la imagen es el nombre del proyecto DEL LOTE (no una constante).
+    const marca = marcaPorId(await obtenerMarcas(), idProyecto(lote.x_proyecto_id));
     const puntosLote = lote.x_geometry_utm as Punto[];
     const vecinos = d.lotes
         .filter((l) => l.default_code !== codigo && conGeom(l))
@@ -105,7 +110,7 @@ export async function GET(req: NextRequest) {
                 <div style={{ position: 'absolute', left: 24, top: 24, display: 'flex', flexDirection: 'column', background: '#ffffff', border: '2px solid #d0d5db', borderRadius: 16, padding: '14px 22px' }}>
                     <div style={{ display: 'flex', fontSize: 40, color: '#111827' }}>{`Mz ${partes.manzana} · Lote ${partes.lote}`}</div>
                     <div style={{ display: 'flex', fontSize: 28, color: '#374151' }}>
-                        {area ? `${area.toLocaleString('en-US', { maximumFractionDigits: 2 })} m²` : 'Terra Lima'}
+                        {area ? `${area.toLocaleString('en-US', { maximumFractionDigits: 2 })} m²` : marca.nombre}
                     </div>
                     {parque && (
                         <div style={{ display: 'flex', marginTop: 8, fontSize: 24, color: '#14532d', background: '#dcfce7', borderRadius: 10, padding: '4px 12px' }}>
@@ -123,7 +128,7 @@ export async function GET(req: NextRequest) {
                     {hayCalle && <div style={{ display: 'flex' }}>Calle</div>}
                 </div>
                 <div style={{ position: 'absolute', right: 24, bottom: 24, display: 'flex', fontSize: 20, color: '#6b7280', background: '#ffffffcc', borderRadius: 10, padding: '6px 12px' }}>
-                    Terra Lima · ubicación referencial
+                    {`${marca.nombre} · ubicación referencial`}
                 </div>
             </div>
         ),

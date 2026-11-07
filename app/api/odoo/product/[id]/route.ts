@@ -44,7 +44,7 @@ export async function GET(
             "search_read",
             [filter],
             {
-                fields: ["id", "name", "default_code", "list_price", "qty_available", "x_statu", "x_area", "x_mz", "x_etapa", "x_lote"],
+                fields: ["id", "name", "default_code", "list_price", "qty_available", "x_statu", "x_area", "x_mz", "x_etapa", "x_lote", "x_proyecto_id"],
                 limit: 1
             }
         );

@@ -9,6 +9,7 @@ import { Lot } from '@/app/data/lotsData';
 import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 import { odooService, OdooUser, Proyecto } from '@/app/services/odooService';
 import { SHADOW_FLOATING } from '@/app/lib/designTokens';
+import { useMarca } from '@/app/context/MarcaContext';
 
 interface MapAreaProps {
     lots: Lot[];
@@ -46,6 +47,7 @@ export default function MapArea({
     currentUser,
     onExport, onExportPdf
 }: MapAreaProps) {
+    const marca = useMarca(proyectoSeleccionadoId);
     const [activeQuotes, setActiveQuotes] = useState<{ count: number; quotes: { orderId: number; clientName: string; vendorName: string }[] } | null>(null);
     const [selectedPhotoPoint, setSelectedPhotoPoint] = useState<ElementoUrbano | null>(null);
     // Generar el plano de la matriz es solo para administradores (a pedido
@@ -169,7 +171,7 @@ export default function MapArea({
                 </button>
             </div>
 
-            {/* Legend Overlay + cubo isométrico de marca (Terra Lima Lotes) */}
+            {/* Legend Overlay + cubo isométrico con el nombre del proyecto (la marca) */}
             <div className="absolute bottom-34 right-4 z-[400] flex flex-col items-end gap-[17px]">
                 {/* Solo desktop: en móvil ese espacio es escaso y esto es
                     puramente decorativo, no aporta a la tarea del usuario.
@@ -180,11 +182,11 @@ export default function MapArea({
                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Lotes</span>
                     <div className="terra-lima-cube-scene">
                         <div className="terra-lima-cube">
-                            <div className="cube-face cube-face-front">TERRA LIMA</div>
-                            <div className="cube-face cube-face-back">TERRA LIMA</div>
+                            <div className="cube-face cube-face-front">{marca.nombre.toUpperCase()}</div>
+                            <div className="cube-face cube-face-back">{marca.nombre.toUpperCase()}</div>
                             <div className="cube-face cube-face-right">VENTA</div>
                             <div className="cube-face cube-face-left">VENTA</div>
-                            <div className="cube-face cube-face-top">TERRA LIMA</div>
+                            <div className="cube-face cube-face-top">{marca.nombre.toUpperCase()}</div>
                             <div className="cube-face cube-face-bottom">VENTA</div>
                         </div>
                     </div>

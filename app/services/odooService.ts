@@ -273,6 +273,8 @@ export interface Proyecto {
     etiquetaAgrupador?: string;
     etiquetaNumero?: string;
     colorPrimario?: string | null;
+    /** Logo del proyecto (ruta del sitio o URL https); null = sin logo. */
+    logoUrl?: string | null;
     oferta?: OfertaCruda;
 }
 

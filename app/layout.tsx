@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/app/providers";
+import { MarcaProvider } from "@/app/context/MarcaContext";
+import { obtenerMarcas } from "@/app/lib/marcaServidor";
 import ServiceWorkerRegistration from "@/app/components/ServiceWorkerRegistration";
 
 const geistSans = Geist({
@@ -14,24 +16,29 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Renasur - Terra Lima",
-  description: "Sistema GIS de gestión de lotes para el proyecto Renasur de Terra Lima",
-  manifest: "/manifest.json",
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: "black-translucent",
-    title: "Renasur",
-  },
-  formatDetection: {
-    telephone: false,
-  },
-  openGraph: {
-    type: "website",
-    title: "Renasur - Terra Lima",
-    description: "Sistema GIS de gestión de lotes",
-  },
-};
+// La marca es el nombre del proyecto (decisión del usuario, 2026-11-06): el título sale del proyecto PRINCIPAL de Odoo
+// (app/lib/marca.ts). Si Odoo no responde, el de siempre. El manifest de la PWA sigue estático (ver LEEME de P5).
+export async function generateMetadata(): Promise<Metadata> {
+  const { principal } = await obtenerMarcas();
+  return {
+    title: principal.nombre,
+    description: `Sistema GIS de gestión de lotes del proyecto ${principal.nombre}`,
+    manifest: "/manifest.json",
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: "black-translucent",
+      title: "Renasur",
+    },
+    formatDetection: {
+      telephone: false,
+    },
+    openGraph: {
+      type: "website",
+      title: principal.nombre,
+      description: "Sistema GIS de gestión de lotes",
+    },
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: "#1e293b",
@@ -41,11 +48,12 @@ export const viewport: Viewport = {
   userScalable: false,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const marcas = await obtenerMarcas();
   return (
     <html lang="es">
       <head>
@@ -90,8 +98,10 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <Providers>
-          <ServiceWorkerRegistration />
-          {children}
+          <MarcaProvider marcas={marcas}>
+            <ServiceWorkerRegistration />
+            {children}
+          </MarcaProvider>
         </Providers>
       </body>
     </html>

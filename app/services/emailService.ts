@@ -1,6 +1,22 @@
 import { Resend } from 'resend';
+import { MARCA_LEGADA, type Marca } from '@/app/lib/marca';
+import { obtenerMarcas } from '@/app/lib/marcaServidor';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
+
+// La marca de los correos es el nombre del proyecto (decisión 2026-11-06). Si quien llama no dice cuál, es la del proyecto
+// principal; si Odoo no responde, la de siempre. El nombre viene de Odoo: se escapa antes de ir dentro del HTML.
+export const escaparHtml = (s: string): string =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+async function marcaDelCorreo(marca?: Marca): Promise<Marca> {
+    if (marca) return marca;
+    try {
+        return (await obtenerMarcas()).principal;
+    } catch {
+        return MARCA_LEGADA;
+    }
+}
 
 interface VerificationCode {
     code: string;
@@ -17,7 +33,9 @@ export const emailService = {
      * @param dni - Partner's DNI (used as identifier)
      * @returns The generated code (for development logging)
      */
-    async sendVerificationCode(email: string, dni: string): Promise<string> {
+    async sendVerificationCode(email: string, dni: string, marcaProyecto?: Marca): Promise<string> {
+        const marca = await marcaDelCorreo(marcaProyecto);
+        const nombre = escaparHtml(marca.nombre);
         const code = Math.floor(100000 + Math.random() * 900000).toString();
         const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
 
@@ -33,9 +51,9 @@ export const emailService = {
             // (confirmado en vivo: pasó exactamente esto con terralima.es
             // sin verificar en Resend).
             const { error } = await resend.emails.send({
-                from: process.env.EMAIL_FROM || 'Terra Lima <onboarding@resend.dev>',
+                from: process.env.EMAIL_FROM || `${marca.nombre.replace(/[<>"]/g, '')} <onboarding@resend.dev>`,
                 to: email,
-                subject: 'Tu código de verificación - Terra Lima',
+                subject: `Tu código de verificación - ${marca.nombre}`,
                 html: `
                     <!DOCTYPE html>
                     <html>
@@ -54,7 +72,7 @@ export const emailService = {
                     <body>
                         <div class="container">
                             <div class="header">
-                                <h1 style="margin: 0;">🏠 Terra Lima</h1>
+                                <h1 style="margin: 0;">🏠 ${nombre}</h1>
                                 <p style="margin: 10px 0 0 0;">Portal de Pagos</p>
                             </div>
                             <div class="content">
@@ -70,7 +88,7 @@ export const emailService = {
                                 <p style="font-size: 14px; color: #666;">Si no solicitaste este código, puedes ignorar este mensaje.</p>
                             </div>
                             <div class="footer">
-                                <p>© 2026 Terra Lima - Portal de Clientes</p>
+                                <p>© 2026 ${nombre} - Portal de Clientes</p>
                             </div>
                         </div>
                     </body>
@@ -133,7 +151,8 @@ export const emailService = {
         amount,
         invoiceName,
         paymentReference,
-        nextDueDate
+        nextDueDate,
+        marca: marcaProyecto,
     }: {
         email: string;
         userName: string;
@@ -141,12 +160,15 @@ export const emailService = {
         invoiceName: string;
         paymentReference: string;
         nextDueDate?: string;
+        marca?: Marca;
     }) {
+        const marca = await marcaDelCorreo(marcaProyecto);
+        const nombre = escaparHtml(marca.nombre);
         try {
             await resend.emails.send({
-                from: process.env.EMAIL_FROM || 'Terra Lima <onboarding@resend.dev>',
+                from: process.env.EMAIL_FROM || `${marca.nombre.replace(/[<>"]/g, '')} <onboarding@resend.dev>`,
                 to: email,
-                subject: '✅ Tu pago ha sido validado exitosamente - Terra Lima',
+                subject: `✅ Tu pago ha sido validado exitosamente - ${marca.nombre}`,
                 html: `
                     <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
                         <h2 style="color: #059669; margin-top: 0;">¡Hola ${userName}!</h2>
@@ -192,7 +214,7 @@ export const emailService = {
                         <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 32px 0;" />
                         <p style="font-size: 12px; color: #94a3b8; text-align: center;">
                             Este es un correo automático, por favor no respondas a este mensaje.<br/>
-                            © ${new Date().getFullYear()} Terra Lima
+                            © ${new Date().getFullYear()} ${nombre}
                         </p>
                     </div>
                 `,

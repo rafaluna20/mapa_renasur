@@ -9,6 +9,7 @@
  */
 
 import type { PaidInvoicesReportData, GeneralReportData, ReportData } from './reportService';
+import { MARCA_LEGADA, type Marca } from '@/app/lib/marca';
 
 function csvEscape(value: string | number | null | undefined): string {
     if (value === null || value === undefined) return '';
@@ -147,9 +148,9 @@ export function buildInvoicesSections(data: PaidInvoicesReportData): CsvSection[
     return sections;
 }
 
-export function exportInvoicesReportToCsv(data: PaidInvoicesReportData): void {
+export function exportInvoicesReportToCsv(data: PaidInvoicesReportData, marca: Marca = MARCA_LEGADA): void {
     const now = new Date();
-    downloadCsv(`TerraLima_Recaudacion_Datos_${now.getFullYear()}${now.getMonth() + 1}.csv`, buildInvoicesSections(data));
+    downloadCsv(`${marca.slug}_Recaudacion_Datos_${now.getFullYear()}${now.getMonth() + 1}.csv`, buildInvoicesSections(data));
 }
 
 export function buildGeneralSections(data: GeneralReportData): CsvSection[] {
@@ -205,9 +206,9 @@ export function buildGeneralSections(data: GeneralReportData): CsvSection[] {
     return sections;
 }
 
-export function exportGeneralReportToCsv(data: GeneralReportData): void {
+export function exportGeneralReportToCsv(data: GeneralReportData, marca: Marca = MARCA_LEGADA): void {
     const now = new Date();
-    downloadCsv(`TerraLima_ReporteGeneral_Datos_${now.getFullYear()}${now.getMonth() + 1}.csv`, buildGeneralSections(data));
+    downloadCsv(`${marca.slug}_ReporteGeneral_Datos_${now.getFullYear()}${now.getMonth() + 1}.csv`, buildGeneralSections(data));
 }
 
 // Reporte de operaciones (solo administrador, app/dashboard): resumen de
@@ -275,9 +276,9 @@ export function buildOperacionesSections(data: GeneralReportData): CsvSection[] 
     return sections;
 }
 
-export function exportOperacionesReportToCsv(data: GeneralReportData): void {
+export function exportOperacionesReportToCsv(data: GeneralReportData, marca: Marca = MARCA_LEGADA): void {
     const now = new Date();
-    downloadCsv(`TerraLima_ReporteOperaciones_${now.getFullYear()}${now.getMonth() + 1}.csv`, buildOperacionesSections(data));
+    downloadCsv(`${marca.slug}_ReporteOperaciones_${now.getFullYear()}${now.getMonth() + 1}.csv`, buildOperacionesSections(data));
 }
 
 export function buildIndividualSections(data: ReportData): CsvSection[] {
@@ -329,7 +330,7 @@ export function buildIndividualSections(data: ReportData): CsvSection[] {
     return sections;
 }
 
-export function exportIndividualReportToCsv(data: ReportData): void {
+export function exportIndividualReportToCsv(data: ReportData, marca: Marca = MARCA_LEGADA): void {
     const now = new Date();
-    downloadCsv(`TerraLima_ReporteAsesor_Datos_${data.advisor.name.replace(/\s+/g, '_')}_${now.getFullYear()}${now.getMonth() + 1}.csv`, buildIndividualSections(data));
+    downloadCsv(`${marca.slug}_ReporteAsesor_Datos_${data.advisor.name.replace(/\s+/g, '_')}_${now.getFullYear()}${now.getMonth() + 1}.csv`, buildIndividualSections(data));
 }

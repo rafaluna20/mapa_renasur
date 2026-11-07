@@ -3,13 +3,14 @@ import autoTable from 'jspdf-autotable';
 import { QuoteCalculations, financeService } from '../services/financeService';
 import { Lot } from '../data/lotsData';
 import { imageUrlToBase64 } from './imageHelper';
+import { MARCA_LEGADA, type Marca } from '../lib/marca';
 
 /**
- * Paleta de Colores Corporativa TERRA LIMA - Mejorada
+ * Paleta de colores corporativa - Mejorada
  * Diseño monocromático armonioso basado en verde suave
  */
 const COLORS = {
-    // Verde TERRA LIMA (Más suave y profesional)
+    // Verde corporativo (más suave y profesional)
     primary: {
         main: [76, 153, 117] as [number, number, number],      // #4C9975 - Verde suave principal
         dark: [55, 125, 95] as [number, number, number],       // #377D5F - Verde oscuro para títulos
@@ -41,7 +42,7 @@ const COLORS = {
 };
 
 /**
- * Exporta una cotización a un archivo PDF profesional con diseño corporativo TERRA LIMA.
+ * Exporta una cotización a un archivo PDF profesional con diseño corporativo. La marca (nombre y logo) es la del PROYECTO del lote.
  * Utiliza jsPDF y jspdf-autotable para manejar tablas multi-página.
  */
 /** Datos de contacto del cliente (res.partner en Odoo) para la sección
@@ -73,8 +74,11 @@ export const exportQuoteToPdf = async (
     // pagos (2, 3... N) en vez de uno solo. Si viene undefined o con un
     // solo elemento, el cronograma se ve exactamente igual que antes (una
     // sola fila "PAGO INICIAL").
-    initialPaymentBreakdown?: { amount: number; date: Date }[]
+    initialPaymentBreakdown?: { amount: number; date: Date }[],
+    // Marca del proyecto del lote (nombre y logo). Sin ella, la de siempre.
+    marca: Marca = MARCA_LEGADA
 ): Promise<Blob | void> => {
+    const nombreMarca = marca.nombre.toUpperCase();
     const clientName = clientDetails?.secondClientName?.trim()
         ? `${clientDetails.name} y ${clientDetails.secondClientName}`
         : clientDetails?.name;
@@ -92,10 +96,10 @@ export const exportQuoteToPdf = async (
     doc.setFillColor(...COLORS.primary.main);
     doc.rect(pageWidth - margin - 10, 10, 10, 25, 'F');
     
-    // Logo TERRA LIMA
+    // Logo del proyecto (si no tiene, solo el nombre)
     let logoLoaded = false;
     try {
-        const logoBase64 = await imageUrlToBase64('/terra-lima-logo.png');
+        const logoBase64 = marca.logoUrl ? await imageUrlToBase64(marca.logoUrl) : null;
         if (logoBase64 && logoBase64.startsWith('data:image/')) {
             doc.addImage(logoBase64, 'PNG', margin, 10, 50, 20);
             logoLoaded = true;
@@ -109,7 +113,7 @@ export const exportQuoteToPdf = async (
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(16);
         doc.setTextColor(...COLORS.primary.main);
-        doc.text('TERRA LIMA', margin, 23);
+        doc.text(nombreMarca, margin, 23);
     }
 
     // Información de la empresa
@@ -173,7 +177,7 @@ export const exportQuoteToPdf = async (
         margin: { left: margin + 3, right: margin + 15 },
         theme: 'plain',
         body: [
-            ['Proyecto:', 'HABILITACIÓN TERRA-LIMA', 'Asesor:', vendorName],
+            ['Proyecto:', `HABILITACIÓN ${nombreMarca}`, 'Asesor:', vendorName],
             ['Lote:', lot.name, 'Estado:', lot.x_statu.toUpperCase()],
             ['Área Total:', `${((lot.x_area || 0) >= 1000 ? (lot.x_area || 0) / 100 : (lot.x_area || 0)).toFixed(2)} m²`, 'Cliente:', clientName || 'No especificado']
         ],
@@ -476,7 +480,7 @@ export const exportQuoteToPdf = async (
         // Logo pequeño en pie (opcional)
         doc.setFontSize(6);
         doc.setTextColor(...COLORS.gray.medium);
-        doc.text('TERRA LIMA - RENACIMIENTO DEL SUR SAC', margin, footerY + 10);
+        doc.text(`${nombreMarca} - RENACIMIENTO DEL SUR SAC`, margin, footerY + 10);
     }
 
     // Descargar
@@ -486,5 +490,5 @@ export const exportQuoteToPdf = async (
     }
 
     // Descargar por defecto
-    doc.save(`Cotizacion_TerraLima_${lot.name.replace(/\s+/g, '_')}.pdf`);
+    doc.save(`Cotizacion_${marca.slug}_${lot.name.replace(/\s+/g, '_')}.pdf`);
 };

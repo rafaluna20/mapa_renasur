@@ -38,9 +38,9 @@ describe('constantes de proyecto en el código', () => {
     expect(Object.values(resumenPorCategoria()).reduce((a, b) => a + b, 0)).toBe(total);
   });
 
-  it('lo que sigue pendiente de convertir (proyecto) y de decidir (marca) — la deuda de P5, que solo debe bajar', () => {
+  it('NO queda ningún texto de proyecto ni de marca escrito a mano: la deuda de P5 en este frente es cero y no puede volver', () => {
     const r = resumenPorCategoria();
-    expect(r.proyecto).toBe(23);
-    expect(r.marca).toBe(40);
+    expect(r.proyecto).toBe(0);
+    expect(r.marca).toBe(0);
   });
 });
