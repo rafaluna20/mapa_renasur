@@ -118,6 +118,16 @@ function registrar(modo: ModoAcceso, datos: Record<string, unknown>): void {
 }
 
 /**
+ * REGISTRO DE AUDITORÍA (P9): un acceso DENEGADO (403) deja una línea fija y fácil de buscar en los registros del servidor:
+ *   [acceso][denegado] {"uid":7,"ruta":"/api/…","recurso":"…","proyecto":3}
+ * Solo lleva el id de quien pidió, la ruta, el recurso y el proyecto: nunca nombres, documentos ni datos de clientes.
+ * (Filtrar una lista —ocultar lo de otros proyectos— es el funcionamiento normal y no se registra: sería ruido en cada pantalla.)
+ */
+function registrarDenegado(datos: Record<string, unknown>): void {
+  console.warn(`[acceso][denegado] ${JSON.stringify(datos)}`);
+}
+
+/**
  * Filtra una lista por proyecto. En «observar» devuelve la lista COMPLETA y registra lo que habría ocultado.
  * `recurso` nombra qué se filtra (para el registro).
  */
@@ -171,6 +181,7 @@ export function guardiaProyecto(
   if (modo === 'off' || puedeVer(acceso, proyectoId)) return { ok: true };
   registrar(modo, { uid: contexto.uid, ruta: contexto.ruta, recurso: contexto.recurso, proyecto: proyectoId ?? null });
   if (modo === 'observar') return { ok: true };
+  registrarDenegado({ uid: contexto.uid, ruta: contexto.ruta, recurso: contexto.recurso, proyecto: proyectoId ?? null });
   return {
     ok: false,
     response: NextResponse.json(
@@ -220,6 +231,7 @@ export async function guardiaLote(
   } catch (error) {
     console.error(`[acceso] No se pudo resolver el proyecto del lote en ${ruta}:`, error instanceof Error ? error.message : error);
     if (modo === 'observar') return { ok: true };
+    registrarDenegado({ uid: sesion.odooUid, ruta, recurso: JSON.stringify(ref), proyecto: null, motivo: 'no se pudo resolver el proyecto' });
     return {
       ok: false,
       response: NextResponse.json({ success: false, error: 'No se pudo verificar el acceso al proyecto.' }, { status: 503 }),

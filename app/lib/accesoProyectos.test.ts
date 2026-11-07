@@ -165,7 +165,23 @@ describe('guardiaProyecto', () => {
     expect(guardiaProyecto(acceso([1]), 1, { uid: 7, ruta: '/x', modo: 'bloquear' }).ok).toBe(true);
   });
 
+  it('bloquear: DEJA REGISTRO de cada acceso denegado (id, ruta, recurso, proyecto) y nada personal', () => {
+    const aviso = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    guardiaProyecto(acceso([1]), 3, { uid: 7, ruta: '/api/odoo/product/9', recurso: '{"productId":9}', modo: 'bloquear' });
+    const linea = String(aviso.mock.calls[0][0]);
+    expect(linea).toContain('[acceso][denegado]');
+    expect(JSON.parse(linea.split('[acceso][denegado] ')[1])).toEqual({ uid: 7, ruta: '/api/odoo/product/9', recurso: '{"productId":9}', proyecto: 3 });
+  });
+
+  it('lo permitido NO deja registro de denegado', () => {
+    const aviso = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    guardiaProyecto(acceso([1]), 1, { uid: 7, ruta: '/x', modo: 'bloquear' });
+    guardiaProyecto(acceso([1]), 2, { uid: 7, ruta: '/x', modo: 'observar' });
+    expect(aviso.mock.calls.filter((c) => String(c[0]).includes('[denegado]'))).toEqual([]);
+  });
+
   it('bloquear: responde 403 para otro proyecto y para lo que no tiene proyecto', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     for (const proyecto of [2, null]) {
       const r = guardiaProyecto(acceso([1]), proyecto, { uid: 7, ruta: '/x', modo: 'bloquear' });
       expect(r.ok).toBe(false);
