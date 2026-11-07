@@ -5,8 +5,9 @@ import { X } from 'lucide-react';
 import { Lot } from '@/app/data/lotsData';
 import LeadForm from '@/app/components/Public/LeadForm';
 import {
-    OFERTA,
-    AVISO_LEGAL_TITULO,
+    OFERTA_LEGADA,
+    type OfertaProyecto,
+    tituloAvisoLegal,
     detalleLegal,
     cuotaReferencial,
     formatSoles,
@@ -25,6 +26,8 @@ interface PublicLotPanelProps {
     utmSource?: string;
     utmMedium?: string;
     utmCampaign?: string;
+    /** Oferta del proyecto del lote (P5). Sin ella, la de siempre. */
+    oferta?: OfertaProyecto;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -45,7 +48,8 @@ function formatPrecio(lot: Lot): string | null {
     return `S/ ${lot.list_price.toLocaleString()}`;
 }
 
-export default function PublicLotPanel({ lot, onClose, utmSource, utmMedium, utmCampaign }: PublicLotPanelProps) {
+export default function PublicLotPanel({ lot, onClose, utmSource, utmMedium, utmCampaign, oferta = OFERTA_LEGADA }: PublicLotPanelProps) {
+    const avisoLegal = tituloAvisoLegal(oferta);
     const estado = lot.x_statu?.toLowerCase() || 'libre';
     const estadoLabel = STATUS_LABEL[estado] || estado;
     const precio = formatPrecio(lot);
@@ -58,7 +62,10 @@ export default function PublicLotPanel({ lot, onClose, utmSource, utmMedium, utm
     const [formAbierto, setFormAbierto] = useState(
         () => typeof window !== 'undefined' && window.matchMedia('(min-width: 641px)').matches,
     );
-    const cuota = esComprable && lot.list_price > 0 ? cuotaReferencial(lot.list_price) : null;
+    const cuota =
+        esComprable && lot.list_price > 0 && oferta.cuotaInicial !== null && oferta.nroCuotas !== null
+            ? cuotaReferencial(lot.list_price, oferta.cuotaInicial, oferta.nroCuotas)
+            : null;
 
     return (
         <div className="venta-lot-panel">
@@ -86,7 +93,7 @@ export default function PublicLotPanel({ lot, onClose, utmSource, utmMedium, utm
                 <>
                     {cuota !== null && (
                         <p className="venta-lot-financing">
-                            Inicial <strong>{formatSoles(OFERTA.cuotaInicial)}</strong> + {OFERTA.nroCuotas} cuotas de{' '}
+                            Inicial <strong>{formatSoles(oferta.cuotaInicial ?? 0)}</strong> + {oferta.nroCuotas} cuotas de{' '}
                             <strong>{formatSoles(cuota)}</strong>
                             <small> · referencial, la confirma un asesor</small>
                         </p>
@@ -97,6 +104,7 @@ export default function PublicLotPanel({ lot, onClose, utmSource, utmMedium, utm
                             area: lot.x_area,
                             precio: lot.list_price,
                             ref: refCampana(utmCampaign, utmSource),
+                            oferta,
                         })}
                         target="_blank"
                         rel="noopener noreferrer"
@@ -126,14 +134,16 @@ export default function PublicLotPanel({ lot, onClose, utmSource, utmMedium, utm
                             utmCampaign={utmCampaign}
                         />
                     </details>
-                    <p className="venta-legal venta-legal--panel">
-                        <strong>{AVISO_LEGAL_TITULO}</strong> {detalleLegal()}
-                    </p>
+                    {avisoLegal && (
+                        <p className="venta-legal venta-legal--panel">
+                            <strong>{avisoLegal}</strong> {detalleLegal(oferta.resolucionMunicipal)}
+                        </p>
+                    )}
                 </>
             ) : (
                 <p className="venta-lot-unavailable">
                     Este lote ya no está disponible. Mira otros lotes libres en el mapa, o escríbenos por
-                    WhatsApp al <a href="tel:+51977684050">{OFERTA.whatsappVisible}</a> para ver alternativas
+                    WhatsApp al <a href={`tel:+${oferta.whatsappNumero}`}>{oferta.whatsappVisible}</a> para ver alternativas
                     similares.
                 </p>
             )}

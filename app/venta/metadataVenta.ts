@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { partesDeCodigo } from '@/app/utils/escenaLote';
-import { OFERTA, AVISO_LEGAL_TITULO, formatSoles } from '@/app/venta/ofertaComercial';
+import { OFERTA_LEGADA, type OfertaProyecto, tituloAvisoLegal, formatSoles } from '@/app/venta/ofertaComercial';
 
 /**
  * Título, descripción e imagen con los que se ve el enlace de /venta cuando se pega en Telegram, WhatsApp, etc.
@@ -13,11 +13,24 @@ import { OFERTA, AVISO_LEGAL_TITULO, formatSoles } from '@/app/venta/ofertaComer
  */
 export const SITE_URL_POR_DEFECTO = 'https://mapa-renasur.vercel.app';
 
-const TITULO_GENERAL = 'Terra Lima — Lotes en venta en Pucusana';
-// Mismos datos que los anuncios (ver ofertaComercial.ts). Incluye a propósito que la habilitación urbana está en
-// proceso: la vista previa del enlace no debe prometer más que la página.
-const COMPLEMENTO = `Cuota inicial de ${formatSoles(OFERTA.cuotaInicial)} y financiamiento directo en ${OFERTA.nroCuotas} cuotas, sin bancos. ${AVISO_LEGAL_TITULO}`;
-const DESCRIPCION_GENERAL = `Lotes disponibles en Terra Lima, Panamericana Sur Km 55, Pucusana. ${COMPLEMENTO}`;
+// Mismos datos que los anuncios (ver ofertaComercial.ts), ahora POR PROYECTO (P5). La vista previa del enlace no debe
+// prometer más que la página: la frase de habilitación sale solo si el proyecto la tiene cargada.
+function textos(oferta: OfertaProyecto) {
+    const donde = oferta.lugar ? `${oferta.nombre}, ${oferta.lugar}` : oferta.nombre;
+    const financiamiento =
+        oferta.cuotaInicial !== null && oferta.nroCuotas !== null
+            ? `Cuota inicial de ${formatSoles(oferta.cuotaInicial)} y financiamiento directo en ${oferta.nroCuotas} cuotas, sin bancos.`
+            : '';
+    const complemento = [financiamiento, tituloAvisoLegal(oferta) ?? ''].filter(Boolean).join(' ');
+    const ubicacion = [oferta.nombre, oferta.direccionReferencia, oferta.lugar].filter(Boolean).join(', ');
+    return {
+        donde,
+        complemento,
+        titulo: `${oferta.nombre} — Lotes en venta${oferta.lugar ? ` en ${oferta.lugar}` : ''}`,
+        descripcion: `Lotes disponibles en ${ubicacion}.${complemento ? ` ${complemento}` : ''}`,
+        ubicacion,
+    };
+}
 
 /**
  * `sinImagen`: para los enlaces que manda el bot de ventas (utm_source=asistente-virtual). El bot ya envía la imagen
@@ -28,19 +41,21 @@ export function construirMetadataVenta(
     lote?: string | null,
     base: string = SITE_URL_POR_DEFECTO,
     opciones: { sinImagen?: boolean } = {},
+    oferta: OfertaProyecto = OFERTA_LEGADA,
 ): Metadata {
+    const t = textos(oferta);
     const origen = base.replace(/\/+$/, '');
     const codigo = String(lote ?? '').trim().toUpperCase();
     const partes = codigo ? partesDeCodigo(codigo) : null;
     const sinImagen = !!opciones.sinImagen && !!partes;
 
-    const titulo = partes ? `Mz ${partes.manzana} · Lote ${partes.lote} — Terra Lima, Pucusana` : TITULO_GENERAL;
+    const titulo = partes ? `Mz ${partes.manzana} · Lote ${partes.lote} — ${t.donde}` : t.titulo;
     const descripcion = partes
-        ? `Mira dónde queda el lote ${partes.lote} de la manzana ${partes.manzana} en Terra Lima, Panamericana Sur Km 55, Pucusana. ${COMPLEMENTO}`
-        : DESCRIPCION_GENERAL;
+        ? `Mira dónde queda el lote ${partes.lote} de la manzana ${partes.manzana} en ${t.ubicacion}.${t.complemento ? ` ${t.complemento}` : ''}`
+        : t.descripcion;
     const imagen = partes
         ? { url: `${origen}/api/public/lote-imagen?codigo=${encodeURIComponent(codigo)}`, width: 1000, height: 1000, alt: `Ubicación del lote ${partes.lote}, manzana ${partes.manzana}` }
-        : { url: `${origen}/venta-hero-portada.jpg`, width: 640, height: 386, alt: 'Ingreso a Terra Lima, Pucusana' };
+        : { url: `${origen}/venta-hero-portada.jpg`, width: 640, height: 386, alt: `Ingreso a ${t.donde}` };
 
     return {
         metadataBase: new URL(origen),
@@ -48,7 +63,7 @@ export function construirMetadataVenta(
         description: descripcion,
         openGraph: {
             type: 'website',
-            siteName: 'Terra Lima',
+            siteName: oferta.nombre,
             locale: 'es_PE',
             title: titulo,
             description: descripcion,

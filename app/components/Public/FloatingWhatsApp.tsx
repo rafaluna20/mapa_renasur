@@ -1,6 +1,6 @@
 'use client';
 
-import { refCampana, urlWhatsApp } from '@/app/venta/ofertaComercial';
+import { type OfertaProyecto, refCampana, urlWhatsApp } from '@/app/venta/ofertaComercial';
 import { trackMeta } from '@/app/venta/metaPixel';
 
 // Ícono flotante de WhatsApp, fijo en la esquina inferior derecha. Se oculta
@@ -21,14 +21,15 @@ interface FloatingWhatsAppProps {
     active: boolean;
     utmSource?: string;
     utmCampaign?: string;
+    oferta?: OfertaProyecto;
 }
 
-export default function FloatingWhatsApp({ active, utmSource, utmCampaign }: FloatingWhatsAppProps) {
+export default function FloatingWhatsApp({ active, utmSource, utmCampaign, oferta }: FloatingWhatsAppProps) {
     if (!active) return null;
 
     return (
         <a
-            href={urlWhatsApp({ ref: refCampana(utmCampaign, utmSource) })}
+            href={urlWhatsApp({ ref: refCampana(utmCampaign, utmSource), oferta })}
             target="_blank"
             rel="noopener noreferrer"
             className="venta-whatsapp-float"

@@ -1,4 +1,5 @@
 import { apiFetch } from '@/app/lib/apiFetch';
+import { leerProyectosVia } from '@/app/lib/proyectosOdoo';
 import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 import { clasificarFrenteParque, crearContextoFrenteParque, type ContextoFrenteParque, type TipoFrenteParque } from '@/app/utils/frenteParque';
 import { ArcoMetadata } from '@/app/utils/arcoUtils';
@@ -263,20 +264,30 @@ export interface Proyecto {
     /** Campo Odoo 'secuencia' ("Orden") — define cuál proyecto es el
      *  default cuando el filtro del mapa está en "Todos los proyectos". */
     orden: number;
+    // --- P5 (solo con proyecto_inmobiliario >= 1.10.0 en Odoo; ausentes en un Odoo más viejo) ---
+    tipo?: string;
+    /** Si el proyecto puede mostrarse en la landing pública. */
+    publicarWeb?: boolean;
+    /** El proyecto que muestra la landing cuando no se pide otro (Odoo: «Proyecto principal»). */
+    esPrincipal?: boolean;
+    etiquetaAgrupador?: string;
+    etiquetaNumero?: string;
+    colorPrimario?: string | null;
+    oferta?: OfertaCruda;
 }
 
-interface OdooProyectoInmobiliario {
-    id: number;
-    codigo: string;
-    name: string;
-    departamento: string;
-    provincia: string;
-    distrito: string;
-    urbanizacion: string;
-    zona_utm: string;
-    centro_este: number | false;
-    centro_norte: number | false;
-    secuencia: number;
+/** Oferta comercial tal como está cargada en Odoo; null = sin cargar (se omite, nunca se toma de otro proyecto). */
+export interface OfertaCruda {
+    cuotaInicial: number | null;
+    nroCuotas: number | null;
+    whatsappNumero: string | null;
+    whatsappVisible: string | null;
+    distanciaReferenciaKm: number | null;
+    referenciaNombre: string | null;
+    direccionReferencia: string | null;
+    servicios: string | null;
+    fraseHabilitacion: string | null;
+    resolucionMunicipal: string | null;
 }
 
 /**
@@ -287,32 +298,7 @@ interface OdooProyectoInmobiliario {
  * mientras se completa el rollout de este módulo.
  */
 export async function fetchProyectos(): Promise<Proyecto[]> {
-    try {
-        const registros: OdooProyectoInmobiliario[] = await fetchOdoo(
-            'proyecto.inmobiliario',
-            'search_read',
-            [[['active', '=', true]]],
-            {
-                fields: ['id', 'codigo', 'name', 'departamento', 'provincia', 'distrito', 'urbanizacion', 'zona_utm', 'centro_este', 'centro_norte', 'secuencia'],
-            }
-        );
-        return registros.map((r) => ({
-            id: r.id,
-            codigo: r.codigo,
-            nombre: r.name,
-            departamento: r.departamento,
-            provincia: r.provincia,
-            distrito: r.distrito,
-            urbanizacion: r.urbanizacion,
-            zonaUTM: r.zona_utm,
-            orden: r.secuencia,
-            ...(r.centro_este ? { centroEste: r.centro_este } : {}),
-            ...(r.centro_norte ? { centroNorte: r.centro_norte } : {}),
-        }));
-    } catch (error) {
-        console.warn('No se pudieron obtener proyectos desde Odoo (¿módulo proyecto_inmobiliario instalado?):', error);
-        return [];
-    }
+    return leerProyectosVia(fetchOdoo as Parameters<typeof leerProyectosVia>[0], 'odooService');
 }
 
 // --- Chatbot IA: búsqueda de lotes (solo lectura) ---

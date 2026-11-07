@@ -4,6 +4,9 @@ import { OdooProduct, Proyecto } from '@/app/services/odooService';
 import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 import VentaClient from '@/app/venta/VentaClient';
 import { construirMetadataVenta } from '@/app/venta/metadataVenta';
+import { elegirProyecto, filtrarPorProyecto } from '@/app/venta/proyectoPublico';
+import { ofertaDeProyecto } from '@/app/venta/ofertaComercial';
+import { idProyecto } from '@/app/lib/accesoProyectos';
 
 // Página pública (sin login) de anuncios pagados: landing + mapa de lotes de
 // solo lectura + formulario que manda un lead al CRM. NO usa la credencial
@@ -14,11 +17,28 @@ import { construirMetadataVenta } from '@/app/venta/metadataVenta';
 // a este diseño.
 export const dynamic = 'force-dynamic';
 
-export async function generateMetadata({ searchParams }: { searchParams: Promise<{ lote?: string; utm_source?: string }> }): Promise<Metadata> {
-    const { lote, utm_source } = await searchParams;
+// Proyectos para los metadatos del enlace (P5: título, descripción y nombre del sitio salen del proyecto). Caché propia y corta;
+// si Odoo falla, los metadatos caen a los de siempre en vez de romper la página.
+let proyectosMetaCache: { proyectos: Proyecto[]; timestamp: number } | null = null;
+
+async function proyectosParaMetadata(): Promise<Proyecto[]> {
+    const ahora = Date.now();
+    if (proyectosMetaCache && ahora - proyectosMetaCache.timestamp < 5 * 60 * 1000) return proyectosMetaCache.proyectos;
+    try {
+        const proyectos = await getPublicProyectos();
+        proyectosMetaCache = { proyectos, timestamp: ahora };
+        return proyectos;
+    } catch {
+        return proyectosMetaCache?.proyectos ?? [];
+    }
+}
+
+export async function generateMetadata({ searchParams }: { searchParams: Promise<{ lote?: string; utm_source?: string; proyecto?: string }> }): Promise<Metadata> {
+    const { lote, utm_source, proyecto } = await searchParams;
     // El bot de ventas ya manda la imagen del lote como adjunto: su enlace no lleva imagen en la vista previa (se veía dos veces).
     const sinImagen = utm_source === 'asistente-virtual';
-    return construirMetadataVenta(lote, process.env.NEXT_PUBLIC_SITE_URL || undefined, { sinImagen });
+    const oferta = ofertaDeProyecto(elegirProyecto(await proyectosParaMetadata(), proyecto).proyecto);
+    return construirMetadataVenta(lote, process.env.NEXT_PUBLIC_SITE_URL || undefined, { sinImagen }, oferta);
 }
 
 interface CacheContainer {
@@ -36,7 +56,7 @@ const CACHE_TTL = 5 * 60 * 1000;
 export default async function VentaPage({
     searchParams,
 }: {
-    searchParams: Promise<{ utm_source?: string; utm_medium?: string; utm_campaign?: string; lote?: string }>;
+    searchParams: Promise<{ utm_source?: string; utm_medium?: string; utm_campaign?: string; lote?: string; proyecto?: string }>;
 }) {
     const resolvedParams = await searchParams;
 
@@ -80,11 +100,18 @@ export default async function VentaPage({
         }
     }
 
+    // P5: la landing muestra UN proyecto (?proyecto=<código>; por defecto el principal) con SU oferta comercial. Solo se
+    // ofrecen proyectos publicables (activos, no «trabajo externo», con «Publicar en la web»). Ver app/venta/proyectoPublico.ts.
+    const seleccion = elegirProyecto(proyectos, resolvedParams?.proyecto);
+    const lotsDelProyecto = filtrarPorProyecto(lots, seleccion, (l) => idProyecto(l.x_proyecto_id), proyectos);
+    const elementosDelProyecto = filtrarPorProyecto(elementosUrbanos, seleccion, (e) => e.proyectoId, proyectos);
+
     return (
         <VentaClient
-            odooProducts={lots}
+            odooProducts={lotsDelProyecto}
             proyectos={proyectos}
-            elementosUrbanos={elementosUrbanos}
+            elementosUrbanos={elementosDelProyecto}
+            oferta={ofertaDeProyecto(seleccion.proyecto)}
             hasConnectionError={hasConnectionError}
             utmSource={resolvedParams?.utm_source}
             utmMedium={resolvedParams?.utm_medium}

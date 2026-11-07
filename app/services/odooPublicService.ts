@@ -12,6 +12,7 @@
 import { callOdooJsonRpc } from '@/app/services/odooRpc';
 import { OdooProduct, Proyecto, fetchElementosUrbanosVia } from '@/app/services/odooService';
 import { leerLotesPaginados } from '@/app/lib/lotesPaginados';
+import { leerProyectosVia } from '@/app/lib/proyectosOdoo';
 import { ElementoUrbano } from '@/app/data/elementosUrbanos';
 
 function getPublicCredentials() {
@@ -66,50 +67,11 @@ export async function getPublicLots(): Promise<OdooProduct[]> {
     return registros;
 }
 
-interface OdooProyectoInmobiliarioPublic {
-    id: number;
-    codigo: string;
-    name: string;
-    departamento: string;
-    provincia: string;
-    distrito: string;
-    urbanizacion: string;
-    zona_utm: string;
-    centro_este: number | false;
-    centro_norte: number | false;
-    secuencia: number;
-}
-
 // Mismos campos que fetchProyectos() (odooService.ts) — necesarios porque
 // LeafletMap resuelve la zona UTM de cada lote a partir de x_proyecto_id +
 // esta lista; sin esto, todo cae al default de zona 18S.
 export async function getPublicProyectos(): Promise<Proyecto[]> {
-    try {
-        const registros: OdooProyectoInmobiliarioPublic[] = await fetchOdooPublic(
-            'proyecto.inmobiliario',
-            'search_read',
-            [[['active', '=', true]]],
-            {
-                fields: ['id', 'codigo', 'name', 'departamento', 'provincia', 'distrito', 'urbanizacion', 'zona_utm', 'centro_este', 'centro_norte', 'secuencia'],
-            }
-        );
-        return registros.map((r) => ({
-            id: r.id,
-            codigo: r.codigo,
-            nombre: r.name,
-            departamento: r.departamento,
-            provincia: r.provincia,
-            distrito: r.distrito,
-            urbanizacion: r.urbanizacion,
-            zonaUTM: r.zona_utm,
-            orden: r.secuencia,
-            ...(r.centro_este ? { centroEste: r.centro_este } : {}),
-            ...(r.centro_norte ? { centroNorte: r.centro_norte } : {}),
-        }));
-    } catch (error) {
-        console.warn('[odooPublicService] No se pudieron obtener proyectos:', error);
-        return [];
-    }
+    return leerProyectosVia(fetchOdooPublic as Parameters<typeof leerProyectosVia>[0], 'odooPublicService');
 }
 
 // Calles/áreas verdes/etc. — mismo modelo 'elemento.urbano' y misma lógica

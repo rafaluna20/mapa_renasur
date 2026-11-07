@@ -12,7 +12,7 @@ import PublicMapSection from '@/app/components/Public/PublicMapSection';
 import PublicLotPanel from '@/app/components/Public/PublicLotPanel';
 import FloatingWhatsApp from '@/app/components/Public/FloatingWhatsApp';
 import { trackMeta } from '@/app/venta/metaPixel';
-import { OFERTA } from '@/app/venta/ofertaComercial';
+import { OFERTA_LEGADA, type OfertaProyecto } from '@/app/venta/ofertaComercial';
 
 
 // Solo se publican lotes con id numérico real de Odoo. mergeLotsData
@@ -36,6 +36,8 @@ interface VentaClientProps {
     // agente comercial de Chatwoot para mandar "aquí lo tienes en el mapa" en vez de (o además de) el PDF
     // técnico. Si no calza con ningún lote publicado, la página se comporta como si no viniera nada.
     loteInicial?: string;
+    /** Oferta comercial del proyecto que se muestra (P5). Sin ella, la de siempre (Terra Lima). */
+    oferta?: OfertaProyecto;
 }
 
 export default function VentaClient({
@@ -47,6 +49,7 @@ export default function VentaClient({
     utmMedium,
     utmCampaign,
     loteInicial,
+    oferta = OFERTA_LEGADA,
 }: VentaClientProps) {
     const [selectedLotId, setSelectedLotId] = useState<string | null>(null);
     // Desactivado por defecto a pedido explícito del cliente (2026-09-09):
@@ -167,7 +170,7 @@ export default function VentaClient({
                         No pudimos cargar el mapa de lotes en este momento.
                     </p>
                     <p style={{ marginTop: '0.6rem', color: '#d9c9ec' }}>
-                        Escríbenos por WhatsApp al <a href="tel:+51977684050">{OFERTA.whatsappVisible}</a> y te
+                        Escríbenos por WhatsApp al <a href={`tel:+${oferta.whatsappNumero}`}>{oferta.whatsappVisible}</a> y te
                         ayudamos directo.
                     </p>
                 </div>
@@ -183,6 +186,7 @@ export default function VentaClient({
                 precioDesde={precioDesde}
                 utmSource={utmSource}
                 utmCampaign={utmCampaign}
+                oferta={oferta}
             />
 
             <PublicMapSection
@@ -202,10 +206,11 @@ export default function VentaClient({
                     utmSource={utmSource}
                     utmMedium={utmMedium}
                     utmCampaign={utmCampaign}
+                    oferta={oferta}
                 />
             )}
 
-            <FloatingWhatsApp active={!selectedLot} utmSource={utmSource} utmCampaign={utmCampaign} />
+            <FloatingWhatsApp active={!selectedLot} utmSource={utmSource} utmCampaign={utmCampaign} oferta={oferta} />
         </main>
     );
 }
