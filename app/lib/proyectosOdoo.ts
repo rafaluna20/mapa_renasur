@@ -21,6 +21,9 @@ export const CAMPOS_OFERTA = [
   'resolucion_municipal', 'etiqueta_agrupador', 'etiqueta_numero', 'color_primario', 'es_principal', 'logo_url',
 ];
 
+// Solo con proyecto_inmobiliario >= 1.13.0 (perfil de los documentos del plano). Se pide aparte para no perder la oferta si Odoo es 1.10-1.12.
+export const CAMPOS_PERFIL = ['perfil_plano'];
+
 export interface ProyectoCrudo {
   id: number;
   codigo: string;
@@ -51,10 +54,14 @@ export interface ProyectoCrudo {
   etiqueta_numero?: string | false;
   color_primario?: string | false;
   logo_url?: string | false;
+  perfil_plano?: string | false;
 }
 
 const texto = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null);
 const numero = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null);
+
+const PERFILES_PLANO = ['HABILITACION_URBANA', 'INDUSTRIAL', 'PREDIO'] as const;
+const perfilPlano = (v: unknown): (typeof PERFILES_PLANO)[number] | undefined => PERFILES_PLANO.find((p) => p === v);
 
 export function mapearProyecto(r: ProyectoCrudo): Proyecto {
   // La oferta existe solo si Odoo devolvió los campos nuevos (aunque estén vacíos): distingue «Odoo viejo» de «sin cargar».
@@ -80,6 +87,7 @@ export function mapearProyecto(r: ProyectoCrudo): Proyecto {
           etiquetaNumero: texto(r.etiqueta_numero) ?? 'Lote',
           colorPrimario: texto(r.color_primario),
           logoUrl: texto(r.logo_url),
+          ...(perfilPlano(r.perfil_plano) ? { perfilPlano: perfilPlano(r.perfil_plano) } : {}),
           oferta: {
             cuotaInicial: numero(r.cuota_inicial),
             nroCuotas: numero(r.nro_cuotas),
@@ -101,6 +109,11 @@ export function mapearProyecto(r: ProyectoCrudo): Proyecto {
 export async function leerProyectosVia(rpc: Rpc, etiqueta = 'proyectos'): Promise<Proyecto[]> {
   const consultar = (fields: string[]) =>
     rpc('proyecto.inmobiliario', 'search_read', [[['active', '=', true]]], { fields }) as Promise<ProyectoCrudo[]>;
+  try {
+    return (await consultar([...CAMPOS_BASE, ...CAMPOS_OFERTA, ...CAMPOS_PERFIL])).map(mapearProyecto);
+  } catch (error) {
+    console.warn(`[${etiqueta}] No se pudo leer el perfil del plano (¿proyecto_inmobiliario >= 1.13.0?); se leen los campos de oferta:`, error instanceof Error ? error.message : error);
+  }
   try {
     return (await consultar([...CAMPOS_BASE, ...CAMPOS_OFERTA])).map(mapearProyecto);
   } catch (error) {

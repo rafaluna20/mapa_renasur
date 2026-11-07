@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { resumenAtributos } from '@/app/lib/atributosLote';
 import { X } from 'lucide-react';
 import { Lot } from '@/app/data/lotsData';
 import LeadForm from '@/app/components/Public/LeadForm';
@@ -79,7 +80,7 @@ export default function PublicLotPanel({ lot, onClose, utmSource, utmMedium, utm
                     <h3 className="venta-lot-title-line">
                         Lote {lot.x_mz}{lot.x_lote}
                         <span className="venta-lot-meta-inline">
-                            ({lot.x_area} m² · {estadoLabel})
+                            ({lot.x_area} m² · {resumenAtributos(lot) ? `${resumenAtributos(lot)} · ` : ''}{estadoLabel})
                         </span>
                         {precio && <span className="venta-lot-price-inline">{precio}</span>}
                     </h3>

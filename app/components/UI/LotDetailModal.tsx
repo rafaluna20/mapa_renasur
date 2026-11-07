@@ -1,4 +1,5 @@
 import { Lot } from '@/app/data/lotsData';
+import { atributosParaMostrar } from '@/app/lib/atributosLote';
 import { useMarca } from '@/app/context/MarcaContext';
 import { X, User, FileText, Users, Receipt, Calendar, RotateCcw, AlertTriangle, CheckCircle, TrendingUp, DollarSign, Map, Download, Loader2, BarChart3 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
@@ -471,6 +472,12 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                                 <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">Área Total</p>
                                 <p className="font-bold text-blue-700 dark:text-blue-400 text-base">{Number(lot.x_area).toFixed(2)} m²</p>
                             </div>
+                            {atributosParaMostrar(lot).map((a) => (
+                                <div key={a.etiqueta} className="bg-white dark:bg-slate-800 p-3 rounded-lg text-center border border-slate-100 dark:border-slate-700 shadow-sm flex flex-col justify-center">
+                                    <p className="text-[10px] uppercase font-bold text-slate-400 mb-1">{a.etiqueta}</p>
+                                    <p className="font-bold text-slate-800 dark:text-slate-100 text-base">{a.valor}</p>
+                                </div>
+                            ))}
                         </div>
 
                         <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">

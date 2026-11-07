@@ -38,6 +38,9 @@ export interface OdooProduct {
     // "FRENTE A CALLE 9"). Texto libre cargado por el equipo comercial —
     // 76% de cobertura, con ruido real (espacios, valores placeholder).
     x_ubicacion?: string | false;
+    /** Frente (m) y potencia (kW): solo con proyecto_inmobiliario >= 1.12.0; Odoo devuelve 0 cuando están vacíos. */
+    x_frente?: number | false;
+    x_potencia_kw?: number | false;
     // Metadata de lados curvos (ver product_lot_geometry): [{ indiceVertice,
     // radio, longitudArco, sentido }, ...]. false/[] si el lote no tiene
     // ningún lado curvo (la inmensa mayoría).
@@ -272,6 +275,8 @@ export interface Proyecto {
     esPrincipal?: boolean;
     etiquetaAgrupador?: string;
     etiquetaNumero?: string;
+    /** Perfil de los documentos del plano (plan_pro): solo con proyecto_inmobiliario >= 1.13.0; ausente = habilitación urbana de siempre. */
+    perfilPlano?: 'HABILITACION_URBANA' | 'INDUSTRIAL' | 'PREDIO';
     colorPrimario?: string | null;
     /** Logo del proyecto (ruta del sitio o URL https); null = sin logo. */
     logoUrl?: string | null;

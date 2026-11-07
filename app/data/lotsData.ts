@@ -27,6 +27,8 @@ export interface Lot {
     x_proyecto?: string; // Proyecto/urbanización al que pertenece (Odoo x_proyecto, texto libre) — deprecado, ver x_proyectoId
     x_proyectoId?: number; // id de proyecto.inmobiliario (Odoo x_proyecto_id) — reemplaza a x_proyecto
     zonaUtm?: number; // Resuelto en el cliente (LeafletMap) a partir de x_proyectoId + la lista de proyectos, NO viene de Odoo directamente
+    x_frente?: number; // Frente del lote en metros (Odoo x_frente); solo lotes industriales
+    x_potencia_kw?: number; // Potencia disponible en kW (Odoo x_potencia_kw); solo lotes industriales
     x_ubicacion?: string; // Calle/referencia del frente del lote (Odoo x_ubicacion), ej. "CALLE 13"
     x_geometry_arcos?: ArcoMetadata[]; // Metadata de lados curvos (Odoo x_geometry_arcos), ver product_lot_geometry
     separacion?: SeparacionInfo; // Plazo de la separación (solo staff, solo lotes reservados). Lo agrega HomeClient, nunca viene de mergeLotsData (que también usa /venta).

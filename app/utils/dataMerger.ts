@@ -111,6 +111,14 @@ function resolveGeometry(
 }
 
 // Helpers exportados por si se necesitan en otro lado
+/** Frente y potencia del lote (solo si Odoo los trae y son mayores que 0: Odoo devuelve 0 cuando están vacíos). */
+export function atributosOpcionales(p: { x_frente?: number | false; x_potencia_kw?: number | false }): { x_frente?: number; x_potencia_kw?: number } {
+    return {
+        ...(typeof p.x_frente === 'number' && p.x_frente > 0 ? { x_frente: p.x_frente } : {}),
+        ...(typeof p.x_potencia_kw === 'number' && p.x_potencia_kw > 0 ? { x_potencia_kw: p.x_potencia_kw } : {}),
+    };
+}
+
 export const normalizeCode = (c: string) => (c || '').toString().replace(/\s+/g, '').toUpperCase().trim();
 
 export const getOdooVal = (v: unknown, fallback: string): string => {
@@ -221,6 +229,7 @@ export function mergeLotsData(
                 x_proyecto: getOdooVal(odooMatch.x_proyecto, lot.x_proyecto || ''),
                 x_proyectoId: odooMatch.x_proyecto_id ? odooMatch.x_proyecto_id[0] : lot.x_proyectoId,
                 x_ubicacion: getOdooVal(odooMatch.x_ubicacion, lot.x_ubicacion || ''),
+                ...atributosOpcionales(odooMatch),
                 x_geometry_arcos: odooMatch.x_geometry_arcos || lot.x_geometry_arcos,
                 points: geometry?.points || lot.points,
                 measurements: geometry?.measurements
@@ -261,6 +270,7 @@ export function mergeLotsData(
                     x_proyecto: getOdooVal(odooMatch.x_proyecto, ''),
                     x_proyectoId: odooMatch.x_proyecto_id ? odooMatch.x_proyecto_id[0] : undefined,
                     x_ubicacion: getOdooVal(odooMatch.x_ubicacion, ''),
+                    ...atributosOpcionales(odooMatch),
                     x_geometry_arcos: odooMatch.x_geometry_arcos || undefined,
                     default_code: code,
                     points: geometry.points,

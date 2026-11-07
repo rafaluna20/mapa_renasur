@@ -61,7 +61,7 @@ export async function getPublicLots(): Promise<OdooProduct[]> {
         // «no vender» no se publica (P4: los lotes que solo tenían geometría pasan a ser productos en ese estado).
         [['active', '=', true], ['default_code', '!=', false], ['x_statu', '!=', 'no vender']],
         PUBLIC_PRODUCT_FIELDS,
-        { context: { lang: 'es_PE' } },
+        { context: { lang: 'es_PE' }, camposOpcionales: ['x_frente', 'x_potencia_kw'] },
     );
     if (truncado) console.warn('[getPublicLots] Se alcanzó el tope de lotes: la landing muestra una lista incompleta.');
     return registros;

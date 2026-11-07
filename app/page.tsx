@@ -57,7 +57,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ r
         fetchOdoo,
         [["active", "=", true]],
         ["id", "name", "default_code", "list_price", "qty_available", "x_statu", "x_area", "x_mz", "x_etapa", "x_lote", "x_cliente", "x_geometry_utm", "x_geometry_arcos", "x_proyecto_id"],
-        { context: { lang: "es_PE" } },
+        { context: { lang: "es_PE" }, camposOpcionales: ["x_frente", "x_potencia_kw"] },
       );
       products = leidos.registros;
       lotesTruncados = leidos.truncado;

@@ -21,8 +21,20 @@ export async function leerLotesPaginados<T>(
   rpc: Rpc,
   dominio: unknown[],
   campos: string[],
-  opciones: { model?: string; pagina?: number; tope?: number; context?: Record<string, unknown> } = {},
+  opciones: { model?: string; pagina?: number; tope?: number; context?: Record<string, unknown>; camposOpcionales?: string[] } = {},
 ): Promise<LotesLeidos<T>> {
+  // Campos que solo existen en un Odoo más nuevo (p. ej. x_frente / x_potencia_kw, proyecto_inmobiliario >= 1.12.0): se piden con
+  // los demás y, si Odoo no los conoce y la consulta falla, se repite SIN ellos. Así desplegar la app antes que Odoo no deja el
+  // mapa vacío.
+  const opcionales = opciones.camposOpcionales ?? [];
+  if (opcionales.length > 0) {
+    try {
+      return await leerLotesPaginados<T>(rpc, dominio, [...campos, ...opcionales], { ...opciones, camposOpcionales: [] });
+    } catch (error) {
+      console.warn('[lotes] No se pudieron leer los campos opcionales; se leen sin ellos:', error instanceof Error ? error.message : error);
+      return leerLotesPaginados<T>(rpc, dominio, campos, { ...opciones, camposOpcionales: [] });
+    }
+  }
   const model = opciones.model ?? 'product.template';
   const pagina = opciones.pagina ?? PAGINA_LOTES;
   const tope = opciones.tope ?? TOPE_LOTES;

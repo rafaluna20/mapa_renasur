@@ -42,4 +42,31 @@ describe('leerLotesPaginados', () => {
   it('el filtro deja pasar lotes sin proyecto y excluye los de proyecto inactivo', () => {
     expect(DOMINIO_PROYECTO_ACTIVO).toEqual(['|', ['x_proyecto_id', '=', false], ['x_proyecto_id.active', '=', true]]);
   });
+
+  describe('campos opcionales (Odoo más nuevo)', () => {
+    it('los pide junto con los demás cuando Odoo los conoce', async () => {
+      const rpc = rpcDe(3);
+      await leerLotesPaginados(rpc, [], ['id'], { camposOpcionales: ['x_frente'] });
+      expect(rpc.mock.calls[0][3]?.fields).toEqual(['id', 'x_frente']);
+      expect(rpc).toHaveBeenCalledTimes(1);
+    });
+
+    it('si Odoo no los conoce (falla la consulta) reintenta SIN ellos y no deja el mapa vacío', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const bueno = rpcDe(3);
+      const rpc = vi.fn(async (m: string, met: string, a: unknown[], kw: Record<string, unknown> = {}) => {
+        if ((kw.fields as string[]).includes('x_frente')) throw new Error("Invalid field 'x_frente' on model 'product.template'");
+        return bueno(m, met, a, kw);
+      });
+      const r = await leerLotesPaginados(rpc, [], ['id'], { camposOpcionales: ['x_frente'] });
+      expect(r.registros).toHaveLength(3);
+      expect(rpc.mock.calls.at(-1)?.[3]?.fields).toEqual(['id']);
+    });
+
+    it('un fallo que no tiene que ver con los opcionales sigue siendo un fallo', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const rpc = vi.fn(async () => { throw new Error('Odoo caído'); });
+      await expect(leerLotesPaginados(rpc, [], ['id'], { camposOpcionales: ['x_frente'] })).rejects.toThrow('Odoo caído');
+    });
+  });
 });

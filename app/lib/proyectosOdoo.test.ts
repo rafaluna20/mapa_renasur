@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CAMPOS_BASE, CAMPOS_OFERTA, leerProyectosVia, mapearProyecto, type ProyectoCrudo } from './proyectosOdoo';
+import { CAMPOS_BASE, CAMPOS_OFERTA, CAMPOS_PERFIL, leerProyectosVia, mapearProyecto, type ProyectoCrudo } from './proyectosOdoo';
 
 const basico: ProyectoCrudo = {
   id: 2, codigo: 'terra-lima', name: 'Terra Lima', departamento: 'Lima', provincia: 'Lima', distrito: 'Pucusana',
@@ -56,37 +56,57 @@ describe('mapearProyecto', () => {
 describe('leerProyectosVia', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('pide los campos básicos y los de oferta, solo proyectos activos', async () => {
+  it('pide los campos básicos, los de oferta y el perfil del plano, solo proyectos activos', async () => {
     const rpc = vi.fn().mockResolvedValue([conOferta]);
     const r = await leerProyectosVia(rpc);
     expect(r).toHaveLength(1);
     expect(rpc).toHaveBeenCalledWith('proyecto.inmobiliario', 'search_read', [[['active', '=', true]]],
-      { fields: [...CAMPOS_BASE, ...CAMPOS_OFERTA] });
+      { fields: [...CAMPOS_BASE, ...CAMPOS_OFERTA, ...CAMPOS_PERFIL] });
+  });
+
+  it('con un Odoo 1.10-1.12 (sin perfil_plano) NO pierde la oferta: reintenta sin el perfil', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const rpc = vi.fn()
+      .mockRejectedValueOnce(new Error("Invalid field 'perfil_plano' on model 'proyecto.inmobiliario'"))
+      .mockResolvedValueOnce([conOferta]);
+    const r = await leerProyectosVia(rpc);
+    expect(r[0].oferta).toBeDefined();
+    expect(r[0].perfilPlano).toBeUndefined();
+    expect(rpc.mock.calls[1][3]).toEqual({ fields: [...CAMPOS_BASE, ...CAMPOS_OFERTA] });
+  });
+
+  it('mapea el perfil del plano y descarta un valor desconocido', () => {
+    expect(mapearProyecto({ ...conOferta, perfil_plano: 'INDUSTRIAL' }).perfilPlano).toBe('INDUSTRIAL');
+    expect(mapearProyecto({ ...conOferta, perfil_plano: 'HABILITACION_URBANA' }).perfilPlano).toBe('HABILITACION_URBANA');
+    expect(mapearProyecto({ ...conOferta, perfil_plano: 'raro' }).perfilPlano).toBeUndefined();
+    expect(mapearProyecto({ ...conOferta, perfil_plano: false }).perfilPlano).toBeUndefined();
   });
 
   it('con un Odoo sin los campos nuevos cae a los básicos y NO se queda sin proyectos', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const rpc = vi.fn()
       .mockRejectedValueOnce(new Error("Invalid field 'cuota_inicial' on model 'proyecto.inmobiliario'"))
+      .mockRejectedValueOnce(new Error("Invalid field 'cuota_inicial' on model 'proyecto.inmobiliario'"))
       .mockResolvedValueOnce([basico]);
     const r = await leerProyectosVia(rpc);
     expect(r).toHaveLength(1);
     expect(r[0].oferta).toBeUndefined();
-    expect(rpc.mock.calls[1][3]).toEqual({ fields: CAMPOS_BASE });
+    expect(rpc.mock.calls[2][3]).toEqual({ fields: CAMPOS_BASE });
   });
 
   it('si fallan las dos consultas devuelve [] sin lanzar', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const rpc = vi.fn().mockRejectedValue(new Error('Odoo caído'));
     expect(await leerProyectosVia(rpc)).toEqual([]);
-    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(rpc).toHaveBeenCalledTimes(3);
   });
 
   it('el aviso de la primera falla dice qué hacer', async () => {
     const aviso = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const rpc = vi.fn().mockRejectedValueOnce(new Error('x')).mockResolvedValueOnce([]);
+    const rpc = vi.fn().mockRejectedValueOnce(new Error('x')).mockRejectedValueOnce(new Error('x')).mockResolvedValueOnce([]);
     await leerProyectosVia(rpc, 'prueba');
     expect(String(aviso.mock.calls[0][0])).toContain('[prueba]');
-    expect(String(aviso.mock.calls[0][0])).toContain('1.10.0');
+    expect(String(aviso.mock.calls[0][0])).toContain('1.13.0');
+    expect(String(aviso.mock.calls[1][0])).toContain('1.10.0');
   });
 });

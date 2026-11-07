@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { fetchOdoo, fetchElementosUrbanos, fetchProyectos, OdooProduct } from '@/app/services/odooService';
+import { fetchOdoo, fetchElementosUrbanos, fetchProyectos, OdooProduct, type Proyecto } from '@/app/services/odooService';
+import { marcaDeProyecto } from '@/app/lib/marca';
 import { lotsData, Lot } from '@/app/data/lotsData';
 import { mergeLotsData, normalizeCode } from '@/app/utils/dataMerger';
 import { derivarColindanciasYDimensiones, type AdvertenciaColindancia } from '@/app/utils/colindanciasUtils';
@@ -55,6 +56,27 @@ function mapEstadoParaPlanoPro(xStatu: string): 'libre' | 'separado' | 'vendido'
   return 'libre';
 }
 
+/**
+ * Lo que plan_pro necesita saber del PROYECTO del lote para no escribir el nombre de otro proyecto en su plano: su nombre (la
+ * marca, ver app/lib/marca.ts) y, si el perfil es industrial, las etiquetas propias y el frente / la potencia del lote.
+ */
+export function metadatosDeProyecto(proyecto: Proyecto, lote: { x_frente?: number; x_potencia_kw?: number }): Record<string, unknown> {
+  const industrial = proyecto.perfilPlano === 'INDUSTRIAL';
+  return {
+    proyectoNombre: marcaDeProyecto(proyecto).nombre,
+    ...(industrial && proyecto.etiquetaAgrupador ? { etiquetaAgrupador: proyecto.etiquetaAgrupador } : {}),
+    ...(industrial && proyecto.etiquetaNumero ? { etiquetaNumero: proyecto.etiquetaNumero } : {}),
+    ...(industrial && lote.x_frente ? { frenteM: lote.x_frente } : {}),
+    ...(industrial && lote.x_potencia_kw ? { potenciaKw: lote.x_potencia_kw } : {}),
+  };
+}
+
+/** El perfil de los documentos solo se manda si NO es el de siempre (habilitación urbana): así el flujo actual no cambia. */
+export function configDeProyecto(proyecto: Proyecto): Record<string, unknown> {
+  const perfil = proyecto.perfilPlano;
+  return perfil && perfil !== 'HABILITACION_URBANA' ? { config: { perfil } } : {};
+}
+
 /** 422: no se genera un plano con la dirección o la zona UTM de otro proyecto (ni sin ellas). */
 function respuestaProyectoNoResuelto(que: string, detalle: string): { ok: false; response: NextResponse } {
   return {
@@ -92,7 +114,7 @@ export async function construirPayloadPlano(defaultCode: string): Promise<PlanoP
     fetchOdoo,
     [['active', '=', true]],
     CAMPOS_LOTE_PLANO,
-    { context: { lang: 'es_PE' } },
+    { context: { lang: 'es_PE' }, camposOpcionales: ['x_frente', 'x_potencia_kw'] },
   );
 
   const allLots: Lot[] = mergeLotsData(odooProducts, lotsData, geometriasEstaticas());
@@ -207,6 +229,7 @@ export async function construirPayloadPlano(defaultCode: string): Promise<PlanoP
       numeroLote: lote.x_lote,
       estado: mapEstadoParaPlanoPro(lote.x_statu),
       ubicacion,
+      ...metadatosDeProyecto(resolucion.proyecto, lote),
     },
     colindancias: colindancias.map((c) => ({
       lado: c.lado,
@@ -221,6 +244,7 @@ export async function construirPayloadPlano(defaultCode: string): Promise<PlanoP
     contexto: (elementosContexto.length > 0 || elementosUrbanosContexto.length > 0)
       ? { elementos: [...elementosContexto, ...elementosUrbanosContexto] }
       : undefined,
+    ...configDeProyecto(resolucion.proyecto),
   };
 
   return { ok: true, payload, advertencias };
@@ -353,6 +377,7 @@ export async function construirPayloadPlanoMatriz(codigoElemento: string): Promi
       numeroLote: '',
       estado: 'libre' as const,
       ubicacion,
+      proyectoNombre: marcaDeProyecto(resolucionMatriz.proyecto).nombre,
     },
     colindancias: colindancias.map((c) => ({
       lado: c.lado,
