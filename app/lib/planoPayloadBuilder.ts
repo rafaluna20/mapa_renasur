@@ -10,6 +10,7 @@ import { geometriasEstaticas } from '@/app/lib/geometriaEstatica';
 import { mergeElementosUrbanos } from '@/app/data/elementosUrbanos';
 import { resolverProyecto } from '@/app/lib/ubicacionProyecto';
 import { leerLotesPaginados } from '@/app/lib/lotesPaginados';
+import { elementosDelEntorno } from '@/app/lib/contextoPlano';
 
 // Extraído de app/api/planos/generar/route.ts para que
 // app/api/planos/generar-resumen/route.ts pueda armar exactamente el mismo
@@ -186,7 +187,8 @@ export async function construirPayloadPlano(defaultCode: string): Promise<PlanoP
   // cual el código de capa dinámico (elemento.urbano.capa en Odoo), junto
   // con su color/mostrarEtiqueta — así una capa nueva no requiere tocar
   // este archivo ni el adaptador de plan_pro.
-  const elementosUrbanosContexto = elementosUrbanos.map((e) => ({
+  // Solo el entorno del lote: su proyecto (y huérfanos cercanos), no los de todos los proyectos. Ver app/lib/contextoPlano.ts.
+  const elementosUrbanosContexto = elementosDelEntorno(elementosUrbanos, lote.x_proyectoId, centroidLote).map((e) => ({
     tipo: e.tipo,
     colorBorde: e.colorBorde,
     colorRelleno: e.colorRelleno,
@@ -346,7 +348,7 @@ export async function construirPayloadPlanoMatriz(codigoElemento: string): Promi
       vertices: l.points,
     }));
 
-  const elementosUrbanosContexto = elementosUrbanosSinMatriz.map((e) => ({
+  const elementosUrbanosContexto = elementosDelEntorno(elementosUrbanosSinMatriz, matriz.proyectoId, centroidMatriz).map((e) => ({
     tipo: e.tipo,
     colorBorde: e.colorBorde,
     colorRelleno: e.colorRelleno,
