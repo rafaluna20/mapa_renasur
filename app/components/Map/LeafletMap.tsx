@@ -1,6 +1,7 @@
 'use client';
 
 import { MapContainer, TileLayer, Polygon, Polyline, useMap, Tooltip, Circle, CircleMarker, ImageOverlay, Marker } from 'react-leaflet';
+import { numeroDeLote } from '@/app/lib/etiquetaLote';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-defaulticon-compatibility/dist/leaflet-defaulticon-compatibility.css';
 import 'leaflet-defaulticon-compatibility';
@@ -1025,7 +1026,7 @@ export default function LeafletMap({ lots: lotsProp, elementosUrbanos = [], proy
                             >
                                 <div className={`flex flex-col items-center justify-center bg-white rounded border border-slate-200 p-1 min-w-[40px] cursor-pointer lot-label-container ${areaClass} ${isSelected ? 'label-selected border-blue-500' : ''}`}>
                                     <span className="text-slate-800 font-bold text-[9px] tracking-tight uppercase text-center leading-none">
-                                        {lot.x_mz}{lot.x_lote}
+                                        {lot.x_mz}{numeroDeLote(lot)}
                                     </span>
                                     <div className="h-[0.5px] w-full bg-slate-100 my-0.5"></div>
                                     <span className="text-blue-600 text-[8px] font-bold tracking-wide">

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { numeroDeLote } from '@/app/lib/etiquetaLote';
 import { resumenAtributos } from '@/app/lib/atributosLote';
 import { X } from 'lucide-react';
 import { Lot } from '@/app/data/lotsData';
@@ -78,7 +79,7 @@ export default function PublicLotPanel({ lot, onClose, utmSource, utmMedium, utm
                         que siga siendo UN solo bloque de texto que envuelve
                         junto si el ancho no alcanza, no 3 líneas fijas. */}
                     <h3 className="venta-lot-title-line">
-                        Lote {lot.x_mz}{lot.x_lote}
+                        Lote {lot.x_mz}{numeroDeLote(lot)}
                         <span className="venta-lot-meta-inline">
                             ({lot.x_area} m² · {resumenAtributos(lot) ? `${resumenAtributos(lot)} · ` : ''}{estadoLabel})
                         </span>

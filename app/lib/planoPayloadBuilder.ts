@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { numeroDeLote } from '@/app/lib/etiquetaLote';
 import { fetchOdoo, fetchElementosUrbanos, fetchProyectos, OdooProduct, type Proyecto } from '@/app/services/odooService';
 import { marcaDeProyecto } from '@/app/lib/marca';
 import { lotsData, Lot } from '@/app/data/lotsData';
@@ -44,7 +45,7 @@ function limpiarUbicacionCalle(raw: string | undefined): string | undefined {
 function construirDireccion(lote: Lot): string | undefined {
   const calle = limpiarUbicacionCalle(lote.x_ubicacion);
   if (!calle) return undefined;
-  return `${calle}, Mz. ${lote.x_mz} Lote ${lote.x_lote}`;
+  return `${calle}, Mz. ${lote.x_mz} Lote ${numeroDeLote(lote)}`;
 }
 
 function mapEstadoParaPlanoPro(xStatu: string): 'libre' | 'separado' | 'vendido' {
@@ -170,7 +171,7 @@ export async function construirPayloadPlano(defaultCode: string): Promise<PlanoP
     .map((l) => ({
       tipo: 'LOTE',
       codigo: l.default_code,
-      texto: l.x_lote || l.default_code,
+      texto: numeroDeLote(l) || l.default_code,
       estado: l.x_statu,
       vertices: l.points,
     }));
@@ -226,7 +227,7 @@ export async function construirPayloadPlano(defaultCode: string): Promise<PlanoP
       nombre: lote.name,
       manzana: lote.x_mz,
       etapa: lote.x_etapa,
-      numeroLote: lote.x_lote,
+      numeroLote: numeroDeLote(lote),
       estado: mapEstadoParaPlanoPro(lote.x_statu),
       ubicacion,
       ...metadatosDeProyecto(resolucion.proyecto, lote),
@@ -340,7 +341,7 @@ export async function construirPayloadPlanoMatriz(codigoElemento: string): Promi
     .map((l) => ({
       tipo: 'LOTE',
       codigo: l.default_code,
-      texto: l.x_lote || l.default_code,
+      texto: numeroDeLote(l) || l.default_code,
       estado: l.x_statu,
       vertices: l.points,
     }));

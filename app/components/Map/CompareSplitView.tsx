@@ -1,6 +1,7 @@
 'use client';
 
 import { Lot } from '@/app/data/lotsData';
+import { numeroDeLote } from '@/app/lib/etiquetaLote';
 import { X, Check } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
@@ -131,7 +132,7 @@ export default function CompareSplitView({
                   />
                   <CompareRow
                     label="Lote"
-                    value={lot.x_lote || 'N/A'}
+                    value={numeroDeLote(lot) || 'N/A'}
                     highlight={false}
                   />
                   <CompareRow

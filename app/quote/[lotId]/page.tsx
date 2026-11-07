@@ -1,6 +1,7 @@
 'use client';
 
 import { use, useState, useMemo, useEffect, useRef } from 'react';
+import { numeroDeLote } from '@/app/lib/etiquetaLote';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, Calculator, Calendar, Tag, Table, Loader2, User, Search, Check, Plus, X, Save, Send, CheckCircle, Map, Pencil } from 'lucide-react';
 import { lotsData, Lot } from '@/app/data/lotsData';
@@ -888,7 +889,7 @@ export default function QuotePage({ params }: QuotePageProps) {
                             <div className="h-10 w-[1px] bg-slate-200 hidden md:block mx-1"></div>
                             <div>
                                 <h1 className="text-xl md:text-2xl font-bold text-slate-800">Cotización {marca.nombre}</h1>
-                                <p className="text-slate-500 font-medium">{lot.name} • {lot.x_mz} {lot.x_lote}</p>
+                                <p className="text-slate-500 font-medium">{lot.name} • {lot.x_mz} {numeroDeLote(lot)}</p>
                             </div>
                         </div>
                         <div className="flex items-center gap-2">

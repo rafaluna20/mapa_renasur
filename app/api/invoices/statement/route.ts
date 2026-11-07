@@ -1,4 +1,5 @@
 import { getServerSession } from 'next-auth';
+import { numeroDeLote } from '@/app/lib/etiquetaLote';
 import { extraerCodigoDeReferencia } from '@/app/lib/codigoLote';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { fetchOdoo } from '@/app/services/odooService';
@@ -141,7 +142,7 @@ export async function GET() {
             const label = codigo === 'SIN_LOTE'
                 ? 'Otros pagos'
                 : producto
-                    ? `Etapa ${producto.x_etapa || '?'} Mz ${producto.x_mz || '?'} Lote ${producto.x_lote || '?'}`
+                    ? `Etapa ${producto.x_etapa || '?'} Mz ${producto.x_mz || '?'} Lote ${numeroDeLote(producto) || '?'}`
                     : codigo;
 
             return {
@@ -149,7 +150,7 @@ export async function GET() {
                 label,
                 mz: producto?.x_mz || null,
                 etapa: producto?.x_etapa || null,
-                numeroLote: producto?.x_lote || null,
+                numeroLote: numeroDeLote(producto) || null,
                 // En dólares: precio pactado del contrato (0 si no se pudo leer: la UI muestra
                 // "—" en vez de un número en la moneda equivocada). En soles: catálogo, como antes.
                 listPrice,

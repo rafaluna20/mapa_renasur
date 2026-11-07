@@ -1,4 +1,5 @@
 import { Lot } from '@/app/data/lotsData';
+import { numeroDeLote } from '@/app/lib/etiquetaLote';
 import { atributosParaMostrar } from '@/app/lib/atributosLote';
 import { useMarca } from '@/app/context/MarcaContext';
 import { X, User, FileText, Users, Receipt, Calendar, RotateCcw, AlertTriangle, CheckCircle, TrendingUp, DollarSign, Map, Download, Loader2, BarChart3 } from 'lucide-react';
@@ -396,10 +397,10 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                 clientEmail: reservationOwner?.clientEmail,
                 clientPhone: reservationOwner?.clientPhone,
                 lots: [{
-                    label: `Etapa ${lot?.x_etapa || '?'} Mz ${lot?.x_mz || '?'} Lote ${lot?.x_lote || '?'}`,
+                    label: `Etapa ${lot?.x_etapa || '?'} Mz ${lot?.x_mz || '?'} Lote ${numeroDeLote(lot) || '?'}`,
                     mz: lot?.x_mz || null,
                     etapa: lot?.x_etapa || null,
-                    numeroLote: lot?.x_lote || null,
+                    numeroLote: numeroDeLote(lot) || null,
                     listPrice,
                     currency: lotCurrency,
                     invoices,
