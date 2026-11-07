@@ -136,5 +136,5 @@ export function partesDeCodigo(codigo: string): { manzana: string; lote: string 
     const p = interpretarCodigoLote(codigo);
     // solo lotes enteros o partidos en A-C, como siempre (los demás sufijos no se dibujan)
     if (!p || p.parte === null || p.parte > 3) return null;
-    return { manzana: p.manzana, lote: String(p.lote) + (p.parte === 0 ? '' : 'ABC'[p.parte - 1]) };
+    return { manzana: p.manzana, lote: String(p.lote) + (p.letra ?? '') };
 }

@@ -6,7 +6,7 @@
 //   legado  E01MZQ055P      E=etapa (2 dígitos) · MZ · manzana (1-2 letras) · lote (3 dígitos) · sufijo
 //   nuevo   P01-E01MZQ055P  el mismo con el código corto del proyecto delante y un guion (SUPUESTO: es el formato recomendado en
 //                           el plan; la decisión final es del usuario y solo cambiaría formatearCodigoLote).
-// Sufijo: P = lote entero (parte 0) · 1-9 = parte de un lote partido · Z = caso heredado (4 lotes E05MZY00xZ), sin parte.
+// Sufijo: P = lote entero (parte 0) · 1-9 = parte de un lote partido (1 = A, 2 = B, 3 = C; E01MZD1241 es el lote 124, parte A) · Z = caso heredado (4 lotes E05MZY00xZ), sin parte.
 // Límite conocido: el número de lote tiene 3 dígitos (máximo medido en producción: 155); con 4 sería ambiguo con la parte.
 
 export interface PartesCodigo {
@@ -22,6 +22,8 @@ export interface PartesCodigo {
   sufijo: string;
   /** 0 = entero, 1-9 = parte, null = no se sabe (sufijo Z). */
   parte: number | null;
+  /** 'A' para la parte 1, 'B' para la 2… (E01MZD1241 = lote 124, parte A); null si el lote está entero o no se sabe. */
+  letra: string | null;
   /** 'E01MZQ055P': el código de siempre, sin proyecto. */
   legado: string;
 }
@@ -31,18 +33,25 @@ const EN_REFERENCIA = /(?:P\d{2,3}-)?(E\d{2}MZ[A-Z]{1,2}\d{3}[P1-9Z])-(?:C\d+|IN
 // forma floja que leía el código anterior: se sigue aceptando (marcada como irregular) para no perder facturas raras
 const EN_REFERENCIA_FLOJA = /(E\d+MZ[A-Z]+\d+[A-Z]?)-(?:C\d+|INIT)/i;
 
+/** Parte 1 → 'A', 2 → 'B'… hasta 9 → 'I'. */
+export function letraDeParte(parte: number | null): string | null {
+  return parte !== null && Number.isInteger(parte) && parte >= 1 && parte <= 9 ? String.fromCharCode(64 + parte) : null;
+}
+
 export function interpretarCodigoLote(texto: unknown): PartesCodigo | null {
   if (typeof texto !== 'string') return null;
   const m = CODIGO.exec(texto.trim().toUpperCase());
   if (!m) return null;
   const [, proyecto, etapa, manzana, lote, sufijo] = m;
+  const parte = sufijo === 'P' ? 0 : /^\d$/.test(sufijo) ? Number(sufijo) : null;
   return {
     proyecto: proyecto ?? null,
     etapa,
     manzana,
     lote: parseInt(lote, 10),
     sufijo,
-    parte: sufijo === 'P' ? 0 : /^\d$/.test(sufijo) ? Number(sufijo) : null,
+    parte,
+    letra: letraDeParte(parte),
     legado: `E${etapa}MZ${manzana}${lote}${sufijo}`,
   };
 }

@@ -27,11 +27,18 @@ describe('interpretarCodigoLote', () => {
 
   it('separa las partes (también en minúsculas)', () => {
     expect(interpretarCodigoLote('e01mzq055p')).toEqual({
-      proyecto: null, etapa: '01', manzana: 'Q', lote: 55, sufijo: 'P', parte: 0, legado: 'E01MZQ055P',
+      proyecto: null, etapa: '01', manzana: 'Q', lote: 55, sufijo: 'P', parte: 0, letra: null, legado: 'E01MZQ055P',
     });
     const p = interpretarCodigoLote('P02-E03MZAB1241')!;
     expect([p.proyecto, p.manzana, p.lote, p.parte]).toEqual(['P02', 'AB', 124, 1]);
     expect(interpretarCodigoLote('E05MZY001Z')!.parte).toBeNull();
+  });
+
+  it('la parte tiene letra: E01MZD1241 es el lote 124, parte A; 2 = B; 3 = C; entero y Z sin letra', () => {
+    expect(['1', '2', '3'].map((n) => interpretarCodigoLote(`E01MZD124${n}`)!.letra)).toEqual(['A', 'B', 'C']);
+    expect(interpretarCodigoLote('E01MZD1241')!.lote).toBe(124);
+    expect(interpretarCodigoLote('E01MZD124P')!.letra).toBeNull();
+    expect(interpretarCodigoLote('E05MZY001Z')!.letra).toBeNull();
   });
 
   it('lo que no es un código de lote no se interpreta', () => {
