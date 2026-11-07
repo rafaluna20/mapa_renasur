@@ -57,7 +57,7 @@ export const RUTAS_ACCESO: Record<string, CategoriaRuta> = {
 
   '/api/planos/generar': 'staff-admin',
   '/api/planos/generar-matriz': 'staff-admin',
-  '/api/planos/generar-resumen': 'staff-admin',
+  '/api/planos/generar-resumen': 'staff-lote',
   '/api/planos/descargas-stats': 'staff-admin',
   '/api/odoo/stats/general': 'staff-admin',
   '/api/odoo/stats/invoices': 'staff-admin',

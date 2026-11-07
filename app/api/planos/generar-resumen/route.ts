@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireStaffSession } from '@/app/lib/staffAuth';
+import { guardiaLote } from '@/app/lib/accesoProyectos';
 import { construirPayloadPlano } from '@/app/lib/planoPayloadBuilder';
 
 /**
@@ -27,6 +28,11 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // P3 (hallazgo de la revisión P1–P9, 2026-11-07): este documento lo pide cualquier personal, así que el lote debe ser de un proyecto
+    // al que el usuario tiene acceso. Antes se armaba el plano (geometría, vecinos y nombre del propietario) de cualquier lote.
+    const guardia = await guardiaLote(auth.session, { codigo: defaultCode }, '/api/planos/generar-resumen');
+    if (!guardia.ok) return guardia.response;
 
     const PLANOS_API_URL = process.env.PLANOS_API_URL;
     const PLANOS_API_KEY = process.env.PLANOS_API_KEY;

@@ -58,7 +58,9 @@ describe('inventario de rutas /api', () => {
   it('las rutas «staff-admin» comprueban isSystem', () => {
     for (const [ruta, cat] of Object.entries(RUTAS_ACCESO)) {
       if (cat !== 'staff-admin') continue;
-      expect(archivos.get(ruta)!, `${ruta} sin isSystem`).toContain('isSystem');
+      // La comprobación REAL (un `if (!…isSystem)` que corta), no la palabra suelta: un comentario con «isSystem» no basta.
+      // Acepta las dos formas que usan las rutas: `if (!auth.session.isSystem)` y `const isSystem = auth.session.isSystem; … !isSystem`.
+      expect(archivos.get(ruta)!, `${ruta} sin la comprobación isSystem`).toMatch(/if\s*\(\s*!\s*auth\.session\.isSystem\s*\)|const\s+isSystem\s*=\s*auth\.session\.isSystem[\s\S]{0,240}!\s*isSystem/);
     }
   });
 
@@ -76,5 +78,16 @@ describe('inventario de rutas /api', () => {
   it('deuda de P3: las rutas de personal aún sin alcance por proyecto (se reduce, no crece)', () => {
     const pendientes = Object.entries(RUTAS_ACCESO).filter(([, c]) => c === 'staff-pendiente').map(([r]) => r).sort();
     expect(pendientes).toHaveLength(13);
+  });
+});
+
+describe('la comprobación de administrador no se deja engañar por un comentario', () => {
+  const REGEX = /if\s*\(\s*!\s*auth\.session\.isSystem\s*\)|const\s+isSystem\s*=\s*auth\.session\.isSystem[\s\S]{0,240}!\s*isSystem/;
+  it('un comentario que nombra isSystem no cuenta', () => {
+    expect(REGEX.test('// ver el gate isSystem ahí\nconst auth = await requireStaffSession(request);')).toBe(false);
+  });
+  it('las dos formas reales sí cuentan', () => {
+    expect(REGEX.test('if (!auth.session.isSystem) { return x; }')).toBe(true);
+    expect(REGEX.test('const isSystem = auth.session.isSystem;\nif (!userId || !isSystem) {')).toBe(true);
   });
 });
