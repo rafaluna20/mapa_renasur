@@ -1,4 +1,5 @@
 import { fetchOdoo } from './odooService';
+import { extraerCodigoDeReferencia, interpretarCodigoLote } from '@/app/lib/codigoLote';
 import { normalizeCurrency } from '../utils/money';
 
 /**
@@ -211,15 +212,19 @@ export const paymentService = {
             return { etapa: '', manzana: '', lote: '', quota: String(quotaNumber), totalQuotas };
         }
 
-        const match = ref.match(/E(\d+)(MZ[A-Z]+)(\d+)([A-Z])?-C(\d+)-(\d{8})/);
+        // P6: el código sale del intérprete único; la cuota y la fecha de 8 dígitos siguen leyéndose de la referencia.
+        const codigo = extraerCodigoDeReferencia(ref)?.codigo;
+        const partes = interpretarCodigoLote(codigo);
+        const cuota = /-C(\d+)-(\d{8})/.exec(ref);
 
-        if (!match) return undefined;
+        if (!partes || !cuota) return undefined;
 
         return {
-            etapa: match[1],
-            manzana: match[2],
-            lote: match[3],
-            quota: quotaNumber !== undefined ? String(quotaNumber) : match[5],
+            etapa: partes.etapa,
+            manzana: `MZ${partes.manzana}`,
+            // como antes: el número con sus ceros y, si el lote está partido, la parte pegada (E01MZD1241 → «1241»)
+            lote: String(partes.lote).padStart(3, '0') + (partes.parte ? String(partes.parte) : ''),
+            quota: quotaNumber !== undefined ? String(quotaNumber) : cuota[1],
             totalQuotas
         };
     },

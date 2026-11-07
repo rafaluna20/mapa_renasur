@@ -1,4 +1,5 @@
 import { getServerSession } from 'next-auth';
+import { extraerCodigoDeReferencia } from '@/app/lib/codigoLote';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { fetchOdoo } from '@/app/services/odooService';
 import { fetchLotContractInfo } from '@/app/lib/lotContract';
@@ -55,8 +56,8 @@ interface OdooProductTemplate {
  * facturas de un cliente de prueba, una por cada uno de sus 2 lotes).
  */
 function extraerCodigoLote(texto: string): string | null {
-    const m = texto.match(/(E\d+MZ[A-Z]+\d+[A-Z]?)-(?:C\d+|INIT)/i);
-    return m ? m[1].toUpperCase() : null;
+    // P6: el intérprete único de códigos (acepta también P01-E01MZR016P y mantiene la lectura floja de antes).
+    return extraerCodigoDeReferencia(texto)?.codigo ?? null;
 }
 
 /**

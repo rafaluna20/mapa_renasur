@@ -1,4 +1,6 @@
 import { ImageResponse } from 'next/og';
+import { codigoLegado } from '@/app/lib/codigoLote';
+import { resolverCodigoViejoEnServidor } from '@/app/lib/aliasLotesServidor';
 import { NextRequest, NextResponse } from 'next/server';
 import { getPublicLots, getPublicElementosUrbanos } from '@/app/services/odooPublicService';
 import { construirEscena, partesDeCodigo, type Punto } from '@/app/utils/escenaLote';
@@ -36,7 +38,10 @@ const ESTILO_OTRO = { relleno: '#e5e7eb', borde: '#cbd5e1', orden: 0 };
 const estilo = (tipo: string) => ESTILO_TIPO[tipo] ?? ESTILO_OTRO;
 
 export async function GET(req: NextRequest) {
-    const codigo = (req.nextUrl.searchParams.get('codigo') || '').trim().toUpperCase();
+    // P6: acepta el código viejo de un lote renombrado y el que trae el proyecto delante; abajo se compara siempre con el vigente.
+    const pedido = (req.nextUrl.searchParams.get('codigo') || '').trim().toUpperCase();
+    const vigente = await resolverCodigoViejoEnServidor(pedido);
+    const codigo = codigoLegado(vigente) ?? pedido;
     const partes = partesDeCodigo(codigo);
     if (!partes) return NextResponse.json({ error: 'Código de lote inválido' }, { status: 400 });
 

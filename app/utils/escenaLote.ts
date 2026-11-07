@@ -1,3 +1,4 @@
+import { interpretarCodigoLote } from '@/app/lib/codigoLote';
 /**
  * Escena para la imagen "lote en su entorno" que el bot de ventas envía por
  * Telegram (endpoint /api/public/lote-imagen). Geometría pura: recibe
@@ -132,7 +133,8 @@ export function construirEscena(entrada: EntradaEscena): Escena | null {
 
 /** "E01MZV0011" → { manzana: 'V', etiqueta: '1A', numero: '1A' }; null si el código no tiene el formato de un lote. */
 export function partesDeCodigo(codigo: string): { manzana: string; lote: string } | null {
-    const m = /^E\d{2}MZ([A-Z]{1,2})(\d{3})([P123])$/i.exec(codigo.trim());
-    if (!m) return null;
-    return { manzana: m[1].toUpperCase(), lote: String(parseInt(m[2], 10)) + (m[3].toUpperCase() === 'P' ? '' : 'ABC'[Number(m[3]) - 1]) };
+    const p = interpretarCodigoLote(codigo);
+    // solo lotes enteros o partidos en A-C, como siempre (los demás sufijos no se dibujan)
+    if (!p || p.parte === null || p.parte > 3) return null;
+    return { manzana: p.manzana, lote: String(p.lote) + (p.parte === 0 ? '' : 'ABC'[p.parte - 1]) };
 }

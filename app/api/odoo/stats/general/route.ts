@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { interpretarCodigoLote } from '@/app/lib/codigoLote';
 import { fetchOdoo } from '@/app/services/odooService';
 import { requireStaffSession } from '@/app/lib/staffAuth';
 import { getCommissionRate } from '@/app/lib/commissionRates';
@@ -33,14 +34,13 @@ interface OdooProduct {
  *   P    = Sufijo (P=entero, 1=parte A, 2=parte B, etc.)
  */
 function parseLotCode(code: string | false | null | undefined): { etapa: string; manzana: string; lotNum: string; suffix: string } | null {
-    if (!code || typeof code !== 'string') return null;
-    const m = code.trim().match(/^E(\d+)MZ([A-Z]+)(\d+)([A-Z0-9]+)$/i);
-    if (!m) return null;
+    const p = interpretarCodigoLote(code); // P6: intérprete único
+    if (!p) return null;
     return {
-        etapa: m[1].padStart(2, '0'),      // '01'
-        manzana: m[2].toUpperCase(),        // 'D'
-        lotNum: m[3],                        // '148'
-        suffix: m[4].toUpperCase()           // 'P', '1', '2'
+        etapa: p.etapa,                          // '01'
+        manzana: p.manzana,                      // 'D'
+        lotNum: String(p.lote).padStart(3, '0'), // '148'
+        suffix: p.sufijo                         // 'P', '1', '2'
     };
 }
 

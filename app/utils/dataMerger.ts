@@ -1,4 +1,5 @@
 import { OdooProduct } from '@/app/services/odooService';
+import { interpretarCodigoLote } from '@/app/lib/codigoLote';
 import { Lot } from '@/app/data/lotsData';
 import { calculateLotMeasurements, calculateDistance, LotMeasurements } from '@/app/utils/geometryUtils';
 import { ArcoMetadata } from '@/app/utils/arcoUtils';
@@ -276,7 +277,7 @@ export function mergeLotsData(
     Object.keys(geometriesJson).forEach(code => {
         const normCode = normalizeCode(code);
         if (!integratedCodes.has(normCode)) {
-            const metadataMatch = normCode.match(/E(\d+)MZ([A-Z]+)(\w+)/);
+            const partesCodigo = interpretarCodigoLote(normCode); // P6: intérprete único
             const geometry = limpiarGeometriaRegistro(geometriesJson[code]);
             fallbackLots.push({
                 id: `fb-${normCode}`,
@@ -284,9 +285,10 @@ export function mergeLotsData(
                 x_statu: 'no vender',
                 list_price: 0,
                 x_area: geometry.measurements?.area || 0,
-                x_mz: metadataMatch ? metadataMatch[2] : '',
-                x_etapa: metadataMatch ? metadataMatch[1] : '',
-                x_lote: metadataMatch ? metadataMatch[3] : '',
+                x_mz: partesCodigo ? partesCodigo.manzana : '',
+                x_etapa: partesCodigo ? partesCodigo.etapa : '',
+                // como antes: el número con sus ceros y el sufijo pegado (E01MZD148P → «148P»)
+                x_lote: partesCodigo ? String(partesCodigo.lote).padStart(3, '0') + partesCodigo.sufijo : '',
                 default_code: normCode,
                 points: geometry.coordinates,
                 measurements: geometry.measurements,

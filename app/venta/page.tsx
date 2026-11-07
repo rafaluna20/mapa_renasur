@@ -7,6 +7,8 @@ import { construirMetadataVenta } from '@/app/venta/metadataVenta';
 import { elegirProyecto, filtrarPorProyecto } from '@/app/venta/proyectoPublico';
 import { ofertaDeProyecto } from '@/app/venta/ofertaComercial';
 import { idProyecto } from '@/app/lib/accesoProyectos';
+import { codigoLegado } from '@/app/lib/codigoLote';
+import { resolverCodigoViejoEnServidor } from '@/app/lib/aliasLotesServidor';
 
 // Página pública (sin login) de anuncios pagados: landing + mapa de lotes de
 // solo lectura + formulario que manda un lead al CRM. NO usa la credencial
@@ -33,12 +35,18 @@ async function proyectosParaMetadata(): Promise<Proyecto[]> {
     }
 }
 
+// P6: un enlace con el código VIEJO de un lote renombrado (o con el proyecto delante) sigue llevando a ese lote.
+async function codigoVigente(lote?: string | null): Promise<string | undefined> {
+    const vigente = await resolverCodigoViejoEnServidor(lote);
+    return codigoLegado(vigente) ?? vigente;
+}
+
 export async function generateMetadata({ searchParams }: { searchParams: Promise<{ lote?: string; utm_source?: string; proyecto?: string }> }): Promise<Metadata> {
     const { lote, utm_source, proyecto } = await searchParams;
     // El bot de ventas ya manda la imagen del lote como adjunto: su enlace no lleva imagen en la vista previa (se veía dos veces).
     const sinImagen = utm_source === 'asistente-virtual';
     const oferta = ofertaDeProyecto(elegirProyecto(await proyectosParaMetadata(), proyecto).proyecto);
-    return construirMetadataVenta(lote, process.env.NEXT_PUBLIC_SITE_URL || undefined, { sinImagen }, oferta);
+    return construirMetadataVenta(await codigoVigente(lote), process.env.NEXT_PUBLIC_SITE_URL || undefined, { sinImagen }, oferta);
 }
 
 interface CacheContainer {
@@ -116,7 +124,7 @@ export default async function VentaPage({
             utmSource={resolvedParams?.utm_source}
             utmMedium={resolvedParams?.utm_medium}
             utmCampaign={resolvedParams?.utm_campaign}
-            loteInicial={resolvedParams?.lote}
+            loteInicial={await codigoVigente(resolvedParams?.lote)}
         />
     );
 }

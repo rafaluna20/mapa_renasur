@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { interpretarCodigoLote } from '@/app/lib/codigoLote';
 import { fetchOdoo } from '@/app/services/odooService';
 import { requireStaffSession } from '@/app/lib/staffAuth';
 import { normalizeCurrency } from '@/app/utils/money';
@@ -8,15 +9,14 @@ import { normalizeCurrency } from '@/app/utils/money';
  * Extrae etapa, manzana, número de lote y sufijo.
  */
 function parseLotCode(code: string | false | null | undefined) {
-    if (!code || typeof code !== 'string') return null;
-    const m = code.trim().match(/^E(\d+)MZ([A-Z]+)(\d+)([A-Z0-9]+)$/i);
-    if (!m) return null;
+    const p = interpretarCodigoLote(code); // P6: intérprete único
+    if (!p) return null;
     return {
-        etapa: `E${m[1].padStart(2, '0')}`,   // 'E01'
-        manzana: m[2].toUpperCase(),             // 'D'
-        lotNum: m[3],                             // '148'
-        suffix: m[4].toUpperCase(),               // 'P', '1', '2'
-        isDivided: m[4] !== 'P'                   // true si el lote está dividido
+        etapa: `E${p.etapa}`,                       // 'E01'
+        manzana: p.manzana,                         // 'D'
+        lotNum: String(p.lote).padStart(3, '0'),    // '148'
+        suffix: p.sufijo,                           // 'P', '1', '2'
+        isDivided: p.sufijo !== 'P'                 // true si el lote está dividido
     };
 }
 
