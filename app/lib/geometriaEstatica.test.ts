@@ -12,7 +12,8 @@ const CODIGOS = Object.keys(json);
 describe('interruptor de la geometría estática', () => {
   it('por defecto (sin variable) se usa el JSON: comportamiento de hoy', () => {
     expect(usarGeometriaEstatica(undefined)).toBe(true);
-    expect(Object.keys(geometriasEstaticas(undefined))).toHaveLength(1342);
+    // 1,342 del JSON menos 2 entradas que no son lotes aparte (E02MZU0221 y E02MZU0222): ver GEOMETRIAS_ESTATICAS_DESCARTADAS.
+    expect(Object.keys(geometriasEstaticas(undefined))).toHaveLength(1340);
   });
 
   it('«no» la apaga (y no distingue mayúsculas ni espacios); cualquier otro valor la deja encendida', () => {
@@ -184,5 +185,15 @@ describe('nadie lee el JSON por su cuenta', () => {
       .filter((f) => !/geometriaEstatica\.(test\.)?ts$/.test(f))
       .filter((f) => /from\s+['"][^'"]*geometries(-enriched)?\.json['"]/.test(readFileSync(f, 'utf-8')));
     expect(intrusos).toEqual([]);
+  });
+});
+
+describe('geometrías estáticas que no son lotes aparte', () => {
+  it('E02MZU0221 y E02MZU0222 no se dibujan como lotes «solo geometría» (el lote 22 se llama E02MZU022P en Odoo)', async () => {
+    const { geometriasEstaticas, GEOMETRIAS_ESTATICAS_DESCARTADAS } = await import('./geometriaEstatica');
+    const g = geometriasEstaticas('si');
+    for (const c of GEOMETRIAS_ESTATICAS_DESCARTADAS) expect(g[c], c).toBeUndefined();
+    expect(Object.keys(g).length).toBeGreaterThan(1300);
+    expect(g['E02MZU021P']).toBeDefined();
   });
 });

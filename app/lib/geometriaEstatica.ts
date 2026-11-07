@@ -21,6 +21,21 @@ export function usarGeometriaEstatica(valor: string | undefined = process.env.NE
 
 const VACIA: GeometriaEstatica = Object.freeze({}) as GeometriaEstatica;
 
+// Entradas del JSON que NO son lotes aparte (decisión del usuario, 2026-11-06/07): el mapa las dibujaba como «lote solo geometría».
+//   E02MZU0221  forma parte del lote E02MZU021P (253.14 m² en Odoo = 141.14 + 112).
+//   E02MZU0222  es la geometría del lote 22, que en Odoo se llama E02MZU022P (el usuario confirmó que ese código se queda).
+export const GEOMETRIAS_ESTATICAS_DESCARTADAS: readonly string[] = ['E02MZU0221', 'E02MZU0222'];
+
+let sinDescartadas: GeometriaEstatica | null = null;
+function conDescartes(): GeometriaEstatica {
+  if (!sinDescartadas) {
+    const copia = { ...(geometriesEnrichedRaw as unknown as GeometriaEstatica) };
+    for (const c of GEOMETRIAS_ESTATICAS_DESCARTADAS) delete copia[c];
+    sinDescartadas = copia;
+  }
+  return sinDescartadas;
+}
+
 export function geometriasEstaticas(valor: string | undefined = process.env.NEXT_PUBLIC_GEOMETRIA_ESTATICA): GeometriaEstatica {
-  return usarGeometriaEstatica(valor) ? (geometriesEnrichedRaw as unknown as GeometriaEstatica) : VACIA;
+  return usarGeometriaEstatica(valor) ? conDescartes() : VACIA;
 }
