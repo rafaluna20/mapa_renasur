@@ -40,45 +40,24 @@ export interface Lot {
 
 // Array RAW de lotes (sin defaultCode)
 const lotsDataRaw: Lot[] = [
-    
-    {
-        id: '33',
-        name: 'etapa 01 mz Z lote 33',
-        x_statu: 'vendido',
-        default_code: 'E01MZZ033',
-        list_price: 33000,
-        x_lote: '33',
-        x_mz: 'Z',
-        x_etapa: '01',
-        x_area: 160,
-        points: [
-            [308735.9792, 8622917.8865], [308728.0547, 8622918.9832], 
-            [308733.9860, 8622900.5004]
-        ],
-        image: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
-    },
-
-  
-
-    {
-        id: '39',
-        name: 'etapa 01 mz Z lote 39',
-        x_statu: 'separado',
-        default_code: 'E01MZZ039',
-        list_price: 39000,
-        x_lote: '39',
-        x_mz: 'Z',
-        x_etapa: '01',
-        x_area: 152.25,
-        points: [
-            [308783.8152, 8622919.140], [308778.9394, 8622900.5572],
-            [308786.6627, 8622901.50]
-        ],
-        image: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
-    }
-
-
-
+    // Lote de prueba E01MZZ033 (geometría de prueba, sin producto en Odoo): comentado el 2026-11-08 a pedido del usuario
+    // para que no aparezca en el mapa ni cuente como «lote sin proyecto». Para volver a mostrarlo, quitar los comentarios.
+    // {
+    //     id: '33',
+    //     name: 'etapa 01 mz Z lote 33',
+    //     x_statu: 'vendido',
+    //     default_code: 'E01MZZ033',
+    //     list_price: 33000,
+    //     x_lote: '33',
+    //     x_mz: 'Z',
+    //     x_etapa: '01',
+    //     x_area: 160,
+    //     points: [
+    //         [308735.9792, 8622917.8865], [308728.0547, 8622918.9832],
+    //         [308733.9860, 8622900.5004]
+    //     ],
+    //     image: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80',
+    // }
 ];
 
 /**
