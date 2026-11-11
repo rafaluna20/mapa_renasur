@@ -4,6 +4,8 @@ import { extraerCodigoDeReferencia } from '@/app/lib/codigoLote';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { fetchOdoo } from '@/app/services/odooService';
 import { fetchLotContractInfo } from '@/app/lib/lotContract';
+import { obtenerMapaAlias } from '@/app/lib/aliasLotesServidor';
+import { resolverCodigoViejo } from '@/app/lib/aliasLotes';
 import { normalizeCurrency } from '@/app/utils/money';
 
 interface ExtendedUser {
@@ -101,11 +103,15 @@ export async function GET() {
         ]);
         const clientPhone = (partners[0]?.mobile || partners[0]?.phone || null) as string | null;
 
-        // Agrupar por código de lote parseado de ref/payment_reference/name
+        // Agrupar por código de lote parseado de ref/payment_reference/name.
+        // Una factura ya emitida puede llevar el código VIEJO de un lote que cambió de código (p. ej. E01MZD129P → E01MZD1293): esas
+        // referencias no se reescriben, se resuelven con los alias de Odoo (proyecto.lote.alias). Sin alias el código queda tal cual.
+        const mapaAlias = await obtenerMapaAlias();
         const grupos = new Map<string, OdooInvoice[]>();
         for (const inv of invoices) {
             const texto = inv.ref || inv.payment_reference || inv.name || '';
-            const codigo = extraerCodigoLote(texto) || 'SIN_LOTE';
+            const extraido = extraerCodigoLote(texto);
+            const codigo = (extraido ? resolverCodigoViejo(extraido, mapaAlias) : null) || 'SIN_LOTE';
             if (!grupos.has(codigo)) grupos.set(codigo, []);
             grupos.get(codigo)!.push(inv);
         }

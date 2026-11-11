@@ -16,6 +16,11 @@ vi.mock('@/app/services/odooService', () => ({
     fetchOdoo: (...args: unknown[]) => fetchOdooMock(...args),
 }));
 
+const obtenerMapaAliasMock = vi.fn(async (): Promise<Record<string, string>> => ({}));
+vi.mock('@/app/lib/aliasLotesServidor', () => ({
+    obtenerMapaAlias: () => obtenerMapaAliasMock(),
+}));
+
 const fetchLotContractInfoMock = vi.fn();
 vi.mock('@/app/lib/lotContract', () => ({
     fetchLotContractInfo: (...args: unknown[]) => fetchLotContractInfoMock(...args),
@@ -33,6 +38,8 @@ const invoice = (id: number, ref: string, currency: [number, string], total: num
 beforeEach(() => {
     fetchOdooMock.mockReset();
     fetchLotContractInfoMock.mockReset();
+    obtenerMapaAliasMock.mockReset();
+    obtenerMapaAliasMock.mockResolvedValue({});
     fetchOdooMock.mockImplementation(async (model: string) => {
         if (model === 'account.move') {
             return [
@@ -106,3 +113,46 @@ describe('GET /api/invoices/statement — moneda por lote', () => {
         expect(invoiceCall[3].fields).toContain('currency_id');
     });
 });
+
+describe('GET /api/invoices/statement — lote que cambió de código (alias)', () => {
+    const preparar = (mapaAlias: Record<string, string>) => {
+        obtenerMapaAliasMock.mockResolvedValue(mapaAlias);
+        fetchLotContractInfoMock.mockResolvedValue(new Map());
+        fetchOdooMock.mockImplementation(async (model: string) => {
+            if (model === 'account.move') {
+                return [
+                    // factura emitida con el código VIEJO del lote 129C
+                    invoice(10, 'CONTRATOMANUAL-E01MZD129P-C001', PEN, 42660, true),
+                    // y una posterior ya con el código vigente
+                    invoice(11, 'CONTRATOMANUAL-E01MZD1293-C002', PEN, 1000),
+                ];
+            }
+            if (model === 'res.partner') return [{ phone: '999', mobile: false }];
+            if (model === 'product.template') {
+                return [{ default_code: 'E01MZD1293', list_price: 42660, x_mz: 'D', x_etapa: '1', x_lote: '129' }];
+            }
+            return [];
+        });
+    };
+
+    it('con alias: la factura con el código viejo se agrupa con el lote actual, con sus datos y su contrato', async () => {
+        preparar({ E01MZD129P: 'E01MZD1293' });
+        const { lots } = await callGet();
+        expect(lots).toHaveLength(1);                       // un solo lote, no «E01MZD129P» aparte
+        expect(lots[0].code).toBe('E01MZD1293');
+        expect(lots[0].label).toBe('Etapa 1 Mz D Lote 129C');
+        expect(lots[0].listPrice).toBe(42660);
+        expect(lots[0].invoices).toHaveLength(2);
+        expect(fetchLotContractInfoMock.mock.calls[0][0]).toEqual(['E01MZD1293']);   // el contrato se busca por el código vigente
+    });
+
+    it('sin alias: igual que antes (el código viejo queda como lote aparte, sin datos)', async () => {
+        preparar({});
+        const { lots } = await callGet();
+        const viejo = lots.find((l: { code: string }) => l.code === 'E01MZD129P');
+        expect(viejo.label).toBe('E01MZD129P');
+        expect(viejo.numeroLote).toBeNull();
+        expect(lots.find((l: { code: string }) => l.code === 'E01MZD1293').invoices).toHaveLength(1);
+    });
+});
+
