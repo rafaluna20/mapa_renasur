@@ -22,6 +22,7 @@ interface StatementLot {
     mz: string | null;
     etapa: string | null;
     numeroLote: string | null;
+    area?: number | null;
     listPrice: number;
     /** Moneda del lote (contratos en dólares facturan en USD). */
     currency?: CurrencyCode;
@@ -78,6 +79,7 @@ export default function PaymentsPortal() {
                     mz: lot.mz,
                     etapa: lot.etapa,
                     numeroLote: lot.numeroLote,
+                    area: lot.area,
                     listPrice: lot.listPrice,
                     currency: lot.currency,
                     invoices: lot.invoices,

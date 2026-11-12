@@ -42,6 +42,7 @@ interface OdooProductTemplate {
     x_mz?: string | false;
     x_etapa?: string | false;
     x_lote?: string | false;
+    x_area?: number | false;
 }
 
 /**
@@ -124,7 +125,7 @@ export async function GET() {
             const productos = await fetchOdoo('product.template', 'search_read', [[
                 ['default_code', 'in', codigos],
             ]], {
-                fields: ['default_code', 'list_price', 'x_mz', 'x_etapa', 'x_lote'],
+                fields: ['default_code', 'list_price', 'x_mz', 'x_etapa', 'x_lote', 'x_area'],
             }) as OdooProductTemplate[];
             for (const p of productos) {
                 productosPorCodigo.set(p.default_code, p);
@@ -157,6 +158,7 @@ export async function GET() {
                 mz: producto?.x_mz || null,
                 etapa: producto?.x_etapa || null,
                 numeroLote: numeroDeLote(producto) || null,
+                area: producto?.x_area || null,
                 // En dólares: precio pactado del contrato (0 si no se pudo leer: la UI muestra
                 // "—" en vez de un número en la moneda equivocada). En soles: catálogo, como antes.
                 listPrice,

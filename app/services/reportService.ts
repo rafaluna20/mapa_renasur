@@ -1751,6 +1751,8 @@ export interface ClientStatementLot {
     mz?: string | null;
     etapa?: string | null;
     numeroLote?: string | null;
+    /** Área del lote en m² (x_area de Odoo, la misma que muestra la ficha del lote). Si falta o es 0, no se imprime. */
+    area?: number | null;
     /** Valor total en la moneda del lote. En un lote en moneda extranjera es el precio pactado
      *  del contrato; 0 = no disponible (el PDF imprime "—" en vez de un número en otra moneda). */
     listPrice: number;
@@ -1976,9 +1978,11 @@ export async function generateClientStatementReport(data: ClientStatementReportD
             lot.etapa && { label: 'Etapa', value: lot.etapa },
             lot.mz && { label: 'Manzana', value: lot.mz },
             lot.numeroLote && { label: 'N° de Lote', value: lot.numeroLote },
+            lot.area && lot.area > 0 && { label: 'Área', value: `${lot.area.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m²` },
         ].filter(Boolean) as { label: string; value: string }[];
         if (loteItems.length > 0) {
-            y = drawInfoBox(doc, margin, y, contentW, 'DATOS DEL LOTE', loteItems, BRAND.purple, 3);
+            // 4 columnas si hay área (etapa, manzana, lote, área en una fila); 3 como antes si no.
+            y = drawInfoBox(doc, margin, y, contentW, 'DATOS DEL LOTE', loteItems, BRAND.purple, loteItems.length >= 4 ? 4 : 3);
         }
 
         // Moneda del lote: TODOS los montos de este estado de cuenta se imprimen en ella.

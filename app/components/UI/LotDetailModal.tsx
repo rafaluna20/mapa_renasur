@@ -401,6 +401,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                     mz: lot?.x_mz || null,
                     etapa: lot?.x_etapa || null,
                     numeroLote: numeroDeLote(lot) || null,
+                    area: Number(lot?.x_area) || null,
                     listPrice,
                     currency: lotCurrency,
                     invoices,
