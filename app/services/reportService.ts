@@ -5,6 +5,7 @@
  * Usa jsPDF v4 + jspdf-autotable v5
  */
 
+import { itemsCopropietarios, type Copropietario } from '@/app/utils/copropietarios';
 import jsPDF from 'jspdf';
 import { MARCA_LEGADA, type Marca } from '@/app/lib/marca';
 import autoTable from 'jspdf-autotable';
@@ -1762,6 +1763,8 @@ export interface ClientStatementLot {
     invoices: ClientStatementInvoice[];
     /** Cronograma del contrato (solo facturación Manual): cuotas vencidas que aún no tienen factura. */
     scheduleLines?: ScheduleLineLike[];
+    /** Copropietarios del contrato (nombre, DNI, teléfono). Vacío o ausente = no se imprime la caja. */
+    copropietarios?: Copropietario[];
 }
 
 export interface ClientStatementReportData {
@@ -1986,6 +1989,12 @@ export async function generateClientStatementReport(data: ClientStatementReportD
         if (loteItems.length > 0) {
             // 4 columnas si hay área (etapa, manzana, lote, área en una fila); 3 como antes si no.
             y = drawInfoBox(doc, margin, y, contentW, 'DATOS DEL LOTE', loteItems, BRAND.purple, loteItems.length >= 4 ? 4 : 3);
+        }
+
+        // Copropietarios del contrato: solo si los hay (sin copropietarios no se imprime nada).
+        const copropietarioItems = itemsCopropietarios(lot.copropietarios);
+        if (copropietarioItems.length > 0) {
+            y = drawInfoBox(doc, margin, y, contentW, 'COPROPIETARIOS', copropietarioItems, BRAND.purple, 3);
         }
 
         // Moneda del lote: TODOS los montos de este estado de cuenta se imprimen en ella.

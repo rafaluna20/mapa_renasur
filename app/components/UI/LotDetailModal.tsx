@@ -1,4 +1,5 @@
 import { Lot } from '@/app/data/lotsData';
+import type { Copropietario } from '@/app/utils/copropietarios';
 import { numeroDeLote } from '@/app/lib/etiquetaLote';
 import { atributosParaMostrar } from '@/app/lib/atributosLote';
 import { useMarca } from '@/app/context/MarcaContext';
@@ -51,7 +52,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
     const [activeTab, setActiveTab] = useState<'info' | 'pagos'>('info');
     const [invoices, setInvoices] = useState<{ id: number; name: string; ref?: string; payment_reference?: string; invoice_date: string; invoice_date_due: string; amount_total: number; amount_residual: number; currency_id?: [number, string] | string | false; payment_state: string; is_late_fee?: boolean; late_fee_origin_id?: [number, string] | false; late_fee_days_late?: number; late_fee_percentage_applied?: number; late_fee_waived?: boolean; state?: string; partner_id?: [number, string] | false; contract_quota_number?: number; invoice_payments_widget?: { content?: { date?: string; is_exchange?: boolean }[] } | false }[]>([]);
     const [scheduleLines, setScheduleLines] = useState<ScheduleLineLike[]>([]);
-    const [contractInfo, setContractInfo] = useState<{ billingMode: 'auto' | 'manual'; coOwnerIds: number[] } | null>(null);
+    const [contractInfo, setContractInfo] = useState<{ billingMode: 'auto' | 'manual'; coOwnerIds: number[]; coOwners: Copropietario[] } | null>(null);
     const [loadingInvoices, setLoadingInvoices] = useState(false);
     const [downloadingStatement, setDownloadingStatement] = useState(false);
     // Moneda y precio pactado del contrato vigente (solo se consulta si las facturas están en moneda
@@ -204,7 +205,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
 
                     setInvoices(validInvoices as any);
                     setScheduleLines(statementData.scheduleLines || []);
-                    setContractInfo(statementData.contract ? { billingMode: statementData.contract.billingMode, coOwnerIds: statementData.contract.coOwnerIds } : null);
+                    setContractInfo(statementData.contract ? { billingMode: statementData.contract.billingMode, coOwnerIds: statementData.contract.coOwnerIds, coOwners: statementData.contract.coOwners ?? [] } : null);
                     setLotContract(contractData);
                     setLoadingInvoices(false);
                     
@@ -427,6 +428,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                     currency: lotCurrency,
                     invoices,
                     scheduleLines,
+                    copropietarios: contractInfo?.coOwners ?? [],
                 }],
             }, marca);
         } catch (error) {
@@ -721,6 +723,23 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                 {/* --- TAB: PAGOS (ACCOUNT STATEMENT) --- */}
                 {activeTab === 'pagos' && (
                     <div className="space-y-4 animate-in slide-in-from-right-4 fade-in duration-300">
+
+                        {/* Copropietarios del contrato: solo si los hay (sin copropietarios no se muestra nada) */}
+                        {contractInfo && contractInfo.coOwners.length > 0 && (
+                            <div className="bg-white dark:bg-slate-800 p-3 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Copropietarios del contrato</p>
+                                <ul className="space-y-2">
+                                    {contractInfo.coOwners.map((c) => (
+                                        <li key={c.id} className="text-xs">
+                                            <p className="font-bold text-slate-800 dark:text-slate-100">{c.name}</p>
+                                            <p className="text-slate-500 dark:text-slate-400">
+                                                DNI {c.dni ?? 'No registrado'} · Tel. {c.phone ?? 'No registrado'}
+                                            </p>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
 
                         {/* Summary Card - Financial Progress */}
                         <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm relative overflow-hidden">

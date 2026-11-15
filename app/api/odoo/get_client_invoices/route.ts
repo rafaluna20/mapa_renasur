@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { fetchOdoo } from '@/app/services/odooService';
 import { requireStaffSession } from '@/app/lib/staffAuth';
-import { fetchCronograma, resolverContratoDelLote, type ContratoEstado } from '@/app/lib/contratoEstadoCuenta';
+import { fetchCronograma, leerCopropietarios, resolverContratoDelLote, type ContratoEstado } from '@/app/lib/contratoEstadoCuenta';
 
 export async function POST(request: Request) {
     const auth = await requireStaffSession(request);
@@ -145,11 +145,14 @@ export async function POST(request: Request) {
             }
         }
 
+        // Datos de los copropietarios (nombre, DNI, teléfono) para el estado de cuenta; sin copropietarios, nada.
+        const coOwners = contrato ? await leerCopropietarios(contrato.coOwnerIds) : [];
+
         return NextResponse.json({
             success: true,
             invoices: invoices || [],
             contract: contrato
-                ? { id: contrato.id, state: contrato.state, billingMode: contrato.billingMode, coOwnerIds: contrato.coOwnerIds }
+                ? { id: contrato.id, state: contrato.state, billingMode: contrato.billingMode, coOwnerIds: contrato.coOwnerIds, coOwners }
                 : null,
             scheduleLines,
         });

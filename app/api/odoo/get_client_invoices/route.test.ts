@@ -20,6 +20,8 @@ interface Escenario {
     facturas?: Dato[];
     productos?: Dato[];
     lineas?: Dato[];
+    partners?: Dato[];                  // filas de res.partner (copropietarios)
+    partnersFalla?: boolean;
 }
 
 function odoo(e: Escenario) {
@@ -35,6 +37,10 @@ function odoo(e: Escenario) {
             const campos = (kwargs.fields as string[]) || [];
             if (e.cronogramaFallaPortal && campos.includes('portal_emitted')) throw new Error('Invalid field portal_emitted');
             return e.cronograma ?? [];
+        }
+        if (model === 'res.partner') {
+            if (e.partnersFalla) throw new Error('sin permiso en res.partner');
+            return e.partners ?? [];
         }
         if (model === 'account.move') return e.facturas ?? [];
         throw new Error('modelo inesperado ' + model);
@@ -207,5 +213,54 @@ describe('get_client_invoices — compatibilidad con Odoo v3.22 y sin contrato',
         odoo({});
         const res = await POST(new Request('http://x', { method: 'POST', body: JSON.stringify({ partnerId: 'abc' }) }));
         expect(res.status).toBe(400);
+    });
+});
+
+describe('get_client_invoices — copropietarios del contrato', () => {
+    beforeEach(() => {
+        fetchOdoo.mockReset();
+    });
+
+    it('con copropietarios devuelve su nombre, DNI y teléfono para el estado de cuenta', async () => {
+        odoo({
+            contratos: [{ id: 63, state: 'confirmed', partner_id: [10, 'T1'], billing_mode: 'manual', co_owner_ids: [20, 21] }],
+            partners: [
+                { id: 21, name: 'LUIS RAMOS', vat: false, phone: false, mobile: '999000111' },
+                { id: 20, name: 'ANA PEREZ', vat: '43160220', phone: '014445566', mobile: false },
+            ],
+        });
+        const r = await llamar({ partnerId: 10, productCode: 'E01MZP037P' });
+        expect(r.contract.coOwners).toEqual([
+            { id: 20, name: 'ANA PEREZ', dni: '43160220', phone: '014445566' },
+            { id: 21, name: 'LUIS RAMOS', dni: null, phone: '999000111' },
+        ]);
+        // solo se leen los copropietarios de ESTE contrato
+        const lectura = fetchOdoo.mock.calls.find((c) => c[0] === 'res.partner')!;
+        expect(JSON.stringify(lectura[2])).toContain('[20,21]');
+    });
+
+    it('sin copropietarios no manda nada y ni siquiera consulta res.partner', async () => {
+        odoo({ contratos: [{ id: 63, state: 'confirmed', partner_id: [10, 'T1'], billing_mode: 'auto', co_owner_ids: [] }] });
+        const r = await llamar({ partnerId: 10, productCode: 'E01MZP037P' });
+        expect(r.contract.coOwners).toEqual([]);
+        expect(fetchOdoo.mock.calls.some((c) => c[0] === 'res.partner')).toBe(false);
+    });
+
+    it('si falla la lectura de los copropietarios, el estado de cuenta sale igual (sin esa información)', async () => {
+        odoo({
+            contratos: [{ id: 63, state: 'confirmed', partner_id: [10, 'T1'], billing_mode: 'manual', co_owner_ids: [20] }],
+            partnersFalla: true,
+            facturas: [{ id: 11, partner_id: [10, 'T1'], contract_id: [63, 'c'] }],
+        });
+        const r = await llamar({ partnerId: 10, productCode: 'E01MZP037P' });
+        expect(r.success).toBe(true);
+        expect(r.invoices).toHaveLength(1);
+        expect(r.contract.coOwners).toEqual([]);
+    });
+
+    it('un lote sin contrato no trae copropietarios', async () => {
+        odoo({ contratos: [], lineas: [{ move_id: [11, 'x'] }] });
+        const r = await llamar({ partnerId: 10, productCode: 'E01MZX001P' });
+        expect(r.contract).toBeNull();
     });
 });

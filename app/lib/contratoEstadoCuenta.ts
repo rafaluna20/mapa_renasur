@@ -1,5 +1,6 @@
 import { fetchOdoo } from '@/app/services/odooService';
 import type { ScheduleLineLike } from '@/app/utils/statementModel';
+import { aCopropietarios, type Copropietario, type FilaCopropietarioOdoo } from '@/app/utils/copropietarios';
 
 /**
  * Lectura del CONTRATO que respalda un estado de cuenta (ficha mapa_estado_cuenta_por_contrato).
@@ -72,6 +73,24 @@ export async function resolverContratoDelLote(productCode: string): Promise<Cont
     const filas = await leerContratos([['product_id', '=', productos[0].id], ['state', 'in', ['confirmed', 'closed']]], 'id desc');
     const elegido = filas.find((f) => f.state === 'confirmed') ?? filas.find((f) => f.state === 'closed');
     return elegido ? aContrato(elegido) : null;
+}
+
+/**
+ * Nombre, DNI y teléfono de los copropietarios del contrato, para mostrarlos en el estado de cuenta. Es informativo:
+ * si Odoo falla, el estado de cuenta sale igual, solo sin esa información.
+ */
+export async function leerCopropietarios(ids: number[]): Promise<Copropietario[]> {
+    if (!ids || ids.length === 0) return [];
+    try {
+        const filas = (await fetchOdoo('res.partner', 'search_read', [[['id', 'in', ids]]], {
+            fields: ['id', 'name', 'vat', 'phone', 'mobile'],
+            context: { active_test: false },
+        })) as FilaCopropietarioOdoo[];
+        return aCopropietarios(filas);
+    } catch (e) {
+        console.warn('⚠️ No se pudieron leer los copropietarios del contrato:', e);
+        return [];
+    }
 }
 
 /** Líneas activas del cronograma de un contrato. Sin la marca de portal (Odoo < 3.23) se leen sin ella. */

@@ -1,3 +1,4 @@
+import type { Copropietario } from '@/app/utils/copropietarios';
 import { apiFetch } from '@/app/lib/apiFetch';
 import { leerProyectosVia } from '@/app/lib/proyectosOdoo';
 import { ElementoUrbano } from '@/app/data/elementosUrbanos';
@@ -1205,7 +1206,7 @@ export const odooService = {
     async getClientStatement(partnerId: number, productCode?: string): Promise<{
         invoices: Record<string, unknown>[];
         scheduleLines: { sequence: number; date: string | false; amount: number; portal_emitted?: boolean }[];
-        contract: { id: number; state: string; billingMode: 'auto' | 'manual'; coOwnerIds: number[] } | null;
+        contract: { id: number; state: string; billingMode: 'auto' | 'manual'; coOwnerIds: number[]; coOwners?: Copropietario[] } | null;
     }> {
         const vacio = { invoices: [], scheduleLines: [], contract: null };
         try {
