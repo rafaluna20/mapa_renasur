@@ -12,6 +12,8 @@ import VoucherStatusBadge from '@/app/components/Payments/VoucherStatusBadge';
 import VoucherStatusAlert from '@/app/components/Payments/VoucherStatusAlert';
 import VoucherTimeline from '@/app/components/Payments/VoucherTimeline';
 import LotFinancialStatement, { type StatementInvoice } from '@/app/components/Payments/LotFinancialStatement';
+import AvisoPagoModal from '@/app/components/Payments/AvisoPagoModal';
+import type { AvisoPago } from '@/app/lib/avisoPago';
 import { formatMoney, normalizeCurrency, sumByCurrency, type CurrencyCode } from '@/app/utils/money';
 import { resumenSinFactura, type ScheduleLineLike } from '@/app/utils/statementModel';
 import { formatDistanceToNow } from 'date-fns';
@@ -30,6 +32,9 @@ interface StatementLot {
     invoices: StatementInvoice[];
     /** Cronograma de un contrato de facturación Manual (cuotas vencidas que aún no tienen factura). */
     scheduleLines?: ScheduleLineLike[];
+    /** Contrato Manual del lote (null en Automáticos) y avisos de pago ya enviados. */
+    contractId?: number | null;
+    avisos?: AvisoPago[];
 }
 
 /** "S/ 1,500.00 + US$ 3,000.00": totales por moneda, nunca mezclados en una sola cifra. */
@@ -97,23 +102,28 @@ export default function PaymentsPortal() {
         }
     }, [downloadingStatement, statementLots, session, clientPhone, marca]);
 
+    const cargarEstadoDeCuenta = useCallback(async () => {
+        try {
+            const res = await fetch('/api/invoices/statement');
+            const data = await res.json();
+            if (data.success) {
+                setStatementLots(data.lots);
+                setClientPhone(data.clientPhone || null);
+            }
+        } catch (err) {
+            console.error('[PAGOS] Error cargando estado de cuenta:', err);
+        } finally {
+            setLoadingStatement(false);
+        }
+    }, []);
+
     useEffect(() => {
         if (status !== 'authenticated') return;
-        (async () => {
-            try {
-                const res = await fetch('/api/invoices/statement');
-                const data = await res.json();
-                if (data.success) {
-                    setStatementLots(data.lots);
-                    setClientPhone(data.clientPhone || null);
-                }
-            } catch (err) {
-                console.error('[PAGOS] Error cargando estado de cuenta:', err);
-            } finally {
-                setLoadingStatement(false);
-            }
-        })();
-    }, [status]);
+        cargarEstadoDeCuenta();
+    }, [status, cargarEstadoDeCuenta]);
+
+    // «Informar pago» de una cuota sin factura (contrato Manual): abre el aviso de esa cuota.
+    const [avisoPara, setAvisoPara] = useState<{ contractId: number; sequence: number; amount: number; currency: CurrencyCode } | null>(null);
 
     // useEffect moved below loadInvoices to avoid "used before declaration" TS error
 
@@ -307,6 +317,10 @@ export default function PaymentsPortal() {
                                 currency={lot.currency}
                                 invoices={lot.invoices}
                                 scheduleLines={lot.scheduleLines}
+                                avisos={lot.avisos}
+                                onInformarPago={lot.contractId
+                                    ? (cuota) => setAvisoPara({ contractId: lot.contractId as number, ...cuota })
+                                    : undefined}
                             />
                         ))}
                     </div>
@@ -432,6 +446,17 @@ export default function PaymentsPortal() {
                     </div>
                 )}
             </div>
+            {avisoPara && (
+                <AvisoPagoModal
+                    contractId={avisoPara.contractId}
+                    quotaNumber={avisoPara.sequence}
+                    amount={avisoPara.amount}
+                    currency={avisoPara.currency}
+                    quotaLabel={avisoPara.sequence === 0 ? 'Cuota Inicial' : `Cuota N° ${avisoPara.sequence}`}
+                    onClose={() => setAvisoPara(null)}
+                    onSuccess={cargarEstadoDeCuenta}
+                />
+            )}
         </div>
     );
 }

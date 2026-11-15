@@ -37,6 +37,7 @@ export const RUTAS_ACCESO: Record<string, CategoriaRuta> = {
 
   '/api/invoices/history': 'cliente',
   '/api/invoices/pending': 'cliente',
+  '/api/avisos-pago': 'cliente',
   '/api/invoices/statement': 'cliente',
   '/api/payments/niubiz/authorize': 'cliente',
   '/api/payments/niubiz/create-session': 'cliente',

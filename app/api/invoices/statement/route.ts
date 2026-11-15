@@ -9,6 +9,7 @@ import { resolverCodigoViejo } from '@/app/lib/aliasLotes';
 import { normalizeCurrency } from '@/app/utils/money';
 import { contratosDelTitular, fetchCronograma, type ContratoEstado } from '@/app/lib/contratoEstadoCuenta';
 import type { ScheduleLineLike } from '@/app/utils/statementModel';
+import type { AvisoPago } from '@/app/lib/avisoPago';
 
 interface ExtendedUser {
     odooPartnerId?: number;
@@ -143,15 +144,44 @@ export async function GET() {
         // factura y se toma del cronograma. Un contrato cerrado no aporta cuotas por facturar. Si el contrato es del
         // lote pero aún no tiene facturas a la vista, el lote igual aparece (para mostrar lo que se debe).
         const cronogramaPorLote = new Map<string, ScheduleLineLike[]>();
+        const contratoPorLote = new Map<string, number>();
+        const lotePorContrato = new Map<number, string>();
         for (const c of contratos) {
             if (c.billingMode !== 'manual' || c.state !== 'confirmed' || !c.productCode) continue;
             const codigoLote = resolverCodigoViejo(c.productCode, mapaAlias) || c.productCode;
             try {
                 const lineas = await fetchCronograma(c.id);
                 cronogramaPorLote.set(codigoLote, [...(cronogramaPorLote.get(codigoLote) ?? []), ...lineas]);
+                contratoPorLote.set(codigoLote, c.id);
+                lotePorContrato.set(c.id, codigoLote);
                 if (!grupos.has(codigoLote)) grupos.set(codigoLote, []);
             } catch (e) {
                 console.warn('[STATEMENT] No se pudo leer el cronograma del contrato manual:', e);
+            }
+        }
+
+        // Avisos de pago de esas cuotas (modulo >= 3.24): el cliente ve si su transferencia esta en revision o fue rechazada.
+        // Solo lo necesario para mostrarlo: nunca quien pago, ni la nota interna, ni la factura. Sin el modelo (Odoo anterior)
+        // o ante cualquier fallo, la lista queda vacia y el estado de cuenta sale igual.
+        const avisosPorLote = new Map<string, AvisoPago[]>();
+        if (lotePorContrato.size > 0) {
+            try {
+                const filas = (await fetchOdoo('simple.contract.payment.notice', 'search_read', [[
+                    ['contract_id', 'in', [...lotePorContrato.keys()]],
+                ]], {
+                    fields: ['contract_id', 'quota_number', 'amount', 'expected_amount', 'state', 'reject_reason', 'create_date'],
+                    order: 'id desc',
+                    limit: 200,
+                })) as (AvisoPago & { id: number; contract_id: [number, string] | false })[];
+                for (const fila of filas ?? []) {
+                    const codigoLote = fila.contract_id ? lotePorContrato.get(fila.contract_id[0]) : undefined;
+                    if (!codigoLote) continue;
+                    const { contract_id: _omitido, ...aviso } = fila;
+                    void _omitido;
+                    avisosPorLote.set(codigoLote, [...(avisosPorLote.get(codigoLote) ?? []), aviso]);
+                }
+            } catch (e) {
+                console.warn('[STATEMENT] No se pudieron leer los avisos de pago (¿modulo < 3.24?):', e instanceof Error ? e.message : e);
             }
         }
 
@@ -206,6 +236,9 @@ export async function GET() {
                 // Cuotas del cronograma de un contrato Manual (vacío en Automáticos): el modelo del estado de cuenta
                 // las usa para mostrar las vencidas sin factura.
                 scheduleLines: cronogramaPorLote.get(codigo) ?? [],
+                // Contrato Manual del lote (para informar un pago) y avisos de pago ya enviados.
+                contractId: contratoPorLote.get(codigo) ?? null,
+                avisos: avisosPorLote.get(codigo) ?? [],
             };
         });
 

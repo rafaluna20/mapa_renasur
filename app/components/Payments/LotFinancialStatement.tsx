@@ -6,6 +6,7 @@ import {
     buildStatementModel, installmentLabel, installmentStatus, lateFeeLabel, lateFeeNote, quotaOrderKey, STATUS_LABEL,
     unbilledQuotaLabel, type ScheduleLineLike, type StatementInvoiceLike, type UnbilledQuota,
 } from '@/app/utils/statementModel';
+import { avisoPorCuota, etiquetaAviso, type AvisoPago } from '@/app/lib/avisoPago';
 
 export interface StatementInvoice {
     id: number;
@@ -48,6 +49,10 @@ interface LotFinancialStatementProps {
     invoices: StatementInvoice[];
     /** Cronograma del contrato (solo contratos de facturación Manual): cuotas vencidas que aún no tienen factura. */
     scheduleLines?: ScheduleLineLike[];
+    /** Avisos de pago ya enviados por el cliente para las cuotas sin factura de este lote. */
+    avisos?: AvisoPago[];
+    /** Si se pasa, cada cuota vencida sin factura (y sin aviso en revisión) ofrece «Informar pago». */
+    onInformarPago?: (cuota: { sequence: number; amount: number; currency: CurrencyCode }) => void;
     loading?: boolean;
 }
 
@@ -63,7 +68,7 @@ type FilaHistorial =
 // ~100 líneas. Si diverge con el tiempo, no es grave — es solo formato.
 // (El formateador ahora lleva la moneda: US$ para contratos en dólares, S/ para soles.)
 
-export default function LotFinancialStatement({ lotLabel, mz, etapa, numeroLote, listPrice, currency, invoices, scheduleLines, loading }: LotFinancialStatementProps) {
+export default function LotFinancialStatement({ lotLabel, mz, etapa, numeroLote, listPrice, currency, invoices, scheduleLines, avisos, onInformarPago, loading }: LotFinancialStatementProps) {
     // Todos los montos de este estado de cuenta se muestran en la moneda del lote.
     const lotCurrency: CurrencyCode = currency ?? normalizeCurrency(invoices[0]?.currency_id);
     const priceKnown = lotCurrency === 'PEN' || listPrice > 0;
@@ -206,14 +211,38 @@ export default function LotFinancialStatement({ lotLabel, mz, etapa, numeroLote,
                                                         <FileText size={10} />
                                                         <span>El comprobante se emite al registrar el pago</span>
                                                     </div>
+                                                    {(() => {
+                                                        const aviso = avisoPorCuota(avisos, fila.q.sequence);
+                                                        const etiqueta = aviso ? etiquetaAviso(aviso) : null;
+                                                        return etiqueta ? (
+                                                            <div className="text-[10px] font-semibold text-slate-600">
+                                                                {etiqueta.texto}{etiqueta.detalle ? ` · ${etiqueta.detalle}` : ''}
+                                                            </div>
+                                                        ) : null;
+                                                    })()}
                                                     <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
                                                         <Calendar size={10} />
                                                         <span>Vencimiento: {fila.q.date}</span>
                                                     </div>
                                                 </div>
-                                                <p className="text-[11px] text-red-600 font-bold bg-red-50 px-2 py-0.5 rounded-md">
-                                                    Saldo: {formatMoney(fila.q.amount)}
-                                                </p>
+                                                <div className="flex flex-col items-end gap-1">
+                                                    <p className="text-[11px] text-red-600 font-bold bg-red-50 px-2 py-0.5 rounded-md">
+                                                        Saldo: {formatMoney(fila.q.amount)}
+                                                    </p>
+                                                    {onInformarPago && (() => {
+                                                        const aviso = avisoPorCuota(avisos, fila.q.sequence);
+                                                        const puede = !aviso || etiquetaAviso(aviso).permiteReinformar;
+                                                        return puede ? (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => onInformarPago({ sequence: fila.q.sequence, amount: fila.q.amount, currency: lotCurrency })}
+                                                                className="text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-md"
+                                                            >
+                                                                {aviso ? 'Informar de nuevo' : 'Informar pago'}
+                                                            </button>
+                                                        ) : null;
+                                                    })()}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>

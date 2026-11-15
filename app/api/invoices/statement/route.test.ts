@@ -290,6 +290,50 @@ describe('GET /api/invoices/statement — por contrato (copropietarios)', () => 
         expect(lot.scheduleLines).toHaveLength(1);
     });
 
+    it('cada lote Manual lleva el contrato y los avisos de pago de sus cuotas, SIN datos de quien pago', async () => {
+        preparar({
+            contratos: [contratoFila()],
+            cronograma: [{ sequence: 3, date: '2026-10-15', amount: 1000, portal_emitted: false }],
+        });
+        const base = fetchOdooMock.getMockImplementation()!;
+        fetchOdooMock.mockImplementation(async (model: string, ...resto: unknown[]) => {
+            if (model === 'simple.contract.payment.notice') {
+                return [{ id: 5, contract_id: [63, 'c'], quota_number: 3, amount: 1000, expected_amount: 1000, state: 'pending', reject_reason: false, create_date: '2026-11-10 10:00:00' }];
+            }
+            return base(model, ...resto);
+        });
+        const { lots } = await callGet();
+        const lot = lots.find((l: { code: string }) => l.code === 'E01MZP037P');
+        expect(lot.contractId).toBe(63);
+        expect(lot.avisos).toEqual([expect.objectContaining({ id: 5, quota_number: 3, state: 'pending' })]);
+        const llamada = fetchOdooMock.mock.calls.find((c) => c[0] === 'simple.contract.payment.notice')!;
+        expect(JSON.stringify(llamada[2])).toContain('["contract_id","in",[63]]');
+        const campos = llamada[3].fields as string[];
+        for (const prohibido of ['payer_id', 'invoice_id', 'note', 'resolution_note', 'attachment_ids', 'operation_number', 'bank_name']) {
+            expect(campos).not.toContain(prohibido);
+        }
+    });
+
+    it('un Odoo sin el modelo de avisos (modulo anterior a 3.24) no rompe el estado de cuenta: avisos vacios', async () => {
+        preparar({ contratos: [contratoFila()], cronograma: [{ sequence: 3, date: '2026-10-15', amount: 1000, portal_emitted: false }] });
+        const base = fetchOdooMock.getMockImplementation()!;
+        fetchOdooMock.mockImplementation(async (model: string, ...resto: unknown[]) => {
+            if (model === 'simple.contract.payment.notice') throw new Error("Object simple.contract.payment.notice doesn't exist");
+            return base(model, ...resto);
+        });
+        const { success, lots } = await callGet();
+        expect(success).toBe(true);
+        expect(lots.find((l: { code: string }) => l.code === 'E01MZP037P').avisos).toEqual([]);
+    });
+
+    it('un contrato Automatico no lleva avisos ni se consultan', async () => {
+        preparar({ contratos: [contratoFila({ billing_mode: 'auto' })] });
+        const { lots } = await callGet();
+        expect(lots[0].avisos).toEqual([]);
+        expect(lots[0].contractId).toBeNull();
+        expect(fetchOdooMock.mock.calls.some((c) => c[0] === 'simple.contract.payment.notice')).toBe(false);
+    });
+
     it('un contrato Manual CERRADO no aporta cuotas por facturar (no se inventa deuda en un contrato terminado)', async () => {
         preparar({
             contratos: [contratoFila({ state: 'closed' })],
