@@ -900,11 +900,12 @@ export const odooService = {
     },
 
     // 3. Attach Evidence to the Order
-    async addAttachmentToOrder(orderId: number, file: File): Promise<boolean> {
+    async addAttachmentToOrder(orderId: number, file: File, tipo: 'cotizacion' | 'comprobante' = 'comprobante'): Promise<boolean> {
         try {
             const formData = new FormData();
             formData.append('orderId', orderId.toString());
             formData.append('file', file);
+            formData.append('tipo', tipo);
 
             const response = await apiFetch('/api/odoo/add_attachment', {
                 method: 'POST',
@@ -1054,7 +1055,7 @@ export const odooService = {
 
             // Step 4: Attach PDF Quote if provided (and valid)
             if (pdfFile && pdfFile instanceof File) {
-                await this.addAttachmentToOrder(orderId, pdfFile);
+                await this.addAttachmentToOrder(orderId, pdfFile, 'cotizacion');
                 console.log("✅ Quote PDF attached to order");
             } else if (pdfFile) {
                 console.warn("⚠️ PDF passed is not a File object, skipping attachment:", pdfFile);

@@ -12,7 +12,9 @@ const buscar = async (query: string) => {
 };
 
 describe('search_partners', () => {
-    beforeEach(() => fetchOdoo.mockReset());
+    beforeEach(() => {
+        fetchOdoo.mockReset();
+    });
 
     it('al buscar por DNI, la ficha con ese documento exacto va primero y los clientes con contrato quedan marcados', async () => {
         fetchOdoo

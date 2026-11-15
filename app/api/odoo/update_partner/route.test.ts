@@ -15,7 +15,9 @@ const llamar = async (body: Record<string, unknown>) => {
 };
 
 describe('update_partner: corregir un documento no puede duplicar a otro cliente', () => {
-    beforeEach(() => fetchOdoo.mockReset());
+    beforeEach(() => {
+        fetchOdoo.mockReset();
+    });
 
     it('si el nuevo documento ya es de OTRO cliente, se rechaza con 409 y no se escribe', async () => {
         fetchOdoo.mockResolvedValueOnce([{ id: 7, name: 'ESCOBAR LUNA, RAFAEL', vat: '43160220' }]);

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { fetchOdoo } from '@/app/services/odooService';
 import { requireStaffSession } from '@/app/lib/staffAuth';
+import { DESCRIPCION_ADJUNTO, normalizarTipoAdjunto } from '@/app/lib/tiposAdjunto';
 
 export async function POST(request: Request) {
     const auth = await requireStaffSession(request);
@@ -10,6 +11,7 @@ export async function POST(request: Request) {
         const formData = await request.formData();
         const orderId = formData.get('orderId');
         const file = formData.get('file') as File;
+        const tipo = normalizarTipoAdjunto(formData.get('tipo'));
 
         if (!orderId || !file) {
             return NextResponse.json(
@@ -39,7 +41,7 @@ export async function POST(request: Request) {
             datas: base64Data,
             res_model: 'sale.order',
             res_id: parseInt(orderId as string),
-            description: 'Comprobante de pago - Reserva'
+            description: DESCRIPCION_ADJUNTO[tipo]
         };
 
         const attachmentId = await fetchOdoo(

@@ -1,6 +1,15 @@
 import { NextResponse } from 'next/server';
 import { fetchOdoo } from '@/app/services/odooService';
 import { requireStaffSession } from '@/app/lib/staffAuth';
+import { avisarDocumentosEnContrato, copiarAdjuntosAlContrato } from '@/app/lib/adjuntosContrato';
+
+// Lleva al contrato la cotización y los comprobantes de la reserva. Nunca falla el alta del contrato por esto.
+async function documentosAlContrato(orderId: number, contractId: number) {
+    const copia = await copiarAdjuntosAlContrato(orderId, contractId);
+    await avisarDocumentosEnContrato(orderId, contractId, copia.copiados);
+    if (copia.errores.length > 0) console.warn(`⚠️ Documentos del contrato #${contractId}:`, copia.errores);
+    return { copiados: copia.copiados.length, yaEstaban: copia.yaEstaban, errores: copia.errores.length };
+}
 
 export async function POST(request: Request) {
     const auth = await requireStaffSession(request);
@@ -73,7 +82,8 @@ export async function POST(request: Request) {
             return NextResponse.json({
                 success: true,
                 message: 'Contrato ya existía (idempotencia)',
-                contractId: existingContracts[0].id
+                contractId: existingContracts[0].id,
+                documentos: await documentosAlContrato(orderIdNum, existingContracts[0].id)
             });
         }
 
@@ -163,7 +173,8 @@ export async function POST(request: Request) {
                     return NextResponse.json({
                         success: true,
                         message: 'Contrato ya existía (idempotencia, creación concurrente)',
-                        contractId: raceContracts[0].id
+                        contractId: raceContracts[0].id,
+                        documentos: await documentosAlContrato(orderIdNum, raceContracts[0].id)
                     });
                 }
             }
@@ -201,9 +212,12 @@ export async function POST(request: Request) {
             // No bloqueamos: El contrato ya existe, solo falta el click final.
         }*/
 
+        const documentos = await documentosAlContrato(orderIdNum, contractId);
+
         return NextResponse.json({
             success: true,
             contractId: contractId,
+            documentos,
             details: {
                 monthlyAmount: monthlyAmount,
                 totalQuotas: order.x_plazo_meses,
