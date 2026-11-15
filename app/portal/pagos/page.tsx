@@ -412,8 +412,8 @@ export default function PaymentsPortal() {
                                     : `Tiene ${sinFactura.count} cuotas vencidas sin comprobante emitido`}
                             </p>
                             <p className="text-sm text-amber-800 mt-1">
-                                En su contrato el comprobante se emite al registrar el pago. Realice su pago por transferencia y avise a
-                                administración para que lo registren: para estas cuotas no hay botón de subir comprobante.
+                                En su contrato el comprobante se emite cuando administración confirma su pago. Realice su pago por
+                                transferencia y pulse «Informar pago» en la cuota para adjuntar su comprobante de transferencia.
                             </p>
                         </div>
                     </div>
