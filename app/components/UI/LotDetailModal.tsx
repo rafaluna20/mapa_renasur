@@ -11,7 +11,8 @@ import { COLOR_SEPARACION, etiquetaAntiguedad, etiquetaSeparacion } from '@/app/
 import { odooService, OdooUser } from '@/app/services/odooService';
 import { formatMoney as formatMoneyWithCurrency, normalizeCurrency } from '@/app/utils/money';
 import {
-    buildStatementModel, installmentLabel, installmentStatus, lateFeeLabel, lateFeeNote, STATUS_LABEL,
+    buildStatementModel, installmentLabel, installmentStatus, lateFeeLabel, lateFeeNote, quotaOrderKey, STATUS_LABEL,
+    unbilledQuotaLabel, type ScheduleLineLike, type UnbilledQuota,
 } from '@/app/utils/statementModel';
 import { SHADOW_FLOATING, BORDER_FLOATING } from '@/app/lib/designTokens';
 
@@ -48,7 +49,9 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
     const [showRefundModal, setShowRefundModal] = useState(false);
     const [reservationOwner, setReservationOwner] = useState<{ id: number; name: string; partnerId?: number; clientName?: string; clientPhone?: string | null; clientEmail?: string | null; clientDni?: string | null; totalInstallments?: number; orderId?: number; separationAmount?: number | null } | null>(null);
     const [activeTab, setActiveTab] = useState<'info' | 'pagos'>('info');
-    const [invoices, setInvoices] = useState<{ id: number; name: string; ref?: string; payment_reference?: string; invoice_date: string; invoice_date_due: string; amount_total: number; amount_residual: number; currency_id?: [number, string] | string | false; payment_state: string; is_late_fee?: boolean; late_fee_origin_id?: [number, string] | false; late_fee_days_late?: number; late_fee_percentage_applied?: number; late_fee_waived?: boolean; state?: string; invoice_payments_widget?: { content?: { date?: string; is_exchange?: boolean }[] } | false }[]>([]);
+    const [invoices, setInvoices] = useState<{ id: number; name: string; ref?: string; payment_reference?: string; invoice_date: string; invoice_date_due: string; amount_total: number; amount_residual: number; currency_id?: [number, string] | string | false; payment_state: string; is_late_fee?: boolean; late_fee_origin_id?: [number, string] | false; late_fee_days_late?: number; late_fee_percentage_applied?: number; late_fee_waived?: boolean; state?: string; partner_id?: [number, string] | false; contract_quota_number?: number; invoice_payments_widget?: { content?: { date?: string; is_exchange?: boolean }[] } | false }[]>([]);
+    const [scheduleLines, setScheduleLines] = useState<ScheduleLineLike[]>([]);
+    const [contractInfo, setContractInfo] = useState<{ billingMode: 'auto' | 'manual'; coOwnerIds: number[] } | null>(null);
     const [loadingInvoices, setLoadingInvoices] = useState(false);
     const [downloadingStatement, setDownloadingStatement] = useState(false);
     // Moneda y precio pactado del contrato vigente (solo se consulta si las facturas están en moneda
@@ -95,6 +98,8 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
 
         // RESET COMPLETO E INMEDIATO - Esto garantiza que la UI se limpie
         setInvoices([]);
+        setScheduleLines([]);
+        setContractInfo(null);
         setLotContract(null);
         setReservationOwner(null);
         setActiveTab('info');
@@ -162,10 +167,13 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                     setLoadingInvoices(true);
                     
                     // 🔑 CLAVE: Pasar el productCode para filtrar solo facturas de este lote
-                    const invoicesData = await odooService.getClientInvoices(
+                    // Estado de cuenta POR CONTRATO: facturas del contrato (a nombre de cualquier titular) y, si es
+                    // de facturación Manual, su cronograma para las cuotas vencidas aún sin factura.
+                    const statementData = await odooService.getClientStatement(
                         ownerData.partnerId,
                         lot.default_code // Filtrar por código del lote
                     );
+                    const invoicesData = statementData.invoices;
                     
                     // 🚨 VALIDACIÓN CRÍTICA NUEVAMENTE
                     if (currentLotIdRef.current !== lotId) {
@@ -195,6 +203,8 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                     }
 
                     setInvoices(validInvoices as any);
+                    setScheduleLines(statementData.scheduleLines || []);
+                    setContractInfo(statementData.contract ? { billingMode: statementData.contract.billingMode, coOwnerIds: statementData.contract.coOwnerIds } : null);
                     setLotContract(contractData);
                     setLoadingInvoices(false);
                     
@@ -344,8 +354,18 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
         : (lot.list_price || 0);
     // Modelo único (utils/statementModel.ts), el mismo del portal del cliente y del PDF: cuotas (capital) y cargos
     // por mora por separado; el capital pagado/avance/saldo son SOLO del capital; la mora condonada no se muestra.
-    const model = buildStatementModel(invoices, listPrice);
+    const model = buildStatementModel(invoices, listPrice, new Date(), scheduleLines);
     const now = new Date();
+    // Historial en orden de cuota: las facturadas y las vencidas aún sin factura, mezcladas por número.
+    type FilaHistorial =
+        | { tipo: 'factura'; orden: number; inv: (typeof model.installments)[number] }
+        | { tipo: 'sinFactura'; orden: number; q: UnbilledQuota };
+    const filasHistorial: FilaHistorial[] = [
+        ...model.installments.map((inv): FilaHistorial => ({ tipo: 'factura', orden: quotaOrderKey(inv), inv })),
+        ...model.unbilledOverdue.map((q): FilaHistorial => ({ tipo: 'sinFactura', orden: q.sequence, q })),
+    ].sort((a, b) => a.orden - b.orden);
+    // Con copropietarios, cada cuota puede salir a nombre de uno distinto: el staff ve quién pagó.
+    const mostrarPagador = !!contractInfo && contractInfo.coOwnerIds.length > 0;
 
     // ─── Recordatorio de mora por WhatsApp ────────────────────────────────────
     // Normaliza a formato internacional para wa.me: quita todo lo que no sea
@@ -370,6 +390,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                     const fecha = new Date(inv.invoice_date_due as string).toLocaleDateString('es-PE');
                     return `• ${installmentLabel(inv)} — ${formatMoney(inv.amount_residual)} (venció ${fecha})`;
                 }),
+            ...model.unbilledOverdue.map((q) => `• ${unbilledQuotaLabel(q)} — ${formatMoney(q.amount)} (venció ${new Date(q.date).toLocaleDateString('es-PE')})`),
             ...model.lateFeesPending.map((fee) => `• ${lateFeeLabel(fee)} — ${formatMoney(fee.amount_residual)} (recargo por mora)`),
         ].join('\n');
 
@@ -405,6 +426,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                     listPrice,
                     currency: lotCurrency,
                     invoices,
+                    scheduleLines,
                 }],
             }, marca);
         } catch (error) {
@@ -736,17 +758,17 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                                 <div>
                                     <p className="text-xs font-bold text-red-700 dark:text-red-400 uppercase">
                                         {model.hasOverdueInstallments
-                                            ? `Atraso Detectado (${model.overdueInstallments.length} ${model.overdueInstallments.length === 1 ? 'cuota' : 'cuotas'})`
+                                            ? `Atraso Detectado (${model.overdueQuotaCount} ${model.overdueQuotaCount === 1 ? 'cuota' : 'cuotas'})`
                                             : 'Mora pendiente de pago'}
                                     </p>
                                     <p className="text-sm font-bold text-red-800 dark:text-red-300 mt-0.5">
                                         {model.hasOverdueInstallments
-                                            ? `Deuda Exigible: ${formatMoney(model.overdueInstallmentsAmount)}`
+                                            ? `Deuda Exigible: ${formatMoney(model.overdueQuotaAmount)}`
                                             : `Mora: ${formatMoney(model.lateFeesPendingAmount)}`}
                                     </p>
                                     {model.hasOverdueInstallments && model.lateFeesPending.length > 0 && (
                                         <p className="text-[11px] font-semibold text-red-700 dark:text-red-300 mt-0.5">
-                                            Cuotas {formatMoney(model.overdueInstallmentsAmount)} + Mora {formatMoney(model.lateFeesPendingAmount)} = Total a regularizar {formatMoney(model.totalToRegularize)}
+                                            Cuotas {formatMoney(model.overdueQuotaAmount)} + Mora {formatMoney(model.lateFeesPendingAmount)} = Total a regularizar {formatMoney(model.totalToRegularize)}
                                         </p>
                                     )}
                                     <p className="text-[10px] text-red-600 dark:text-red-400 mt-1">El cliente presenta pagos vencidos. Priorizar cobranza.</p>
@@ -768,14 +790,46 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
 
                             {loadingInvoices ? (
                                 <div className="p-6 text-center text-slate-400 text-xs bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700">Cargando estado de cuenta...</div>
-                            ) : model.installments.length === 0 ? (
+                            ) : filasHistorial.length === 0 ? (
                                 <div className="p-6 text-center bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm text-slate-400 text-xs italic flex flex-col items-center">
                                     <Receipt size={24} className="mb-2 opacity-50" />
                                     Aún no hay cuotas facturadas.
                                 </div>
                             ) : (
                                 <div className="relative border-l-2 border-slate-200 dark:border-slate-700 ml-3 pl-4 space-y-4">
-                                    {model.installments.map((inv) => {
+                                    {filasHistorial.map((fila) => {
+                                        if (fila.tipo === 'sinFactura') {
+                                            return (
+                                                <div key={`sin-${fila.q.sequence}`} className="relative">
+                                                    <div className="absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full border-2 border-white dark:border-slate-900 bg-red-500 animate-pulse" />
+                                                    <div className="bg-white dark:bg-slate-800 p-3 rounded-lg border border-red-200 dark:border-red-900/50 shadow-sm">
+                                                        <div className="flex justify-between items-start mb-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-bold text-slate-700 dark:text-slate-200 text-xs">{unbilledQuotaLabel(fila.q)}</span>
+                                                                <span className="bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-300 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase animate-pulse">{STATUS_LABEL.overdue}</span>
+                                                            </div>
+                                                            <p className="font-bold text-slate-800 dark:text-slate-100 text-sm">{formatMoney(fila.q.amount)}</p>
+                                                        </div>
+                                                        <div className="flex justify-between items-end mt-2">
+                                                            <div className="space-y-0.5">
+                                                                <div className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400">
+                                                                    <FileText size={10} />
+                                                                    <span>Sin comprobante: se emite al registrar el pago</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400">
+                                                                    <Calendar size={10} />
+                                                                    <span>Vencimiento: {fila.q.date}</span>
+                                                                </div>
+                                                            </div>
+                                                            <p className="text-[11px] text-red-600 dark:text-red-400 font-bold bg-red-50 dark:bg-red-950/40 px-2 py-0.5 rounded-md">
+                                                                Saldo: {formatMoney(fila.q.amount)}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+                                        const inv = fila.inv;
                                         const status = installmentStatus(inv, now);
                                         const isPaid = status === 'paid';
                                         const isOverdueItem = status === 'overdue';
@@ -806,6 +860,9 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                                                                 <FileText size={10} />
                                                                 <span>{inv.name || inv.ref || 'S/N'}</span>
                                                             </div>
+                                                            {mostrarPagador && inv.partner_id && (
+                                                                <div className="text-[10px] text-slate-500 dark:text-slate-400">Pagador: {inv.partner_id[1]}</div>
+                                                            )}
                                                             <div className="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400">
                                                                 <Calendar size={10} />
                                                                 <span>Vencimiento: {inv.invoice_date_due || inv.invoice_date}</span>

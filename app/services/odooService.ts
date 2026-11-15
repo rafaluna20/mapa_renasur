@@ -1199,6 +1199,34 @@ export const odooService = {
         }
     },
 
+    // Estado de cuenta de un lote POR CONTRATO (ficha mapa_estado_cuenta_por_contrato): las facturas del contrato (a nombre
+    // de cualquier titular) y, en contratos de facturación Manual, su cronograma para mostrar las cuotas vencidas que aún
+    // no tienen factura. Ante un fallo devuelve vacío, igual que getClientInvoices.
+    async getClientStatement(partnerId: number, productCode?: string): Promise<{
+        invoices: Record<string, unknown>[];
+        scheduleLines: { sequence: number; date: string | false; amount: number; portal_emitted?: boolean }[];
+        contract: { id: number; state: string; billingMode: 'auto' | 'manual'; coOwnerIds: number[] } | null;
+    }> {
+        const vacio = { invoices: [], scheduleLines: [], contract: null };
+        try {
+            const response = await apiFetch('/api/odoo/get_client_invoices', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ partnerId, productCode })
+            });
+            const result = await response.json();
+            if (!result.success) return vacio;
+            return {
+                invoices: result.invoices || [],
+                scheduleLines: result.scheduleLines || [],
+                contract: result.contract || null,
+            };
+        } catch (error) {
+            console.error("Error fetching client statement:", error);
+            return vacio;
+        }
+    },
+
     // Moneda y precio pactado del contrato vigente de un lote (null si no tiene contrato o falla).
     // Sirve para mostrar Valor total / Saldo en la moneda del contrato (contratos en dólares).
     async getLotContract(productCode: string): Promise<{

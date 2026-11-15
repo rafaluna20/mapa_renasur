@@ -33,6 +33,27 @@ export interface StatementInvoiceLike {
     late_fee_percentage_applied?: number;
     late_fee_waived?: boolean;
     state?: string;
+    /** Número de cuota guardado por el módulo en la factura (0 = inicial). Preferible a leerlo de la referencia. */
+    contract_quota_number?: number;
+}
+
+/**
+ * Línea del cronograma de un contrato (simple.contract.schedule). Solo se usa en contratos de facturación MANUAL:
+ * ahí la factura nace al cobro y una cuota vencida que nadie cobró todavía no tiene factura.
+ */
+export interface ScheduleLineLike {
+    sequence: number;
+    date: string | false;
+    amount: number;
+    /** Marca «emitida en el portal» (módulo >= 3.23): la cuota ya se cobró y emitió fuera de Odoo. */
+    portal_emitted?: boolean;
+}
+
+/** Cuota vencida que figura en el cronograma pero aún no tiene factura ni marca de portal. */
+export interface UnbilledQuota {
+    sequence: number;
+    date: string;
+    amount: number;
 }
 
 export type InstallmentStatus = 'paid' | 'overdue' | 'pending';
@@ -63,6 +84,12 @@ export function quotaNumberOf(inv: Pick<StatementInvoiceLike, 'name' | 'ref' | '
     return m ? parseInt(m[1], 10) : null;
 }
 
+/** Cuota que cubre la factura: el número estructurado del contrato y, si falta, el de la referencia. */
+export function billedQuotaNumberOf(inv: StatementInvoiceLike): number | null {
+    if (typeof inv.contract_quota_number === 'number' && inv.contract_quota_number >= 0) return inv.contract_quota_number;
+    return quotaNumberOf(inv);
+}
+
 export function isLateFeeInvoice(inv: StatementInvoiceLike): boolean {
     if (typeof inv.is_late_fee === 'boolean') return inv.is_late_fee;
     return REF_MORA.test(refOf(inv)); // respaldo si el dato no llegó de Odoo
@@ -80,6 +107,11 @@ export function installmentLabel(inv: StatementInvoiceLike): string {
     if (n === 0) return 'Cuota Inicial';
     if (n !== null) return `Cuota N° ${n}`;
     return inv.name || 'Factura';
+}
+
+/** Etiqueta de una cuota del cronograma que aún no tiene factura (misma redacción que una cuota facturada). */
+export function unbilledQuotaLabel(q: Pick<UnbilledQuota, 'sequence'>): string {
+    return q.sequence === 0 ? 'Cuota Inicial' : `Cuota N° ${q.sequence}`;
 }
 
 /** Etiqueta de una MORA: "Mora cuota 17". */
@@ -116,6 +148,48 @@ export function lateFeeStatus(inv: StatementInvoiceLike): 'paid' | 'pending' {
     return inv.payment_state === 'paid' ? 'paid' : 'pending';
 }
 
+/**
+ * Cuotas del cronograma ya vencidas que NO tienen factura (y no están marcadas como emitidas en el portal).
+ * Una MORA no cuenta como factura de la cuota (hereda su número pero no la cubre). Sin cronograma devuelve [].
+ */
+export function unbilledOverdueQuotas(
+    invoices: StatementInvoiceLike[],
+    schedule: ScheduleLineLike[] | undefined,
+    now: Date = new Date(),
+): UnbilledQuota[] {
+    if (!schedule || schedule.length === 0) return [];
+    const billed = new Set<number>();
+    for (const inv of invoices) {
+        if (isLateFeeInvoice(inv)) continue;
+        const n = billedQuotaNumberOf(inv);
+        if (n !== null) billed.add(n);
+    }
+    return schedule
+        .filter((l) => l.date && l.amount > 0 && !l.portal_emitted && !billed.has(l.sequence) && new Date(l.date as string) < now)
+        .map((l) => ({ sequence: l.sequence, date: l.date as string, amount: l.amount }))
+        .sort((a, b) => a.sequence - b.sequence);
+}
+
+/**
+ * Resumen de las cuotas vencidas SIN factura de varios lotes (tarjetas del portal «Total pendiente» y «Vencidas»).
+ * Devuelve cuantas son y su monto en la moneda de cada lote (nunca mezcladas). Los lotes sin cronograma
+ * (contratos Automaticos) no aportan nada: ahi el motor ya emitio la factura.
+ */
+export function resumenSinFactura<C extends string>(
+    lotes: { invoices: StatementInvoiceLike[]; scheduleLines?: ScheduleLineLike[]; currency: C }[],
+    now: Date = new Date(),
+): { count: number; amounts: { currency: C; amount: number }[] } {
+    let count = 0;
+    const amounts: { currency: C; amount: number }[] = [];
+    for (const lote of lotes) {
+        const sinFactura = unbilledOverdueQuotas(lote.invoices, lote.scheduleLines, now);
+        if (sinFactura.length === 0) continue;
+        count += sinFactura.length;
+        amounts.push({ currency: lote.currency, amount: sinFactura.reduce((s, q) => s + q.amount, 0) });
+    }
+    return { count, amounts };
+}
+
 export interface StatementModel<T extends StatementInvoiceLike> {
     /** Cuotas (capital), ordenadas por número de cuota. */
     installments: T[];
@@ -132,7 +206,14 @@ export interface StatementModel<T extends StatementInvoiceLike> {
     overdueInstallmentsAmount: number;
     lateFeesPending: T[];
     lateFeesPendingAmount: number;
-    /** Cuotas vencidas + mora pendiente. */
+    /** Cuotas vencidas del cronograma sin factura (contratos Manuales). Vacío si no se pasó cronograma. */
+    unbilledOverdue: UnbilledQuota[];
+    unbilledOverdueAmount: number;
+    /** Cuántas cuotas están vencidas, con factura o sin ella (lo que dice el aviso de atraso). */
+    overdueQuotaCount: number;
+    /** Monto de esas cuotas vencidas: saldo de las facturadas + monto de las que aún no tienen factura. */
+    overdueQuotaAmount: number;
+    /** Cuotas vencidas (facturadas o no) + mora pendiente. */
     totalToRegularize: number;
     hasOverdueInstallments: boolean;
     hasLateFees: boolean;
@@ -144,6 +225,7 @@ export function buildStatementModel<T extends StatementInvoiceLike>(
     invoices: T[],
     listPrice: number,
     now: Date = new Date(),
+    schedule?: ScheduleLineLike[],
 ): StatementModel<T> {
     const visible = invoices.filter((inv) => !isHiddenLateFee(inv));
     const installments = visible.filter((inv) => !isLateFeeInvoice(inv)).sort(compareByQuota);
@@ -162,6 +244,9 @@ export function buildStatementModel<T extends StatementInvoiceLike>(
     const lateFeesPending = lateFees.filter((i) => i.payment_state !== 'paid');
     const lateFeesPendingAmount = sum(lateFeesPending, (i) => i.amount_residual);
 
+    const unbilledOverdue = unbilledOverdueQuotas(invoices, schedule, now);
+    const unbilledOverdueAmount = unbilledOverdue.reduce((s, q) => s + q.amount, 0);
+
     return {
         installments,
         lateFees,
@@ -173,10 +258,14 @@ export function buildStatementModel<T extends StatementInvoiceLike>(
         overdueInstallmentsAmount,
         lateFeesPending,
         lateFeesPendingAmount,
-        totalToRegularize: overdueInstallmentsAmount + lateFeesPendingAmount,
-        hasOverdueInstallments: overdueInstallments.length > 0,
+        unbilledOverdue,
+        unbilledOverdueAmount,
+        overdueQuotaCount: overdueInstallments.length + unbilledOverdue.length,
+        overdueQuotaAmount: overdueInstallmentsAmount + unbilledOverdueAmount,
+        totalToRegularize: overdueInstallmentsAmount + unbilledOverdueAmount + lateFeesPendingAmount,
+        hasOverdueInstallments: overdueInstallments.length > 0 || unbilledOverdue.length > 0,
         hasLateFees: lateFees.length > 0,
-        hasDebt: overdueInstallments.length > 0 || lateFeesPending.length > 0,
+        hasDebt: overdueInstallments.length > 0 || unbilledOverdue.length > 0 || lateFeesPending.length > 0,
     };
 }
 

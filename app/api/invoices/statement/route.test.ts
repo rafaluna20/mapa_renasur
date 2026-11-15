@@ -156,3 +156,177 @@ describe('GET /api/invoices/statement — lote que cambió de código (alias)', 
     });
 });
 
+
+/**
+ * Estado de cuenta POR CONTRATO (ficha mapa_estado_cuenta_por_contrato, criterio C3).
+ * Un copropietario ve las facturas de su contrato aunque hayan salido a nombre del otro titular; quien no es titular
+ * ni copropietario sigue viendo solo lo suyo. El contrato sale de la SESIÓN del servidor, nunca de un parámetro.
+ */
+describe('GET /api/invoices/statement — por contrato (copropietarios)', () => {
+    const contratoFila = (over: Record<string, unknown> = {}) => ({
+        id: 63, state: 'confirmed', partner_id: [10, 'Titular 1'], product_id: [900, 'Lote'],
+        billing_mode: 'manual', co_owner_ids: [77], ...over,
+    });
+
+    const preparar = (opts: { contratos?: Record<string, unknown>[]; v322?: boolean; cronograma?: Record<string, unknown>[] }) => {
+        fetchLotContractInfoMock.mockResolvedValue(new Map());
+        fetchOdooMock.mockImplementation(async (model: string, _method: string, args: unknown[], kwargs: Record<string, unknown> = {}) => {
+            if (model === 'simple.contract') {
+                if (opts.v322 && JSON.stringify(args).includes('co_owner_ids')) throw new Error('Invalid field co_owner_ids');
+                if (opts.v322 && ((kwargs.fields as string[]) || []).includes('billing_mode')) throw new Error('Invalid field billing_mode');
+                return opts.contratos ?? [];
+            }
+            if (model === 'product.product') return [{ id: 900, default_code: 'E01MZP037P' }];
+            if (model === 'simple.contract.schedule') return opts.cronograma ?? [];
+            if (model === 'account.move') {
+                return [
+                    { ...invoice(1, 'CONTRATOMANUAL-E01MZP037P-C001', PEN, 1000, true), contract_id: [63, 'c'], contract_quota_number: 1 },
+                    { ...invoice(2, 'CONTRATOMANUAL-E01MZP037P-C002', PEN, 1000, true), contract_id: [63, 'c'], contract_quota_number: 2 },
+                ];
+            }
+            if (model === 'res.partner') return [{ phone: '999', mobile: false }];
+            if (model === 'product.template') return [{ default_code: 'E01MZP037P', list_price: 60000, x_mz: 'P', x_etapa: '1', x_lote: '37' }];
+            return [];
+        });
+    };
+
+    const dominioFacturas = () => fetchOdooMock.mock.calls.find((c) => c[0] === 'account.move')![2][0];
+
+    it('un copropietario recibe también las facturas de su contrato (a nombre del otro titular)', async () => {
+        preparar({ contratos: [contratoFila()] });
+        const { lots } = await callGet();
+        const d = JSON.stringify(dominioFacturas());
+        expect(d).toContain('["partner_id","=",77]');
+        expect(d).toContain('["contract_id","in",[63]]');
+        expect(lots[0].invoices).toHaveLength(2);
+    });
+
+    it('los contratos se buscan con el cliente de la SESIÓN (77), como titular o copropietario', async () => {
+        preparar({ contratos: [contratoFila()] });
+        await callGet();
+        const llamada = fetchOdooMock.mock.calls.find((c) => c[0] === 'simple.contract')!;
+        const dom = JSON.stringify(llamada[2]);
+        expect(dom).toContain('["partner_id","=",77]');
+        expect(dom).toContain('["co_owner_ids","in",[77]]');
+    });
+
+    it('quien no es titular ni copropietario sigue viendo solo lo suyo (el filtro no cambia)', async () => {
+        preparar({ contratos: [] });
+        await callGet();
+        expect(dominioFacturas()).toEqual([
+            ['partner_id', '=', 77],
+            ['move_type', '=', 'out_invoice'],
+            ['state', '=', 'posted'],
+        ]);
+    });
+
+    it('no expone a nombre de quién salió cada factura (no se filtra el nombre del otro titular)', async () => {
+        preparar({ contratos: [contratoFila()] });
+        await callGet();
+        const campos = fetchOdooMock.mock.calls.find((c) => c[0] === 'account.move')![3].fields as string[];
+        expect(campos).not.toContain('partner_id');
+        expect(campos).toContain('contract_id');
+        expect(campos).toContain('contract_quota_number');
+    });
+
+    it('contrato Manual: el lote lleva su cronograma, también si todavía no tiene ninguna factura', async () => {
+        preparar({
+            contratos: [contratoFila()],
+            cronograma: [{ sequence: 3, date: '2026-10-15', amount: 1000, portal_emitted: false }],
+        });
+        const { lots } = await callGet();
+        const lot = lots.find((l: { code: string }) => l.code === 'E01MZP037P');
+        expect(lot.scheduleLines).toEqual([{ sequence: 3, date: '2026-10-15', amount: 1000, portal_emitted: false }]);
+    });
+
+    it('agrupa por el lote del CONTRATO aunque la referencia de la factura no traiga el codigo (ej. "CTR10691-C001")', async () => {
+        preparar({
+            contratos: [contratoFila()],
+            cronograma: [{ sequence: 3, date: '2026-10-15', amount: 1000, portal_emitted: false }],
+        });
+        fetchOdooMock.mockImplementation(async (model: string) => {
+            if (model === 'simple.contract') return [contratoFila()];
+            if (model === 'product.product') return [{ id: 900, default_code: 'E01MZP037P' }];
+            if (model === 'simple.contract.schedule') return [{ sequence: 3, date: '2026-10-15', amount: 1000, portal_emitted: false }];
+            if (model === 'account.move') {
+                return [
+                    { ...invoice(1, 'CTR10691-C001', PEN, 1000, true), contract_id: [63, 'c'], contract_quota_number: 1 },
+                    { ...invoice(2, 'CTR10691-C002', PEN, 1000, true), contract_id: [63, 'c'], contract_quota_number: 2 },
+                ];
+            }
+            if (model === 'res.partner') return [{ phone: '999', mobile: false }];
+            if (model === 'product.template') return [{ default_code: 'E01MZP037P', list_price: 60000, x_mz: 'P', x_etapa: '1', x_lote: '37' }];
+            return [];
+        });
+        const { lots } = await callGet();
+        expect(lots).toHaveLength(1);
+        expect(lots[0].code).toBe('E01MZP037P');         // no "SIN_LOTE" / "Otros pagos"
+        expect(lots[0].label).toBe('Etapa 1 Mz P Lote 37');
+        expect(lots[0].invoices).toHaveLength(2);
+        expect(lots[0].scheduleLines).toHaveLength(1);    // el cronograma queda en el mismo lote
+    });
+
+    it('una factura SIN contrato sigue agrupandose por la referencia, como siempre', async () => {
+        preparar({ contratos: [] });
+        const { lots } = await callGet();
+        expect(lots[0].code).toBe('E01MZP037P');
+    });
+
+    it('un lote Manual en DOLARES que aun no tiene ninguna factura sale en dolares (moneda del contrato), no en soles', async () => {
+        preparar({
+            contratos: [contratoFila()],
+            cronograma: [{ sequence: 1, date: '2026-09-01', amount: 500, portal_emitted: false }],
+        });
+        fetchLotContractInfoMock.mockResolvedValue(new Map([
+            ['E01MZP037P', { contractId: 63, state: 'confirmed', currency: 'USD', finalPrice: 60000 }],
+        ]));
+        const base = fetchOdooMock.getMockImplementation()!;
+        fetchOdooMock.mockImplementation(async (model: string, ...resto: unknown[]) => (model === 'account.move' ? [] : base(model, ...resto)));
+        const { lots } = await callGet();
+        const lot = lots.find((l: { code: string }) => l.code === 'E01MZP037P');
+        expect(lot.invoices).toHaveLength(0);
+        expect(lot.currency).toBe('USD');
+        expect(lot.listPrice).toBe(60000);
+        expect(lot.scheduleLines).toHaveLength(1);
+    });
+
+    it('un contrato Manual CERRADO no aporta cuotas por facturar (no se inventa deuda en un contrato terminado)', async () => {
+        preparar({
+            contratos: [contratoFila({ state: 'closed' })],
+            cronograma: [{ sequence: 3, date: '2026-10-15', amount: 1000, portal_emitted: false }],
+        });
+        const { lots } = await callGet();
+        expect(lots[0].scheduleLines).toEqual([]);
+        expect(fetchOdooMock.mock.calls.some((c) => c[0] === 'simple.contract.schedule')).toBe(false);
+    });
+
+    it('contrato Automático: no se pide cronograma y el lote no lleva cuotas por facturar', async () => {
+        preparar({ contratos: [contratoFila({ billing_mode: 'auto' })] });
+        const { lots } = await callGet();
+        expect(lots[0].scheduleLines).toEqual([]);
+        expect(fetchOdooMock.mock.calls.some((c) => c[0] === 'simple.contract.schedule')).toBe(false);
+    });
+
+    it('con un Odoo v3.22 (sin copropietarios) funciona como antes: los contratos del titular principal, Automáticos', async () => {
+        preparar({ v322: true, contratos: [{ id: 63, state: 'confirmed', partner_id: [77, 'Yo'], product_id: [900, 'Lote'] }] });
+        const { success, lots } = await callGet();
+        expect(success).toBe(true);
+        expect(lots[0].invoices).toHaveLength(2);
+        expect(lots[0].scheduleLines).toEqual([]);
+        // el respaldo (solo titular principal) SÍ encontró el contrato: las facturas se piden por contrato
+        expect(JSON.stringify(dominioFacturas())).toContain('["contract_id","in",[63]]');
+    });
+
+    it('si falla la lectura de contratos, el estado de cuenta sale igual que antes (solo por cliente)', async () => {
+        fetchLotContractInfoMock.mockResolvedValue(new Map());
+        fetchOdooMock.mockImplementation(async (model: string) => {
+            if (model === 'simple.contract') throw new Error('boom');
+            if (model === 'account.move') return [invoice(1, 'CONTRATOMANUAL-E01MZP037P-C001', PEN, 1000, true)];
+            if (model === 'res.partner') return [{ phone: '999', mobile: false }];
+            return [];
+        });
+        const { success, lots } = await callGet();
+        expect(success).toBe(true);
+        expect(lots).toHaveLength(1);
+    });
+});

@@ -13,6 +13,7 @@ import VoucherStatusAlert from '@/app/components/Payments/VoucherStatusAlert';
 import VoucherTimeline from '@/app/components/Payments/VoucherTimeline';
 import LotFinancialStatement, { type StatementInvoice } from '@/app/components/Payments/LotFinancialStatement';
 import { formatMoney, normalizeCurrency, sumByCurrency, type CurrencyCode } from '@/app/utils/money';
+import { resumenSinFactura, type ScheduleLineLike } from '@/app/utils/statementModel';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -27,6 +28,8 @@ interface StatementLot {
     /** Moneda del lote (contratos en dólares facturan en USD). */
     currency?: CurrencyCode;
     invoices: StatementInvoice[];
+    /** Cronograma de un contrato de facturación Manual (cuotas vencidas que aún no tienen factura). */
+    scheduleLines?: ScheduleLineLike[];
 }
 
 /** "S/ 1,500.00 + US$ 3,000.00": totales por moneda, nunca mezclados en una sola cifra. */
@@ -83,6 +86,7 @@ export default function PaymentsPortal() {
                     listPrice: lot.listPrice,
                     currency: lot.currency,
                     invoices: lot.invoices,
+                    scheduleLines: lot.scheduleLines,
                 })),
             }, marca);
         } catch (err) {
@@ -203,6 +207,17 @@ export default function PaymentsPortal() {
     const upcomingInvoices = invoices.filter(inv =>
         new Date(inv.invoice_date_due) >= new Date()
     );
+    // Contratos de facturacion Manual: la factura nace al cobro, asi que una cuota vencida que aun no se cobro no tiene
+    // factura y no esta en `invoices`. Se toma del cronograma para que las tarjetas no digan 0 mientras el estado de
+    // cuenta de arriba dice que hay atraso.
+    const sinFactura = resumenSinFactura(
+        statementLots.map((lot) => ({
+            invoices: lot.invoices,
+            scheduleLines: lot.scheduleLines,
+            currency: lot.currency ?? normalizeCurrency(lot.invoices[0]?.currency_id),
+        })),
+        new Date(),
+    );
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-stone-50">
@@ -291,6 +306,7 @@ export default function PaymentsPortal() {
                                 listPrice={lot.listPrice}
                                 currency={lot.currency}
                                 invoices={lot.invoices}
+                                scheduleLines={lot.scheduleLines}
                             />
                         ))}
                     </div>
@@ -303,10 +319,13 @@ export default function PaymentsPortal() {
                             <div>
                                 <p className="text-xs text-slate-500 font-medium">Total Pendiente</p>
                                 <p className="text-xl font-bold text-slate-800 mt-1">
-                                    {formatTotalsByCurrency(sumByCurrency(invoices.map((inv) => ({
-                                        amount: inv.amount_residual,
-                                        currency: normalizeCurrency(inv.currency_id),
-                                    }))))}
+                                    {formatTotalsByCurrency(sumByCurrency([
+                                        ...invoices.map((inv) => ({
+                                            amount: inv.amount_residual,
+                                            currency: normalizeCurrency(inv.currency_id),
+                                        })),
+                                        ...sinFactura.amounts,
+                                    ]))}
                                 </p>
                             </div>
                             <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
@@ -320,7 +339,7 @@ export default function PaymentsPortal() {
                             <div>
                                 <p className="text-xs text-slate-500 font-medium">Vencidas</p>
                                 <p className="text-xl font-bold text-red-600 mt-1">
-                                    {overdueInvoices.length}
+                                    {overdueInvoices.length + sinFactura.count}
                                 </p>
                             </div>
                             <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
@@ -365,8 +384,29 @@ export default function PaymentsPortal() {
                     </div>
                 )}
 
+                {/* Cuotas vencidas SIN comprobante (contratos de facturacion Manual): aqui no hay boton de subir comprobante */}
+                {sinFactura.count > 0 && (
+                    <div
+                        className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 flex items-start gap-3"
+                        role="status"
+                    >
+                        <AlertCircle size={20} className="text-amber-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                            <p className="font-bold text-amber-900">
+                                {sinFactura.count === 1
+                                    ? 'Tiene 1 cuota vencida sin comprobante emitido'
+                                    : `Tiene ${sinFactura.count} cuotas vencidas sin comprobante emitido`}
+                            </p>
+                            <p className="text-sm text-amber-800 mt-1">
+                                En su contrato el comprobante se emite al registrar el pago. Realice su pago por transferencia y avise a
+                                administración para que lo registren: para estas cuotas no hay botón de subir comprobante.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
                 {/* Invoices List */}
-                {invoices.length === 0 ? (
+                {invoices.length === 0 && sinFactura.count === 0 ? (
                     <div className="bg-white rounded-xl p-12 text-center border border-slate-200">
                         <CheckCircle2 size={48} className="mx-auto text-emerald-500 mb-4" />
                         <h3 className="text-xl font-bold text-slate-800 mb-2">
@@ -376,7 +416,7 @@ export default function PaymentsPortal() {
                             No tienes cuotas pendientes en este momento
                         </p>
                     </div>
-                ) : (
+                ) : invoices.length === 0 ? null : (
                     <div className="space-y-4">
                         <h2 className="text-base font-bold text-slate-800">
                             Cuotas Pendientes ({invoices.length})

@@ -7,6 +7,8 @@ import { fetchLotContractInfo } from '@/app/lib/lotContract';
 import { obtenerMapaAlias } from '@/app/lib/aliasLotesServidor';
 import { resolverCodigoViejo } from '@/app/lib/aliasLotes';
 import { normalizeCurrency } from '@/app/utils/money';
+import { contratosDelTitular, fetchCronograma, type ContratoEstado } from '@/app/lib/contratoEstadoCuenta';
+import type { ScheduleLineLike } from '@/app/utils/statementModel';
 
 interface ExtendedUser {
     odooPartnerId?: number;
@@ -30,6 +32,9 @@ interface OdooInvoice {
     late_fee_days_late?: number;
     late_fee_percentage_applied?: number;
     late_fee_waived?: boolean;
+    // Cuota que cubre la factura y contrato de origen (estado de cuenta por contrato). Nunca el nombre de quién pagó.
+    contract_id?: [number, string] | false;
+    contract_quota_number?: number;
     // Único lugar donde vive la fecha real de pago (no existe como campo
     // plano en account.move) — la usa el PDF de Estado de Cuenta para la
     // columna "Fecha de Pago" / "Días de atraso-adelanto".
@@ -90,13 +95,24 @@ export async function GET() {
         // ver [...nextauth]/route.ts) aunque Odoo sí lo tiene — se trae acá
         // con un fetch puntual por partnerId, mismo patrón ya usado en
         // get_reservation_owner/route.ts para el mismo dato.
+        // Estado de cuenta POR CONTRATO: además de las facturas a su nombre, el cliente ve las de los contratos donde es
+        // titular o copropietario (en un lote con copropietarios la factura nace al cobro, a nombre de quien paga).
+        // El cliente sale de la SESIÓN del servidor. Si la lectura de contratos falla, se vuelve al filtro de siempre.
+        let contratos: ContratoEstado[] = [];
+        try {
+            contratos = await contratosDelTitular(partnerId);
+        } catch (e) {
+            console.warn('[STATEMENT] No se pudieron leer los contratos del cliente; se usa solo su cliente:', e);
+        }
+        const contractIds = contratos.map((c) => c.id);
+        const dominioFacturas = contractIds.length > 0
+            ? ['|', ['partner_id', '=', partnerId], ['contract_id', 'in', contractIds],
+                ['move_type', '=', 'out_invoice'], ['state', '=', 'posted']]
+            : [['partner_id', '=', partnerId], ['move_type', '=', 'out_invoice'], ['state', '=', 'posted']];
+
         const [invoices, partners] = await Promise.all([
-            fetchOdoo('account.move', 'search_read', [[
-                ['partner_id', '=', partnerId],
-                ['move_type', '=', 'out_invoice'],
-                ['state', '=', 'posted'],
-            ]], {
-                fields: ['id', 'name', 'ref', 'payment_reference', 'invoice_date', 'invoice_date_due', 'payment_state', 'amount_total', 'amount_residual', 'currency_id', 'is_late_fee', 'late_fee_origin_id', 'late_fee_days_late', 'late_fee_percentage_applied', 'late_fee_waived', 'invoice_payments_widget'],
+            fetchOdoo('account.move', 'search_read', [dominioFacturas], {
+                fields: ['id', 'name', 'ref', 'payment_reference', 'invoice_date', 'invoice_date_due', 'payment_state', 'amount_total', 'amount_residual', 'currency_id', 'contract_id', 'contract_quota_number', 'is_late_fee', 'late_fee_origin_id', 'late_fee_days_late', 'late_fee_percentage_applied', 'late_fee_waived', 'invoice_payments_widget'],
                 limit: 500,
                 order: 'invoice_date asc',
             }) as Promise<OdooInvoice[]>,
@@ -109,12 +125,34 @@ export async function GET() {
         // referencias no se reescriben, se resuelven con los alias de Odoo (proyecto.lote.alias). Sin alias el código queda tal cual.
         const mapaAlias = await obtenerMapaAlias();
         const grupos = new Map<string, OdooInvoice[]>();
+        // El lote de una factura sale primero de su CONTRATO (account.move.contract_id): no depende de como este escrita la
+        // referencia (en algunas bases es "CTR10691-C001", sin el codigo del lote). Sin contrato conocido se lee de la referencia.
+        const codigoPorContrato = new Map<number, string>(
+            contratos.filter((c) => c.productCode).map((c) => [c.id, c.productCode as string]),
+        );
         for (const inv of invoices) {
             const texto = inv.ref || inv.payment_reference || inv.name || '';
-            const extraido = extraerCodigoLote(texto);
+            const contratoId = Array.isArray(inv.contract_id) ? inv.contract_id[0] : null;
+            const extraido = (contratoId !== null ? codigoPorContrato.get(contratoId) : undefined) ?? extraerCodigoLote(texto);
             const codigo = (extraido ? resolverCodigoViejo(extraido, mapaAlias) : null) || 'SIN_LOTE';
             if (!grupos.has(codigo)) grupos.set(codigo, []);
             grupos.get(codigo)!.push(inv);
+        }
+
+        // Contratos Manuales VIGENTES: la factura nace al cobro, así que una cuota vencida que nadie cobró no tiene
+        // factura y se toma del cronograma. Un contrato cerrado no aporta cuotas por facturar. Si el contrato es del
+        // lote pero aún no tiene facturas a la vista, el lote igual aparece (para mostrar lo que se debe).
+        const cronogramaPorLote = new Map<string, ScheduleLineLike[]>();
+        for (const c of contratos) {
+            if (c.billingMode !== 'manual' || c.state !== 'confirmed' || !c.productCode) continue;
+            const codigoLote = resolverCodigoViejo(c.productCode, mapaAlias) || c.productCode;
+            try {
+                const lineas = await fetchCronograma(c.id);
+                cronogramaPorLote.set(codigoLote, [...(cronogramaPorLote.get(codigoLote) ?? []), ...lineas]);
+                if (!grupos.has(codigoLote)) grupos.set(codigoLote, []);
+            } catch (e) {
+                console.warn('[STATEMENT] No se pudo leer el cronograma del contrato manual:', e);
+            }
         }
 
         // Traer precio de lista + datos de manzana/etapa/lote para cada
@@ -141,7 +179,8 @@ export async function GET() {
             const contrato = contratosPorCodigo.get(codigo);
             // La moneda sale de las facturas (lo que realmente se le cobra al cliente); el contrato
             // solo se usa para el precio cuando ambos son en moneda extranjera.
-            const currency = normalizeCurrency(invs[0]?.currency_id);
+            // Sin facturas todavia (contrato Manual con la primera cuota por cobrar) la moneda es la del contrato.
+            const currency = invs.length === 0 && contrato ? contrato.currency : normalizeCurrency(invs[0]?.currency_id);
             const esMonedaExtranjera = currency !== 'PEN';
             const listPrice = esMonedaExtranjera
                 ? (contrato && contrato.currency === currency ? contrato.finalPrice : 0)
@@ -164,6 +203,9 @@ export async function GET() {
                 listPrice,
                 currency,
                 invoices: invs,
+                // Cuotas del cronograma de un contrato Manual (vacío en Automáticos): el modelo del estado de cuenta
+                // las usa para mostrar las vencidas sin factura.
+                scheduleLines: cronogramaPorLote.get(codigo) ?? [],
             };
         });
 

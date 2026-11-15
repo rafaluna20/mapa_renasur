@@ -10,7 +10,8 @@ import { MARCA_LEGADA, type Marca } from '@/app/lib/marca';
 import autoTable from 'jspdf-autotable';
 import { formatMoney, normalizeCurrency, currencyName, currencySymbol, type CurrencyCode } from '../utils/money';
 import {
-    buildStatementModel, installmentLabel, lateFeeNote, installmentStatus, lateFeeLabel, STATUS_LABEL,
+    buildStatementModel, installmentLabel, lateFeeNote, installmentStatus, lateFeeLabel, quotaOrderKey, STATUS_LABEL,
+    unbilledQuotaLabel, type ScheduleLineLike,
 } from '../utils/statementModel';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -1759,6 +1760,8 @@ export interface ClientStatementLot {
     /** Moneda del lote; si falta se deduce de sus facturas (y en su defecto, soles). */
     currency?: CurrencyCode;
     invoices: ClientStatementInvoice[];
+    /** Cronograma del contrato (solo facturación Manual): cuotas vencidas que aún no tienen factura. */
+    scheduleLines?: ScheduleLineLike[];
 }
 
 export interface ClientStatementReportData {
@@ -1991,7 +1994,7 @@ export async function generateClientStatementReport(data: ClientStatementReportD
 
         // Modelo único del estado de cuenta: cuotas (capital) y cargos por mora por separado.
         // El capital pagado, el % de avance y el saldo deudor se calculan SOLO sobre las cuotas.
-        const model = buildStatementModel(lot.invoices, lot.listPrice, now);
+        const model = buildStatementModel(lot.invoices, lot.listPrice, now, lot.scheduleLines);
 
         // ── Resumen Financiero
         drawSectionHeader(doc, 'RESUMEN FINANCIERO', margin, y, BRAND.green);
@@ -2024,12 +2027,12 @@ export async function generateClientStatementReport(data: ClientStatementReportD
         const feesPending = model.lateFeesPending.length > 0;
         const bannerH = model.hasDebt && feesPending ? 22 : 16;
         if (model.hasDebt) {
-            const nVencidas = model.overdueInstallments.length;
+            const nVencidas = model.overdueQuotaCount;
             drawRect(doc, margin, y, contentW, bannerH, [254, 242, 242] as [number, number, number], 2);
             setFont(doc, 8, BRAND.red, 'bold');
             doc.text(
                 nVencidas > 0
-                    ? `ATRASO DETECTADO (${nVencidas} ${nVencidas === 1 ? 'CUOTA' : 'CUOTAS'}) · DEUDA EXIGIBLE: ${currency(model.overdueInstallmentsAmount, cur)}`
+                    ? `ATRASO DETECTADO (${nVencidas} ${nVencidas === 1 ? 'CUOTA' : 'CUOTAS'}) · DEUDA EXIGIBLE: ${currency(model.overdueQuotaAmount, cur)}`
                     : `MORA PENDIENTE DE PAGO: ${currency(model.lateFeesPendingAmount, cur)}`,
                 margin + 5, y + 6
             );
@@ -2038,7 +2041,7 @@ export async function generateClientStatementReport(data: ClientStatementReportD
                 // Las cuotas y la mora se informan por separado y luego sumadas: nunca contadas como cuotas.
                 setFont(doc, 7, BRAND.darkBg, 'bold');
                 doc.text(
-                    `Cuotas vencidas ${currency(model.overdueInstallmentsAmount, cur)} + Mora ${currency(model.lateFeesPendingAmount, cur)} = TOTAL A REGULARIZAR ${currency(model.totalToRegularize, cur)}`,
+                    `Cuotas vencidas ${currency(model.overdueQuotaAmount, cur)} + Mora ${currency(model.lateFeesPendingAmount, cur)} = TOTAL A REGULARIZAR ${currency(model.totalToRegularize, cur)}`,
                     margin + 5, lineY
                 );
                 lineY += 5.5;
@@ -2059,25 +2062,44 @@ export async function generateClientStatementReport(data: ClientStatementReportD
         drawLine(doc, margin, y + 2.5, W - margin, y + 2.5, BRAND.borderLight, 0.15);
         y += 5;
 
-        // Solo las CUOTAS, ordenadas por número (la mora va en su propia sección más abajo).
-        const sortedInvoices = model.installments;
+        // Solo las CUOTAS, ordenadas por número (la mora va en su propia sección más abajo). En un contrato de
+        // facturación Manual se mezclan las cuotas vencidas que aún no tienen factura (salen del cronograma).
+        type EntradaCuota =
+            | { tipo: 'factura'; orden: number; inv: ClientStatementInvoice }
+            | { tipo: 'sinFactura'; orden: number; q: { sequence: number; date: string; amount: number } };
+        const entradas: EntradaCuota[] = [
+            ...model.installments.map((inv): EntradaCuota => ({ tipo: 'factura', orden: quotaOrderKey(inv), inv })),
+            ...model.unbilledOverdue.map((q): EntradaCuota => ({ tipo: 'sinFactura', orden: q.sequence, q })),
+        ].sort((a, b) => a.orden - b.orden);
 
         const filaEstado = (inv: ClientStatementInvoice) => STATUS_LABEL[installmentStatus(inv, now)];
 
         // Fecha de pago real + días de atraso/adelanto — precalculados en el
-        // mismo orden que `sortedInvoices` para que `didParseCell` pueda
+        // mismo orden que `entradas` para que `didParseCell` pueda
         // colorear la celda de DÍAS por índice de fila sin recalcular nada.
-        const diasInfo = sortedInvoices.map((inv) => calcularDiasPdf(getFechaPagoRawPdf(inv), inv.invoice_date_due));
+        const diasInfo = entradas.map((e) =>
+            e.tipo === 'factura'
+                ? calcularDiasPdf(getFechaPagoRawPdf(e.inv), e.inv.invoice_date_due)
+                : calcularDiasPdf(null, e.q.date));
 
-        const rows = sortedInvoices.map((inv, i) => [
-            installmentLabel(inv),
-            formatDDMMYY(inv.invoice_date_due || inv.invoice_date),
-            (() => { const f = getFechaPagoRawPdf(inv); return f ? formatDDMMYY(f) : '—'; })(),
+        const rows = entradas.map((e, i) => e.tipo === 'factura' ? [
+            installmentLabel(e.inv),
+            formatDDMMYY(e.inv.invoice_date_due || e.inv.invoice_date),
+            (() => { const f = getFechaPagoRawPdf(e.inv); return f ? formatDDMMYY(f) : '—'; })(),
             diasInfo[i].texto,
-            ...(MOSTRAR_COLUMNA_FACTURA ? [inv.name || inv.ref || 'S/N'] : []),
-            filaEstado(inv),
-            currency(inv.amount_total, cur),
-            inv.payment_state === 'paid' ? '—' : currency(inv.amount_residual, cur),
+            ...(MOSTRAR_COLUMNA_FACTURA ? [e.inv.name || e.inv.ref || 'S/N'] : []),
+            filaEstado(e.inv),
+            currency(e.inv.amount_total, cur),
+            e.inv.payment_state === 'paid' ? '—' : currency(e.inv.amount_residual, cur),
+        ] : [
+            unbilledQuotaLabel(e.q),
+            formatDDMMYY(e.q.date),
+            '—',
+            diasInfo[i].texto,
+            ...(MOSTRAR_COLUMNA_FACTURA ? ['Se emite al pagar'] : []),
+            STATUS_LABEL.overdue,
+            currency(e.q.amount, cur),
+            currency(e.q.amount, cur),
         ]);
 
         // ESTADO/MONTO/SALDO se corren cuando FACTURA está oculta — se
