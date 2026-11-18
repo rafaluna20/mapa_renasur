@@ -60,7 +60,8 @@ export const paymentService = {
             ['partner_id', '=', partnerId],
             ['move_type', '=', 'out_invoice'],
             ['state', '=', 'posted'],
-            ['payment_state', '!=', 'paid']
+            // Ni las pagadas ni las REVERTIDAS (anuladas con nota de credito, saldo 0): una revertida no es una cuota por pagar.
+            ['payment_state', 'not in', ['paid', 'reversed']]
         ];
 
         const fields = [

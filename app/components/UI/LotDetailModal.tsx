@@ -477,7 +477,7 @@ export default function LotDetailModal({ lot, onClose, onUpdateStatus, onQuotati
                             className={`pb-2 border-b-2 transition-colors flex items-center gap-1 ${activeTab === 'pagos' ? `border-${config.text.split('-')[1]}-600 text-slate-800` : 'border-transparent hover:text-slate-700'}`}
                         >
                             <Receipt size={12} />
-                            Pagos ({invoices.length})
+                            Pagos ({model.installments.length + model.lateFees.length})
                         </button>
                     </div>
                 )}

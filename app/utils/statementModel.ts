@@ -101,6 +101,15 @@ export function isHiddenLateFee(inv: StatementInvoiceLike): boolean {
     return inv.late_fee_waived === true || inv.state === 'cancel' || inv.payment_state === 'reversed';
 }
 
+/**
+ * Factura REVERTIDA (anulada con nota de credito: payment_state = 'reversed', saldo 0). No es una cuota vencida ni una deuda,
+ * y el dinero tampoco entro por ella: no se muestra ni cuenta como cuota. Si la cuota se reemitio, la que vale es la factura
+ * nueva. (Para un contrato Manual SI sigue contando como "facturada" al decidir si falta factura: igual que en el modulo.)
+ */
+export function isReversedInvoice(inv: Pick<StatementInvoiceLike, 'payment_state'>): boolean {
+    return inv.payment_state === 'reversed';
+}
+
 /** Etiqueta de una CUOTA. */
 export function installmentLabel(inv: StatementInvoiceLike): string {
     const n = quotaNumberOf(inv);
@@ -227,7 +236,7 @@ export function buildStatementModel<T extends StatementInvoiceLike>(
     now: Date = new Date(),
     schedule?: ScheduleLineLike[],
 ): StatementModel<T> {
-    const visible = invoices.filter((inv) => !isHiddenLateFee(inv));
+    const visible = invoices.filter((inv) => !isHiddenLateFee(inv) && !isReversedInvoice(inv));
     const installments = visible.filter((inv) => !isLateFeeInvoice(inv)).sort(compareByQuota);
     const lateFees = visible.filter((inv) => isLateFeeInvoice(inv)).sort(compareByQuota);
 
